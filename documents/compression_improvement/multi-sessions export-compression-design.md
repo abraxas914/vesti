@@ -1,6 +1,6 @@
 # LLM 智能压缩引入与合并指南
 
-> 说明：本系统引入 Kimi LLM 实现对话导出的 Compact/Summary 智能压缩，替代原有简单截断方案。
+> 说明：本系统引入 Kimi LLM 实现对话导出的 Compact/Summary 智能压缩，替代原有简单截断方案。（后续可以更换使用其他llm）
 
 ---
 

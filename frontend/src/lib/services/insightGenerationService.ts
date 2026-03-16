@@ -852,10 +852,15 @@ function shouldSkipSummaryCompaction(
   conversation: Conversation,
   messages: Message[]
 ): boolean {
+  // 原版本逻辑：简单检查消息数和字符数
   if (conversation.message_count <= SUMMARY_COMPACTION_SKIP_MAX_MESSAGES) {
     return true;
   }
-  return countInputChars(messages) <= SUMMARY_COMPACTION_SKIP_MAX_CHARS;
+  const totalChars = messages.reduce(
+    (sum, m) => sum + m.content_text.length,
+    0
+  );
+  return totalChars <= SUMMARY_COMPACTION_SKIP_MAX_CHARS;
 }
 
 function buildSummaryPromptFromCompaction(
@@ -889,8 +894,11 @@ async function runCompaction(
   conversation: Conversation,
   messages: Message[]
 ): Promise<CompactionExecution> {
-  const prompt = getPrompt("compaction", { variant: "current" });
+  const startedAt = Date.now();
   const charsIn = countInputChars(messages);
+
+  // 压缩方式：使用传统 compaction prompt
+  const prompt = getPrompt("compaction", { variant: "current" });
   const payload = {
     conversationTitle: conversation.title,
     conversationPlatform: conversation.platform,
@@ -899,7 +907,6 @@ async function runCompaction(
     locale: "zh" as const,
   };
 
-  const startedAt = Date.now();
   try {
     const compactionPrompt = truncateForContext(
       prompt.userTemplate(payload),

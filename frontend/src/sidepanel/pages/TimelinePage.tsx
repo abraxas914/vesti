@@ -13,7 +13,7 @@ import {
 import { useBatchSelection } from "../hooks/useBatchSelection";
 import { BatchActionBar } from "../components/BatchActionBar";
 import { ExportDialog, type ExportConfig, type ExportResult } from "../components/ExportDialog";
-import { exportConversations } from "../utils/exportConversations";
+import { exportConversationsV2 } from "../utils/exportConversationsV2";
 
 interface TimelinePageProps {
   onSelectConversation: (conversation: Conversation) => void;
@@ -74,7 +74,7 @@ export function TimelinePage({ onSelectConversation, refreshToken }: TimelinePag
 
   const handleExport = async (config: ExportConfig): Promise<ExportResult> => {
     const selectedConversations = conversations.filter((c) => selectedIds.has(c.id));
-    return exportConversations(selectedConversations, config);
+    return exportConversationsV2(selectedConversations, config);
   };
 
   const handleOpenSearch = () => {

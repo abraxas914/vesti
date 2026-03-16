@@ -1,6 +1,12 @@
+/**
+ * Export Conversations - 导出功能
+ * 使用传统方式导出对话
+ */
+
 import type { Conversation, Message } from "~lib/types";
 import type { ExportConfig, ExportResult } from "../components/ExportDialog";
 import { getMessages } from "~lib/services/storageService";
+import { logger } from "~lib/utils/logger";
 
 function toLocalDateTime(timestamp: number): string {
   const d = new Date(timestamp);
@@ -8,13 +14,29 @@ function toLocalDateTime(timestamp: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/**
+ * 主导出函数
+ */
 export async function exportConversations(
   conversations: Conversation[],
   config: ExportConfig
 ): Promise<ExportResult> {
   const { contentMode, format } = config;
 
-  // Fetch messages for all conversations
+  // 传统导出方式
+  return exportWithLegacyFormat(conversations, config);
+}
+
+/**
+ * 传统导出方式
+ */
+async function exportWithLegacyFormat(
+  conversations: Conversation[],
+  config: ExportConfig
+): Promise<ExportResult> {
+  const { contentMode, format } = config;
+
+  // 获取所有对话的消息
   const messagesMap = new Map<number, Message[]>();
   await Promise.all(
     conversations.map(async (conv) => {
@@ -23,21 +45,94 @@ export async function exportConversations(
     })
   );
 
-  let content: string;
+  const parts: string[] = [];
 
-  switch (format) {
-    case "md":
-      content = toMarkdown(conversations, messagesMap, contentMode);
-      break;
-    case "txt":
-      content = toText(conversations, messagesMap, contentMode);
-      break;
-    case "json":
-      content = toJSON(conversations, messagesMap, contentMode);
-      break;
-    default:
-      throw new Error(`Unsupported format: ${format}`);
+  for (const conv of conversations) {
+    const messages = messagesMap.get(conv.id) || [];
+
+    if (format === "md") {
+      // Markdown 格式
+      const lines: string[] = [];
+      lines.push(`# ${conv.title || "Untitled"}`);
+      lines.push(`> Platform: ${conv.platform} | Date: ${formatDate(conv.source_created_at || conv.created_at)}`);
+      lines.push("");
+
+      for (const msg of messages) {
+        const role = msg.role === "user" ? "**User**" : "**AI**";
+        lines.push(`${role} (${formatDate(msg.created_at)})`);
+        lines.push("");
+        
+        // 根据 contentMode 处理内容
+        let content = msg.content_text;
+        if (contentMode === "compact") {
+          // Compact 模式：简单截断，保留前 2000 字符
+          content = truncateContent(content, 2000);
+        } else if (contentMode === "summary") {
+          // Summary 模式：保留前 1000 字符
+          content = truncateContent(content, 1000);
+        }
+        // Full 模式：完整内容
+        
+        lines.push(content);
+        lines.push("");
+        lines.push("---");
+        lines.push("");
+      }
+
+      parts.push(lines.join("\n"));
+    } else if (format === "txt") {
+      // 纯文本格式
+      const lines: string[] = [];
+      lines.push(`=${conv.title || "Untitled"}=`);
+      lines.push(`Platform: ${conv.platform}`);
+      lines.push("");
+
+      for (const msg of messages) {
+        const role = msg.role === "user" ? "USER" : "AI";
+        lines.push(`[${role}] ${formatDate(msg.created_at)}`);
+        
+        let content = msg.content_text;
+        if (contentMode === "compact") {
+          content = truncateContent(content, 2000);
+        } else if (contentMode === "summary") {
+          content = truncateContent(content, 1000);
+        }
+        
+        lines.push(content);
+        lines.push("");
+      }
+
+      parts.push(lines.join("\n"));
+    } else if (format === "json") {
+      // JSON 格式
+      const data = {
+        conversation: {
+          id: conv.id,
+          title: conv.title,
+          platform: conv.platform,
+          url: conv.url,
+          created_at: conv.created_at,
+          source_created_at: conv.source_created_at,
+        },
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: contentMode === "full" 
+            ? m.content_text 
+            : truncateContent(m.content_text, contentMode === "compact" ? 2000 : 1000),
+          created_at: m.created_at,
+        })),
+      };
+      parts.push(JSON.stringify(data, null, 2));
+    }
   }
+
+  const content = parts.join("\n\n" + "=".repeat(50) + "\n\n");
+
+  logger.info("export", "Export completed", {
+    conversationCount: conversations.length,
+    format,
+    contentMode,
+  });
 
   return {
     content,
@@ -45,152 +140,38 @@ export async function exportConversations(
   };
 }
 
-function toMarkdown(
-  conversations: Conversation[],
-  messagesMap: Map<number, Message[]>,
-  mode: string
-): string {
-  const lines: string[] = [];
-
-  lines.push("# VESTI Conversation Export");
-  lines.push("");
-  lines.push(`**Exported:** ${new Date().toLocaleString()}`);
-  lines.push(`**Threads:** ${conversations.length}`);
-  lines.push("");
-  lines.push("---");
-  lines.push("");
-
-  conversations.forEach((conv, idx) => {
-    const messages = messagesMap.get(conv.id) || [];
-
-    lines.push(`## ${idx + 1}. ${conv.title || "Untitled"}`);
-    lines.push("");
-    lines.push(`- **Platform:** ${conv.platform}`);
-    lines.push(`- **URL:** ${conv.url || "N/A"}`);
-    lines.push(`- **Date:** ${toLocalDateTime(conv.source_created_at || conv.created_at)}`);
-    lines.push(`- **Messages:** ${messages.length}`);
-    lines.push("");
-
-    if (mode === "summary") {
-      lines.push(conv.snippet || "*No summary available*");
-      lines.push("");
-    } else if (mode === "compact") {
-      // Compact: show key questions and final answer
-      const userMsgs = messages.filter((m) => m.role === "user").slice(0, 3);
-      const assistantMsgs = messages.filter((m) => m.role === "assistant");
-
-      if (userMsgs.length > 0) {
-        lines.push("### Key Questions");
-        userMsgs.forEach((m) => {
-          const preview = m.content_text.slice(0, 150);
-          lines.push(`- ${preview}${m.content_text.length > 150 ? "..." : ""}`);
-        });
-        lines.push("");
-      }
-
-      if (assistantMsgs.length > 0) {
-        lines.push("### Summary Response");
-        const lastResponse = assistantMsgs[assistantMsgs.length - 1];
-        lines.push(lastResponse.content_text.slice(0, 800));
-        lines.push("");
-      }
-    } else {
-      // Full mode
-      lines.push("### Conversation");
-      lines.push("");
-      messages.forEach((msg) => {
-        const role = msg.role === "user" ? "User" : "Assistant";
-        lines.push(`**${role}** (${toLocalDateTime(msg.created_at)})`);
-        lines.push("");
-        lines.push(msg.content_text);
-        lines.push("");
-      });
-    }
-
-    lines.push("---");
-    lines.push("");
-  });
-
-  return lines.join("\n");
+/**
+ * 截断内容
+ */
+function truncateContent(content: string, maxLength: number): string {
+  if (content.length <= maxLength) return content;
+  return content.slice(0, maxLength) + "\n\n[...truncated...]";
 }
 
-function toText(
-  conversations: Conversation[],
-  messagesMap: Map<number, Message[]>,
-  mode: string
-): string {
-  const lines: string[] = [];
-
-  lines.push("VESTI CONVERSATION EXPORT");
-  lines.push("=".repeat(50));
-  lines.push(`Exported: ${new Date().toLocaleString()}`);
-  lines.push(`Threads: ${conversations.length}`);
-  lines.push("");
-
-  conversations.forEach((conv, idx) => {
-    const messages = messagesMap.get(conv.id) || [];
-
-    lines.push(`${idx + 1}. ${conv.title || "Untitled"}`);
-    lines.push(`   Platform: ${conv.platform}`);
-    lines.push(`   URL: ${conv.url || "N/A"}`);
-    lines.push("");
-
-    if (mode === "full") {
-      messages.forEach((msg) => {
-        const role = msg.role === "user" ? "USER" : "AI";
-        lines.push(`${role}: ${msg.content_text}`);
-        lines.push("");
-      });
-    } else {
-      lines.push(conv.snippet || "No content");
-      lines.push("");
-    }
-
-    lines.push("-".repeat(40));
-    lines.push("");
+/**
+ * 格式化日期
+ */
+function formatDate(timestamp: number): string {
+  const d = new Date(timestamp);
+  return d.toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
-
-  return lines.join("\n");
 }
 
-function toJSON(
-  conversations: Conversation[],
-  messagesMap: Map<number, Message[]>,
+/**
+ * 生成文件名
+ */
+function generateFilename(
+  count: number,
+  format: string,
   mode: string
 ): string {
-  const data = conversations.map((conv) => {
-    const messages = messagesMap.get(conv.id) || [];
-    return {
-      id: conv.id,
-      title: conv.title,
-      platform: conv.platform,
-      url: conv.url,
-      created_at: conv.source_created_at || conv.created_at,
-      updated_at: conv.updated_at,
-      snippet: conv.snippet,
-      messages:
-        mode === "full"
-          ? messages
-          : mode === "compact"
-            ? messages.slice(-2) // Last 2 messages
-            : [], // Summary: no messages
-    };
-  });
-
-  return JSON.stringify(
-    {
-      exported_at: new Date().toISOString(),
-      count: conversations.length,
-      content_mode: mode,
-      conversations: data,
-    },
-    null,
-    2
-  );
-}
-
-function generateFilename(count: number, format: string, mode: string): string {
-  const date = new Date().toISOString().slice(0, 10);
-  const modeSuffix = mode === "full" ? "" : `-${mode}`;
-  return `vesti-${count}threads${modeSuffix}-${date}.${format}`;
+  const now = new Date();
+  const date = now.toISOString().split("T")[0];
+  const ext = format === "json" ? "json" : format;
+  return `vesti_export_${count}threads_${mode}_${date}.${ext}`;
 }

@@ -6,6 +6,7 @@ import type {
   SummaryRecord,
   WeeklyReportRecord,
 } from "../types";
+// Note: PACS compression system has been removed
 
 export type ConversationRecord = Omit<Conversation, "id"> & { id?: number };
 export type MessageRecord = Omit<Message, "id" | "content_ast"> & {
@@ -52,8 +53,11 @@ export interface ExploreMessageRecord {
   role: "user" | "assistant";
   content: string;
   sources?: string; // JSON serialized RelatedConversation[]
+  agentMeta?: string; // JSON serialized ExploreAgentMeta
   timestamp: number;
 }
+
+// Note: CompressionCacheRecord removed along with PACS system
 
 function normalizePersistedPlatform(value: unknown): ConversationRecord["platform"] | undefined {
   if (value === "Yuanbao" || value === "YUANBAO") {
@@ -119,6 +123,7 @@ export class MemoryHubDB extends Dexie {
   notes!: Table<NoteRecord, number>;
   explore_sessions!: Table<ExploreSessionRecord, string>;
   explore_messages!: Table<ExploreMessageRecord, string>;
+  // Note: compression_cache table removed (PACS system deleted)
 
   constructor() {
     super("MemoryHubDB");
@@ -333,6 +338,39 @@ export class MemoryHubDB extends Dexie {
             }
           });
       });
+    this.version(11)
+      .stores({
+        conversations:
+          "++id, platform, title, created_at, updated_at, uuid, source_created_at, turn_count, topic_id, is_starred, [platform+created_at], [platform+uuid], [topic_id+updated_at]",
+        messages:
+          "++id, conversation_id, role, created_at, [conversation_id+created_at]",
+        summaries: "++id, conversationId, createdAt",
+        weekly_reports: "++id, rangeStart, rangeEnd, createdAt",
+        topics:
+          "++id, parent_id, name, created_at, updated_at, [parent_id+name]",
+        vectors: "++id, conversation_id, text_hash",
+        notes: "++id, created_at, updated_at",
+        explore_sessions: "id, updatedAt, createdAt",
+        explore_messages: "id, sessionId, timestamp, [sessionId+timestamp]",
+      })
+      .upgrade(() => undefined);
+    this.version(12)
+      .stores({
+        conversations:
+          "++id, platform, title, created_at, updated_at, uuid, source_created_at, turn_count, topic_id, is_starred, [platform+created_at], [platform+uuid], [topic_id+updated_at]",
+        messages:
+          "++id, conversation_id, role, created_at, [conversation_id+created_at]",
+        summaries: "++id, conversationId, createdAt",
+        weekly_reports: "++id, rangeStart, rangeEnd, createdAt",
+        topics:
+          "++id, parent_id, name, created_at, updated_at, [parent_id+name]",
+        vectors: "++id, conversation_id, text_hash",
+        notes: "++id, created_at, updated_at",
+        explore_sessions: "id, updatedAt, createdAt",
+        explore_messages: "id, sessionId, timestamp, [sessionId+timestamp]",
+        // Note: compression_cache store removed (PACS system deleted)
+      })
+      .upgrade(() => undefined);
   }
 }
 

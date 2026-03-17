@@ -1,0 +1,14 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "typeRoots": ["../frontend/node_modules/@types"],
+    "outDir": "../.tmp/eval"
+  },
+  "include": ["./eval-prompts.ts"]
+}

@@ -143,19 +143,18 @@ const PLACEHOLDER_PATTERNS = [
 ] as const;
 const EXPECTED_HEADINGS: Record<ExportCompressionMode, string[]> = {
   compact: [
-    "## Background",
-    "## Key Questions",
-    "## Decisions And Answers",
-    "## Reusable Artifacts",
-    "## Unresolved",
+    "[主题]",
+    "[背景]",
+    "[关键决策]",
+    "[核心代码]",
+    "[来源]",
   ],
   summary: [
     "## TL;DR",
-    "## Problem Frame",
-    "## Important Moves",
-    "## Reusable Snippets",
-    "## Next Steps",
-    "## Tags",
+    "## 问题定义",
+    "## 方案对比",
+    "## 可复用代码",
+    "## 后续行动",
   ],
 };
 
@@ -549,30 +548,30 @@ function buildCompactFallback(
   const artifacts = collectArtifactLines(messages, 5);
   const unresolved = collectUnresolvedLines(messages, 3);
 
-  const background = [
-    `- Title: ${item.conversation.title || "(untitled)"}`,
-    `- Platform: ${item.conversation.platform}`,
-    `- Context: ${pickContextLine(item.conversation, messages)}`,
-    ...constraints.map((constraint) => `- Constraint: ${constraint}`),
-    `- Fallback reason: ${reason}`,
-  ];
+  const firstUser = messages.find((m) => m.role === "user");
+  const lastAi = [...messages].reverse().find((m) => m.role === "ai");
 
-  return [
-    "## Background",
-    ...background,
-    "",
-    "## Key Questions",
-    ...toBulletLines(questions, "- No explicit user question was captured."),
-    "",
-    "## Decisions And Answers",
-    ...toBulletLines(decisions, "- No grounded decision or answer was captured."),
-    "",
-    "## Reusable Artifacts",
-    ...toBulletLines(artifacts, "- None grounded in this thread."),
-    "",
-    "## Unresolved",
-    ...toBulletLines(unresolved, "- No unresolved follow-up was explicit in this thread."),
-  ].join("\n");
+  return `[主题] ${item.conversation.title || "未命名对话"}
+
+[背景] ${firstUser ? shorten(firstUser.content_text, 120) : "无背景信息"}
+${constraints.length > 0 ? "约束条件：" + constraints.map(c => shorten(c, 60)).join("；") : ""}
+
+[关键决策]
+${decisions.length > 0 
+  ? decisions.map((d, i) => `${i + 1}. ${shorten(d, 100)}`).join("\n")
+  : "1. " + (lastAi ? shorten(lastAi.content_text, 100) : "无明确决策")}
+
+[核心代码]
+${artifacts.length > 0 
+  ? artifacts.slice(0, 2).map(a => `- ${shorten(a, 120)}`).join("\n")
+  : "```\n// 无代码或代码未提取\n```"}
+
+[待解决问题]
+${unresolved.length > 0 
+  ? unresolved.map((u, i) => `${i + 1}. ${shorten(u, 80)}`).join("\n")
+  : "无明显待解决问题"}
+
+[来源] ${messages.length}轮对话${reason ? ` (${reason})` : ""}`;
 }
 
 function buildSummaryFallback(
@@ -585,36 +584,42 @@ function buildSummaryFallback(
   const decisions = collectDecisionLines(messages, 3);
   const artifacts = collectArtifactLines(messages, 5);
   const unresolved = collectUnresolvedLines(messages, 3);
-  const roleAwareMoves = collectRoleAwareTurns(messages, 4);
   const tags = collectPotentialTags(item.conversation, messages, 5);
 
-  const problemFrame = [
-    item.conversation.title || "Untitled conversation",
-    pickContextLine(item.conversation, messages),
-    ...questions,
-    ...constraints,
-  ];
-  const importantMoves = decisions.length > 0 ? decisions : roleAwareMoves;
+  const firstUser = messages.find((m) => m.role === "user");
+  const lastAi = [...messages].reverse().find((m) => m.role === "ai");
 
-  return [
-    "## TL;DR",
-    `- ${buildSummaryTldr(item, questions, decisions, unresolved)}`,
-    "",
-    "## Problem Frame",
-    ...toBulletLines(problemFrame, "- No problem framing captured."),
-    "",
-    "## Important Moves",
-    ...toBulletLines(importantMoves, "- No grounded key move was captured."),
-    "",
-    "## Reusable Snippets",
-    ...toBulletLines(artifacts, "- None grounded in this thread."),
-    "",
-    "## Next Steps",
-    ...toBulletLines(unresolved, "- No grounded next step was explicit in this thread."),
-    "",
-    "## Tags",
-    `- ${tags.length > 0 ? tags.join(", ") : `fallback-local, ${reason}`}`,
-  ].join("\n");
+  return `# ${item.conversation.title || "未命名对话"}
+> ${new Date().toISOString().split("T")[0]} | ${item.conversation.platform} | ${messages.length}轮
+
+## TL;DR
+${firstUser ? shorten(firstUser.content_text, 100) : "技术讨论"}
+
+## 问题定义
+${questions.length > 0 
+  ? questions.map((q, i) => `${i + 1}. ${shorten(q, 80)}`).join("\n")
+  : "**症状**：待整理\n**约束**：待整理"}
+
+## 方案对比
+待整理...
+
+## 可复用代码
+${artifacts.length > 0 
+  ? artifacts.slice(0, 3).map(a => `- ${shorten(a, 100)}`).join("\n")
+  : "\`\`\`\n// 请查看原始对话获取完整代码\n\`\`\`"}
+
+## 关键决策依据
+${decisions.length > 0 
+  ? decisions.map((d, i) => `${i + 1}. ${shorten(d, 100)}`).join("\n")
+  : "1. " + (lastAi ? shorten(lastAi.content_text, 100) : "决策待整理")}
+
+## 后续行动
+${unresolved.length > 0 
+  ? unresolved.map(() => `- [ ] 待处理`).join("\n")
+  : "- [ ] 整理完整笔记"}
+
+## 标签
+${tags.length > 0 ? tags.map(t => `#${t}`).join(" ") : `#${item.conversation.platform} #待整理`}${reason ? ` #fallback` : ""}`;
 }
 
 function buildLocalFallback(
@@ -956,11 +961,12 @@ function buildCompressionNotice(
     (result) => result.source === "local_fallback"
   ).length;
   const llmCount = results.length - fallbackCount;
+  const modeLabel = mode === "compact" ? "AI Handoff" : "Knowledge Export";
 
   if (fallbackCount === 0) {
     return {
       tone: "default",
-      message: `${mode === "compact" ? "Compact" : "Summary"} export used the current LLM path for all selected threads.`,
+      message: `${modeLabel} 导出成功：已使用当前 LLM 设置处理所有 ${results.length} 个对话。`,
     };
   }
 
@@ -986,25 +992,25 @@ function buildCompressionNotice(
 ${diagnostic.technicalSummary}`
     : validationFeedback?.detail;
   const hint = diagnostic
-    ? "Check Settings > Model Access."
+    ? "请检查 Settings > Model Access 中的 LLM 配置。"
     : validationFeedback?.hint;
 
   if (llmCount === 0) {
     return {
       tone: "warning",
-      message: `${mode === "compact" ? "Compact" : "Summary"} export used structured local fallback for all selected threads.`,
-      title: "Local fallback used for all selected threads",
-      detail,
+      message: `${modeLabel} 导出：所有对话使用了本地 fallback 格式。`,
+      title: "LLM 压缩未生效",
+      detail: detail || "可能是 API Key 未配置或 LLM 服务暂时不可用。",
       technicalSummary,
-      hint,
+      hint: hint || "请检查 Settings > Model Access 中的配置。",
       diagnostic: diagnostic || null,
     };
   }
 
   return {
     tone: "warning",
-    message: `${mode === "compact" ? "Compact" : "Summary"} export used structured local fallback for ${fallbackCount} of ${results.length} selected threads.`,
-    title: `Local fallback used for ${fallbackCount} of ${results.length} selected threads`,
+    message: `${modeLabel} 导出：${llmCount}/${results.length} 个对话使用 LLM 压缩，${fallbackCount} 个使用本地 fallback。`,
+    title: `部分压缩使用 fallback`,
     detail,
     technicalSummary,
     hint,

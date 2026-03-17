@@ -1,16 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Conversation, Message, Platform, Topic } from "~lib/types";
+import type {
+  Conversation,
+  ConversationMatchSummary,
+  Message,
+  Platform,
+  Topic,
+} from "~lib/types";
+import {
+  getConversationCaptureFreshnessAt,
+  getConversationFirstCapturedAt,
+  getConversationOriginAt,
+  getConversationSourceCreatedAt,
+} from "~lib/conversations/timestamps";
 import {
   deleteConversation,
   getConversations,
   getMessages,
   getTopics,
-  searchConversationIdsByText,
+  searchConversationMatchesByText,
   updateConversationTitle,
 } from "~lib/services/storageService";
 import { trackCardActionClick } from "~lib/services/telemetry";
 import type { DatePreset } from "../types/timelineFilters";
 import { ConversationCard } from "../components/ConversationCard";
+import { SearchLineIcon, SearchSlashIcon } from "../components/ThreadSearchIcons";
 
 interface ConversationListProps {
   searchQuery: string;
@@ -18,16 +31,26 @@ interface ConversationListProps {
   selectedPlatforms: Set<Platform>;
   onSelect: (conversation: Conversation) => void;
   refreshToken: number;
+  resultSummaryMap: Record<number, ConversationMatchSummary>;
+  onResultSummaryMapChange: (next: Record<number, ConversationMatchSummary>) => void;
+  anchorConversationId?: number | null;
+  onAnchorConsumed?: () => void;
+  onBodySearchStarted?: () => void;
+  onBodySearchResolved?: (summaries: ConversationMatchSummary[]) => void;
   // Batch selection support
   isBatchMode?: boolean;
   selectedIds?: Set<number>;
   onToggleSelection?: (id: number) => void;
+  onSelectFromMenu?: (id: number) => void;
+  onFilteredConversationsChange?: (conversations: Conversation[]) => void;
   onConversationsLoaded?: (conversations: Conversation[]) => void;
+  bottomInsetPx?: number;
 }
 
 interface FilteredConversationItem {
   conversation: Conversation;
   matchedInMessagesOnly: boolean;
+  summary?: ConversationMatchSummary;
 }
 
 function pad2(value: number): string {
@@ -45,10 +68,6 @@ function toLocalDateTime(value: number): string {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
-function getDisplayCreatedAt(conversation: Conversation): number {
-  return conversation.source_created_at ?? conversation.created_at;
-}
-
 function buildConversationCopyText(
   conversation: Conversation,
   messages: Message[]
@@ -57,8 +76,22 @@ function buildConversationCopyText(
   lines.push(`# ${conversation.title || "Untitled Conversation"}`);
   lines.push(`Platform: ${conversation.platform}`);
   lines.push(`Source URL: ${conversation.url || "N/A"}`);
-  lines.push(`Created At: ${toLocalDateTime(getDisplayCreatedAt(conversation))}`);
-  lines.push(`Updated At: ${toLocalDateTime(conversation.updated_at)}`);
+  lines.push(`Started At: ${toLocalDateTime(getConversationOriginAt(conversation))}`);
+  const sourceCreatedAt = getConversationSourceCreatedAt(conversation);
+  if (sourceCreatedAt !== null) {
+    lines.push(`Source Time: ${toLocalDateTime(sourceCreatedAt)}`);
+  }
+  lines.push(
+    `First Captured At: ${toLocalDateTime(
+      getConversationFirstCapturedAt(conversation)
+    )}`
+  );
+  lines.push(
+    `Last Captured At: ${toLocalDateTime(
+      getConversationCaptureFreshnessAt(conversation)
+    )}`
+  );
+  lines.push(`Last Modified: ${toLocalDateTime(conversation.updated_at)}`);
   lines.push(`Message Count: ${messages.length}`);
   lines.push("");
 
@@ -131,27 +164,57 @@ export function ConversationList({
   selectedPlatforms,
   onSelect,
   refreshToken,
+  resultSummaryMap,
+  onResultSummaryMapChange,
+  anchorConversationId,
+  onAnchorConsumed,
+  onBodySearchStarted,
+  onBodySearchResolved,
   isBatchMode = false,
   selectedIds = new Set(),
   onToggleSelection,
+  onSelectFromMenu,
+  onFilteredConversationsChange,
   onConversationsLoaded,
+  bottomInsetPx = 16,
 }: ConversationListProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
-  const [messageMatchIds, setMessageMatchIds] = useState<Set<number>>(new Set());
   const [isMessageSearchPending, setIsMessageSearchPending] = useState(false);
   const fullTextCacheRef = useRef<Map<number, string>>(new Map());
-  const queryCacheRef = useRef<Map<string, Set<number>>>(new Map());
+  const queryCacheRef = useRef<Map<string, Record<number, ConversationMatchSummary>>>(
+    new Map()
+  );
   const searchRequestSeqRef = useRef(0);
   const searchDebounceRef = useRef<number | null>(null);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastAnchorRef = useRef<number | null>(null);
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filterKey = useMemo(() => {
+    const platforms = Array.from(selectedPlatforms).sort().join(",");
+    return `${datePreset}|${platforms}`;
+  }, [datePreset, selectedPlatforms]);
+  const candidateConversationIds = useMemo(() => {
+    if (!conversations.length) return [];
+    return conversations
+      .filter((conversation) => {
+        if (!matchesDatePreset(getConversationOriginAt(conversation), datePreset)) {
+          return false;
+        }
+        if (selectedPlatforms.size > 0 && !selectedPlatforms.has(conversation.platform)) {
+          return false;
+        }
+        return true;
+      })
+      .map((conversation) => conversation.id);
+  }, [conversations, datePreset, selectedPlatforms]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     queryCacheRef.current.clear();
-    setMessageMatchIds(new Set());
+    onResultSummaryMapChange({});
     getConversations()
       .then((data) => {
         if (!cancelled) {
@@ -183,33 +246,51 @@ export function ConversationList({
 
     if (normalizedSearchQuery.length < 2) {
       setIsMessageSearchPending(false);
-      setMessageMatchIds(new Set());
+      onResultSummaryMapChange({});
       return;
     }
 
-    const cached = queryCacheRef.current.get(normalizedSearchQuery);
+    const cacheKey = `${normalizedSearchQuery}::${filterKey}`;
+    const cached = queryCacheRef.current.get(cacheKey);
     if (cached) {
       setIsMessageSearchPending(false);
-      setMessageMatchIds(new Set<number>(cached));
+      onResultSummaryMapChange(cached);
+      onBodySearchResolved?.(Object.values(cached));
+      return;
+    }
+
+    if (candidateConversationIds.length === 0) {
+      setIsMessageSearchPending(false);
+      onResultSummaryMapChange({});
+      onBodySearchResolved?.([]);
       return;
     }
 
     setIsMessageSearchPending(true);
+    onBodySearchStarted?.();
     searchDebounceRef.current = window.setTimeout(() => {
       void (async () => {
         try {
-          const ids = await searchConversationIdsByText(normalizedSearchQuery);
+          const summaries = await searchConversationMatchesByText({
+            query: normalizedSearchQuery,
+            conversationIds: candidateConversationIds,
+          });
           if (requestSeq !== searchRequestSeqRef.current) {
             return;
           }
-          const matchSet = new Set(ids);
-          queryCacheRef.current.set(normalizedSearchQuery, matchSet);
-          setMessageMatchIds(new Set<number>(matchSet));
+          const summaryMap: Record<number, ConversationMatchSummary> = {};
+          for (const summary of summaries) {
+            summaryMap[summary.conversationId] = summary;
+          }
+          queryCacheRef.current.set(cacheKey, summaryMap);
+          onResultSummaryMapChange(summaryMap);
+          onBodySearchResolved?.(summaries);
         } catch {
           if (requestSeq !== searchRequestSeqRef.current) {
             return;
           }
-          setMessageMatchIds(new Set<number>());
+          onResultSummaryMapChange({});
+          onBodySearchResolved?.([]);
         } finally {
           if (requestSeq === searchRequestSeqRef.current) {
             setIsMessageSearchPending(false);
@@ -224,32 +305,43 @@ export function ConversationList({
         searchDebounceRef.current = null;
       }
     };
-  }, [normalizedSearchQuery, refreshToken]);
+  }, [
+    candidateConversationIds,
+    filterKey,
+    normalizedSearchQuery,
+    onResultSummaryMapChange,
+  ]);
 
   const filteredConversations = useMemo(() => {
     const convs = conversations ?? [];
     return convs.reduce<FilteredConversationItem[]>((acc, conversation) => {
       const baseMatch = matchesSearch(conversation, normalizedSearchQuery);
-      const textMatch =
-        normalizedSearchQuery.length >= 2 && messageMatchIds.has(conversation.id);
+      const summary =
+        normalizedSearchQuery.length >= 2
+          ? resultSummaryMap[conversation.id]
+          : undefined;
+      const textMatch = Boolean(summary);
       const matchesQuery =
         normalizedSearchQuery.length === 0 ? true : baseMatch || textMatch;
       if (!matchesQuery) return acc;
-      if (!matchesDatePreset(conversation.updated_at, datePreset)) return acc;
+      if (!matchesDatePreset(getConversationOriginAt(conversation), datePreset)) {
+        return acc;
+      }
       if (selectedPlatforms.size > 0 && !selectedPlatforms.has(conversation.platform)) {
         return acc;
       }
       acc.push({
         conversation,
         matchedInMessagesOnly: textMatch && !baseMatch,
+        summary,
       });
       return acc;
     }, []);
   }, [
     conversations,
     datePreset,
-    messageMatchIds,
     normalizedSearchQuery,
+    resultSummaryMap,
     selectedPlatforms,
   ]);
 
@@ -273,6 +365,12 @@ export function ConversationList({
 
   const topicOptions = useMemo(() => flattenTopics(topics), [topics]);
 
+  useEffect(() => {
+    onFilteredConversationsChange?.(
+      filteredConversations.map((item) => item.conversation)
+    );
+  }, [filteredConversations, onFilteredConversationsChange]);
+
   const grouped = useMemo(() => {
     const now = Date.now();
     const today: FilteredConversationItem[] = [];
@@ -280,18 +378,31 @@ export function ConversationList({
     const older: FilteredConversationItem[] = [];
 
     for (const item of filteredConversations) {
-      const diff = now - item.conversation.updated_at;
+      const diff = now - getConversationOriginAt(item.conversation);
       if (diff < 86_400_000) today.push(item);
       else if (diff < 604_800_000) week.push(item);
       else older.push(item);
     }
 
     const groups: { label: string; items: FilteredConversationItem[] }[] = [];
-    if (today.length > 0) groups.push({ label: "Today", items: today });
-    if (week.length > 0) groups.push({ label: "This Week", items: week });
-    if (older.length > 0) groups.push({ label: "Earlier", items: older });
+    if (today.length > 0) groups.push({ label: "Started Today", items: today });
+    if (week.length > 0) groups.push({ label: "Started This Week", items: week });
+    if (older.length > 0) groups.push({ label: "Started Earlier", items: older });
     return groups;
   }, [filteredConversations]);
+
+  useEffect(() => {
+    if (!anchorConversationId || loading) return;
+    if (lastAnchorRef.current === anchorConversationId) return;
+    const target = listContainerRef.current?.querySelector(
+      `[data-conversation-id="${anchorConversationId}"]`
+    );
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      lastAnchorRef.current = anchorConversationId;
+      onAnchorConsumed?.();
+    }
+  }, [anchorConversationId, grouped, loading, onAnchorConsumed]);
 
   const handleCopyFullText = useCallback(async (conversation: Conversation) => {
     const hasCache = fullTextCacheRef.current.has(conversation.id);
@@ -398,16 +509,23 @@ export function ConversationList({
             : item
         );
 
-        next = next.sort((a, b) => b.updated_at - a.updated_at);
+        next = next.sort(
+          (a, b) => getConversationOriginAt(b) - getConversationOriginAt(a)
+        );
 
         if (!normalizedSearchQuery) {
           return next;
         }
 
-        return next.filter((item) => matchesSearch(item, normalizedSearchQuery));
+        return next.filter((item) => {
+          const baseMatch = matchesSearch(item, normalizedSearchQuery);
+          const textMatch =
+            normalizedSearchQuery.length >= 2 && resultSummaryMap[item.id];
+          return baseMatch || Boolean(textMatch);
+        });
       });
     },
-    [normalizedSearchQuery]
+    [normalizedSearchQuery, resultSummaryMap]
   );
 
   if (loading) {
@@ -432,17 +550,27 @@ export function ConversationList({
   }
 
   if (filteredConversations.length === 0) {
+    const emptyLabel = isMessageSearchPending ? "Searching messages..." : "No matches";
     return (
       <div className="flex h-full items-center justify-center p-8">
-        <p className="text-vesti-sm text-text-tertiary">
-          {isMessageSearchPending ? "Searching messages..." : "No matches"}
-        </p>
+        <div className="flex items-center gap-2 text-vesti-sm text-text-tertiary">
+          {isMessageSearchPending ? (
+            <SearchLineIcon className="h-4 w-4 text-text-tertiary" />
+          ) : (
+            <SearchSlashIcon className="h-4 w-4 text-text-tertiary" />
+          )}
+          <span>{emptyLabel}</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="vesti-scroll h-full min-h-0 flex flex-col gap-2 overflow-y-scroll px-4 pb-4">
+    <div
+      ref={listContainerRef}
+      className="vesti-scroll h-full min-h-0 flex flex-col gap-2 overflow-y-scroll px-4"
+      style={{ paddingBottom: `${bottomInsetPx}px` }}
+    >
       {grouped.map((group) => (
         <div key={group.label}>
           <h4 className="-mx-4 sticky top-0 z-10 bg-bg-app px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-tertiary">
@@ -454,6 +582,10 @@ export function ConversationList({
                 key={item.conversation.id}
                 conversation={item.conversation}
                 matchedInMessagesOnly={item.matchedInMessagesOnly}
+                searchQuery={searchQuery}
+                messageExcerpt={
+                  item.matchedInMessagesOnly ? item.summary?.bestExcerpt ?? null : null
+                }
                 onClick={() => onSelect(item.conversation)}
                 onCopyFullText={handleCopyFullText}
                 onOpenSource={handleOpenSource}
@@ -465,6 +597,7 @@ export function ConversationList({
                 isBatchMode={isBatchMode}
                 isSelected={selectedIds.has(item.conversation.id)}
                 onToggleSelect={() => onToggleSelection?.(item.conversation.id)}
+                onSelectFromMenu={() => onSelectFromMenu?.(item.conversation.id)}
               />
             ))}
           </div>
@@ -473,3 +606,8 @@ export function ConversationList({
     </div>
   );
 }
+
+
+
+
+

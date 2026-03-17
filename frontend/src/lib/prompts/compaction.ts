@@ -46,8 +46,8 @@ function toCompactTranscript(messages: Message[]): string {
 function buildCompactionPrompt(payload: CompactionPromptPayload): string {
   const conversationTitle = payload.conversationTitle || "(untitled)";
   const conversationPlatform = payload.conversationPlatform || "unknown";
-  const conversationCreatedAt = payload.conversationCreatedAt
-    ? new Date(payload.conversationCreatedAt).toLocaleString("en-US")
+  const conversationOriginAt = payload.conversationOriginAt
+    ? new Date(payload.conversationOriginAt).toLocaleString("en-US")
     : "unknown";
 
   return `Build an Agent-A compaction markdown skeleton from this conversation slice.
@@ -55,7 +55,7 @@ function buildCompactionPrompt(payload: CompactionPromptPayload): string {
 Metadata:
 - Title: ${conversationTitle}
 - Platform: ${conversationPlatform}
-- CreatedAt: ${conversationCreatedAt}
+- StartedAt: ${conversationOriginAt}
 - Locale: ${payload.locale || "zh"}
 - MessageCount: ${payload.messages.length}
 

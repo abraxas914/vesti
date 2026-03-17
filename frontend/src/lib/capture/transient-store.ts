@@ -17,12 +17,15 @@ export interface TransientCaptureStatusSnapshot {
   messageCount?: number;
   turnCount?: number;
   lastDecision?: CaptureDecisionMeta;
+  firstObservedAt?: number;
   updatedAt?: number;
 }
 
 interface TransientCaptureState {
   payload: TransientCapturePayload | null;
   lastDecision?: CaptureDecisionMeta;
+  currentKey?: string;
+  firstObservedAt?: number;
   updatedAt?: number;
 }
 
@@ -39,8 +42,18 @@ export function createTransientCaptureStore() {
 
   return {
     setPayload(payload: TransientCapturePayload) {
+      const platform = normalizePlatform(payload.conversation.platform) ?? payload.conversation.platform;
+      const transientKey = buildTransientKey(platform, payload.conversation.uuid);
+      if (state.currentKey !== transientKey || !state.firstObservedAt) {
+        state.currentKey = transientKey;
+        state.firstObservedAt = payload.conversation.first_captured_at || Date.now();
+      }
+
       state.payload = {
-        conversation: payload.conversation,
+        conversation: {
+          ...payload.conversation,
+          first_captured_at: state.firstObservedAt,
+        },
         messages: payload.messages,
       };
       state.updatedAt = Date.now();
@@ -52,7 +65,18 @@ export function createTransientCaptureStore() {
     },
 
     getPayload(): TransientCapturePayload | null {
-      return state.payload;
+      if (!state.payload) {
+        return null;
+      }
+
+      return {
+        conversation: {
+          ...state.payload.conversation,
+          first_captured_at:
+            state.firstObservedAt ?? state.payload.conversation.first_captured_at,
+        },
+        messages: state.payload.messages,
+      };
     },
 
     getStatus(): TransientCaptureStatusSnapshot {
@@ -61,6 +85,7 @@ export function createTransientCaptureStore() {
           available: false,
           reason: "no_transient",
           lastDecision: state.lastDecision,
+          firstObservedAt: state.firstObservedAt,
           updatedAt: state.updatedAt,
         };
       }
@@ -79,6 +104,7 @@ export function createTransientCaptureStore() {
         messageCount: messages.length,
         turnCount: countAiTurns(messages),
         lastDecision: state.lastDecision,
+        firstObservedAt: state.firstObservedAt,
         updatedAt: state.updatedAt,
       };
     },

@@ -15,6 +15,10 @@
   RagResponse,
   RelatedConversation,
 } from "../types";
+import {
+  getConversationCaptureFreshnessAt,
+  getConversationOriginAt,
+} from "../conversations/timestamps";
 import { db } from "../db/schema";
 import {
   addExploreMessage,
@@ -889,7 +893,12 @@ async function buildWeeklyEvidenceText(conversations: Conversation[]): Promise<s
     const summary = await getSummary(conversation.id);
     lines.push(
       `- ${conversation.title} [${conversation.platform}]`,
-      `  Updated: ${formatLocalIsoDate(new Date(conversation.updated_at))}`,
+      `  Started: ${formatLocalIsoDate(
+        new Date(getConversationOriginAt(conversation))
+      )}`,
+      `  Captured: ${formatLocalIsoDate(
+        new Date(getConversationCaptureFreshnessAt(conversation))
+      )}`,
       `  Snippet: ${truncateInline(conversation.snippet || "No snippet available", 220)}`,
       `  Summary: ${
         summary?.content?.trim()

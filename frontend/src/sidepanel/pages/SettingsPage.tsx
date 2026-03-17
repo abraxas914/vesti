@@ -42,9 +42,12 @@ import {
   MODELSCOPE_BASE_URL,
   buildDefaultLlmSettings,
   getLlmAccessMode,
+  getProxyBaseUrl,
   normalizeLlmSettings,
   sanitizeByokModelId,
 } from "~lib/services/llmConfig";
+import type { LlmDiagnostic } from "~lib/services/llmService";
+import { getLlmDiagnostic } from "~lib/services/llmService";
 import {
   applyUiTheme,
   getUiSettings,
@@ -180,6 +183,12 @@ function getErrorMessage(error: unknown): string {
 
 const MODEL_ACCESS_FEEDBACK_MAX_CHARS = 180;
 
+interface ModelAccessFeedback {
+  summary: string;
+  detail?: string;
+  hint?: string;
+}
+
 function normalizeModelAccessFeedback(
   message: string | null | undefined,
   fallback: string
@@ -190,11 +199,37 @@ function normalizeModelAccessFeedback(
   return `${collapsed.slice(0, MODEL_ACCESS_FEEDBACK_MAX_CHARS - 3)}...`;
 }
 
-function formatModelTestResultMessage(result: { ok: boolean; message?: string }): string {
+function toModelAccessFeedback(
+  summary: string | null | undefined,
+  fallback: string,
+  options: Partial<Omit<ModelAccessFeedback, "summary">> = {}
+): ModelAccessFeedback {
+  return {
+    summary: normalizeModelAccessFeedback(summary, fallback),
+    detail: options.detail ? normalizeModelAccessFeedback(options.detail, options.detail) : undefined,
+    hint: options.hint ? normalizeModelAccessFeedback(options.hint, options.hint) : undefined,
+  };
+}
+
+function feedbackFromDiagnostic(diagnostic: LlmDiagnostic): ModelAccessFeedback {
+  return {
+    summary: diagnostic.userMessage,
+    detail: diagnostic.technicalSummary,
+  };
+}
+
+function formatModelTestResultMessage(result: {
+  ok: boolean;
+  message?: string;
+  diagnostic?: LlmDiagnostic | null;
+}): ModelAccessFeedback {
   if (result.ok) {
-    return "Connection verified.";
+    return { summary: "Connection verified." };
   }
-  return normalizeModelAccessFeedback(result.message, "Connection test failed.");
+  if (result.diagnostic) {
+    return feedbackFromDiagnostic(result.diagnostic);
+  }
+  return toModelAccessFeedback(result.message, "Connection test failed.");
 }
 
 function parseKeywordsInput(value: string): string[] {
@@ -320,7 +355,8 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
   const [showApiKey, setShowApiKey] = useState(false);
   const [showProxyToken, setShowProxyToken] = useState(false);
   const [modelStatus, setModelStatus] = useState<AsyncStatus>("idle");
-  const [modelMessage, setModelMessage] = useState<string | null>(null);
+  const [modelFeedback, setModelFeedback] = useState<ModelAccessFeedback | null>(null);
+  const [savedLlmSettingsState, setSavedLlmSettingsState] = useState<LlmConfig | null>(null);
   const [captureStatus, setCaptureStatus] = useState<AsyncStatus>("idle");
   const [captureMessage, setCaptureMessage] = useState<string | null>(null);
   const [activeCaptureStatus, setActiveCaptureStatus] =
@@ -349,6 +385,12 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
   const isSmartMode = captureSettings.mode === "smart";
   const isManualMode = captureSettings.mode === "manual";
   const byokEndpointHost = getEndpointHost(MODELSCOPE_BASE_URL);
+  const proxyContextSource =
+    savedLlmSettingsState && getLlmAccessMode(savedLlmSettingsState) === "demo_proxy"
+      ? savedLlmSettingsState
+      : llmSettings;
+  const proxyConnectionBaseUrl = getProxyBaseUrl(proxyContextSource);
+  const proxyServiceTokenAttached = Boolean((proxyContextSource.proxyServiceToken || "").trim());
   const archiveMode = activeCaptureStatus?.mode;
   const canArchiveByMode = archiveMode === "smart" || archiveMode === "manual";
   const canArchiveNow =
@@ -376,9 +418,13 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
     getLlmSettings()
       .then((settings) => {
         if (settings) {
-          setLlmSettingsState(normalizeLlmSettings(settings));
+          const normalized = normalizeLlmSettings(settings);
+          setLlmSettingsState(normalized);
+          setSavedLlmSettingsState(normalized);
         } else {
-          setLlmSettingsState(buildDefaultLlmSettings());
+          const fallback = buildDefaultLlmSettings();
+          setLlmSettingsState(fallback);
+          setSavedLlmSettingsState(fallback);
         }
       })
       .catch(() => {});
@@ -452,52 +498,64 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
         mode: custom ? "custom_byok" : "demo_proxy",
       })
     );
-    setModelMessage(null);
+    setModelFeedback(null);
     setModelStatus("idle");
   };
 
   const handleSave = async () => {
     setModelStatus("loading");
-    setModelMessage(null);
+    setModelFeedback(null);
 
     try {
       const next = resolveSettingsForMode(llmSettings);
       if (getLlmAccessMode(next) === "custom_byok" && !next.apiKey.trim()) {
         setModelStatus("error");
-        setModelMessage("API key is required in custom mode.");
+        setModelFeedback({ summary: "API key is required in custom mode." });
         return;
       }
 
       await setLlmSettings(next);
       setLlmSettingsState(next);
+      setSavedLlmSettingsState(next);
       setModelStatus("ready");
-      setModelMessage("Saved");
+      setModelFeedback({ summary: "Saved." });
     } catch (error) {
+      const diagnostic = getLlmDiagnostic(error);
       setModelStatus("error");
-      setModelMessage(normalizeModelAccessFeedback(getErrorMessage(error), "Save failed."));
+      setModelFeedback(
+        diagnostic
+          ? feedbackFromDiagnostic(diagnostic)
+          : toModelAccessFeedback(getErrorMessage(error), "Save failed.")
+      );
     }
   };
 
   const handleTest = async () => {
     setModelStatus("loading");
-    setModelMessage(null);
+    setModelFeedback(null);
 
     try {
       const next = resolveSettingsForMode(llmSettings);
       if (getLlmAccessMode(next) === "custom_byok" && !next.apiKey.trim()) {
         setModelStatus("error");
-        setModelMessage("API key is required in custom mode.");
+        setModelFeedback({ summary: "API key is required in custom mode." });
         return;
       }
 
       await setLlmSettings(next);
       setLlmSettingsState(next);
+      setSavedLlmSettingsState(next);
       const result = await testLlmConnection();
       setModelStatus(result.ok ? "ready" : "error");
-      setModelMessage(formatModelTestResultMessage(result));
+      setModelFeedback(formatModelTestResultMessage(result));
     } catch (error) {
+      const diagnostic = getLlmDiagnostic(error);
       setModelStatus("error");
-      setModelMessage(normalizeModelAccessFeedback(getErrorMessage(error), "Connection test failed."));
+      setModelFeedback(
+        diagnostic
+          ? feedbackFromDiagnostic(diagnostic)
+          : toModelAccessFeedback(getErrorMessage(error), "Connection test failed.")
+      );
     }
   };
 
@@ -781,9 +839,26 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                     <span>Proxy</span>
                   </div>
                   <p className="text-[11px] font-sans text-text-tertiary">
-                    Summary and Explore embeddings route through proxy by default. Service token is
-                    optional and only needed when your proxy enforces token checks.
+                    Chat requests attach the service-token header only when this field is non-empty.
+                    Some proxy deployments or embeddings routes may enforce it, but the current
+                    inspected chat route may not.
                   </p>
+                  <div className="model-access-info-block">
+                    <div className="model-access-info-row">
+                      <span className="model-access-info-key">Route</span>
+                      <span className="model-access-info-value">Proxy chat</span>
+                    </div>
+                    <div className="model-access-info-row">
+                      <span className="model-access-info-key">Base URL</span>
+                      <span className="model-access-info-value">{proxyConnectionBaseUrl}</span>
+                    </div>
+                    <div className="model-access-info-row">
+                      <span className="model-access-info-key">Header</span>
+                      <span className="model-access-info-value">
+                        Service token header: {proxyServiceTokenAttached ? "attached" : "omitted"}
+                      </span>
+                    </div>
+                  </div>
 
                   <div className="model-access-field-group">
                     <label className="model-access-input-label">Base URL</label>
@@ -943,14 +1018,20 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                 </div>
               )}
 
-              {modelMessage && modelStatus !== "loading" && (
-                <p
-                  className={`model-access-feedback ${
-                    modelStatus === "error" ? "text-danger" : "text-text-secondary"
+              {modelFeedback && modelStatus !== "loading" && (
+                <div
+                  className={`model-access-feedback-card ${
+                    modelStatus === "error" ? "is-error" : ""
                   }`}
                 >
-                  {modelMessage}
-                </p>
+                  <p className="model-access-feedback-title">{modelFeedback.summary}</p>
+                  {modelFeedback.detail && (
+                    <p className="model-access-feedback-detail">{modelFeedback.detail}</p>
+                  )}
+                  {modelFeedback.hint && (
+                    <p className="model-access-feedback-hint">{modelFeedback.hint}</p>
+                  )}
+                </div>
               )}
             </div>
           ) : null}

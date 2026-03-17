@@ -10,6 +10,7 @@ import {
   listMessages,
   listNotes,
   searchConversationIdsByText,
+  searchConversationMatchesByText,
   deleteConversation,
   createNote,
   updateNote,
@@ -118,6 +119,7 @@ type ContentTransientStatusResponse =
         messageCount?: number;
         turnCount?: number;
         lastDecision?: ActiveCaptureStatus["lastDecision"];
+        firstObservedAt?: number;
         updatedAt?: number;
       };
     }
@@ -273,6 +275,7 @@ async function buildActiveCaptureStatus(mode: CaptureMode): Promise<ActiveCaptur
       messageCount: response.status.messageCount,
       turnCount: response.status.turnCount,
       lastDecision: response.status.lastDecision,
+      firstObservedAt: response.status.firstObservedAt,
       updatedAt: response.status.updatedAt,
     };
   } catch {
@@ -461,6 +464,10 @@ async function handleOffscreenRequest(message: RequestMessage): Promise<Response
       }
       case "SEARCH_CONVERSATION_IDS_BY_TEXT": {
         const data = await searchConversationIdsByText(message.payload.query);
+        return { ok: true, type: messageType, data };
+      }
+      case "SEARCH_CONVERSATION_MATCHES_BY_TEXT": {
+        const data = await searchConversationMatchesByText(message.payload);
         return { ok: true, type: messageType, data };
       }
       case "DELETE_CONVERSATION": {

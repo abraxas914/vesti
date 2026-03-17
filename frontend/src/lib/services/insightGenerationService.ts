@@ -49,6 +49,10 @@ import {
 import type { WeeklySemanticIssueCode } from "./insightSchemas";
 import { logger } from "../utils/logger";
 import { getEffectiveModelId, getLlmAccessMode } from "./llmConfig";
+import {
+  getConversationCaptureFreshnessAt,
+  getConversationOriginAt,
+} from "../conversations/timestamps";
 
 const SUMMARY_MAX_CHARS = 12000;
 const WEEKLY_MAX_CHARS = 12000;
@@ -563,13 +567,17 @@ function buildWeeklySemanticRepairPrompt(
   const issueBlock =
     issueCodes.map((code) => `- ${code}`).join("\n") || "- UNKNOWN_ISSUE";
 
-  return `涓嬫柟 weekly_lite.v1 JSON 鍙互瑙ｆ瀽锛屼絾璇箟璐ㄩ噺鏈揪鏍囥€傝涓ユ牸淇鍚庝粎杈撳嚭涓€涓?JSON 瀵硅薄銆?
-闂鍒楄〃:
+  return `The weekly_lite.v1 JSON below is parseable, but its semantic quality is not acceptable. Repair it and output exactly one JSON object only.
+Issue list:
 ${issueBlock}
 
-淇瑙勫垯:
-1) highlights / recurring_questions / unresolved_threads / suggested_focus 鐨勬瘡鏉￠兘蹇呴』鏄畬鏁村彲璇荤煭鍙ワ紝绂佹鍗曞瓧銆佽瘝妗╁拰绗﹀彿娈嬬墖銆?2) recurring_questions 搴旇鏄€滈棶棰樺彞鈥濓紝浼樺厛淇濈暀甯﹂棶鎰忔垨鎺㈢储鎰忓浘鐨勮〃杈俱€?3) 鎵€鏈?claim 蹇呴』鏉ヨ嚜鐜版湁璇佹嵁锛岀姝㈡柊澧炴棤渚濇嵁浜嬪疄銆?4) 淇濇寔 weekly_lite.v1 瀛楁瀹屾暣锛屼笉寰楁柊澧?鍒犻櫎瀛楁锛沜ross_domain_echoes 鏃犺瘉鎹椂浣跨敤 []銆?5) 鑻ヤ慨澶嶅悗浠嶆棤娉曚繚璇佽川閲忥紝璇蜂繚鎸?insufficient_data=true锛屽苟纭繚闄?highlights 澶栧叾浣欏垪琛ㄤ负绌恒€?
-褰撳墠 JSON:
+Repair rules:
+1) Every item in highlights, recurring_questions, unresolved_threads, and suggested_focus must be a complete readable short sentence. No single-character fragments or broken token stubs.
+2) recurring_questions should be phrased as question-like prompts when the evidence supports that interpretation.
+3) Every non-trivial claim must be grounded in the provided evidence. Do not invent new facts.
+4) Keep the weekly_lite.v1 schema intact. Do not add or remove fields. Use [] for cross_domain_echoes when there is no evidence.
+5) If quality still cannot be guaranteed after repair, keep insufficient_data=true and ensure every list except highlights is empty.
+Current JSON:
 ${JSON.stringify(report)}`;
 }
 
@@ -852,15 +860,10 @@ function shouldSkipSummaryCompaction(
   conversation: Conversation,
   messages: Message[]
 ): boolean {
-  // 原版本逻辑：简单检查消息数和字符数
   if (conversation.message_count <= SUMMARY_COMPACTION_SKIP_MAX_MESSAGES) {
     return true;
   }
-  const totalChars = messages.reduce(
-    (sum, m) => sum + m.content_text.length,
-    0
-  );
-  return totalChars <= SUMMARY_COMPACTION_SKIP_MAX_CHARS;
+  return countInputChars(messages) <= SUMMARY_COMPACTION_SKIP_MAX_CHARS;
 }
 
 function buildSummaryPromptFromCompaction(
@@ -894,19 +897,17 @@ async function runCompaction(
   conversation: Conversation,
   messages: Message[]
 ): Promise<CompactionExecution> {
-  const startedAt = Date.now();
-  const charsIn = countInputChars(messages);
-
-  // 压缩方式：使用传统 compaction prompt
   const prompt = getPrompt("compaction", { variant: "current" });
+  const charsIn = countInputChars(messages);
   const payload = {
     conversationTitle: conversation.title,
     conversationPlatform: conversation.platform,
-    conversationCreatedAt: conversation.created_at,
+    conversationOriginAt: getConversationOriginAt(conversation),
     messages,
     locale: "zh" as const,
   };
 
+  const startedAt = Date.now();
   try {
     const compactionPrompt = truncateForContext(
       prompt.userTemplate(payload),
@@ -1034,7 +1035,9 @@ function buildSummaryReferenceFromRecord(summaryRecord: SummaryRecord): string {
 }
 
 function selectWeeklyCandidates(conversations: Conversation[]): Conversation[] {
-  const sorted = [...conversations].sort((a, b) => b.created_at - a.created_at);
+  const sorted = [...conversations].sort(
+    (a, b) => getConversationOriginAt(b) - getConversationOriginAt(a)
+  );
   return sorted.slice(0, WEEKLY_CANDIDATE_LIMIT);
 }
 
@@ -1127,7 +1130,10 @@ async function buildWeeklyLiteInput(
       if (a.conversation.message_count !== b.conversation.message_count) {
         return b.conversation.message_count - a.conversation.message_count;
       }
-      return b.conversation.created_at - a.conversation.created_at;
+      return (
+        getConversationOriginAt(b.conversation) -
+        getConversationOriginAt(a.conversation)
+      );
     })
     .slice(0, WEEKLY_DEFAULT_INPUT_LIMIT);
 
@@ -1462,7 +1468,7 @@ async function generateStructuredSummary(
   const payload = {
     conversationTitle: conversation.title,
     conversationPlatform: conversation.platform,
-    conversationCreatedAt: conversation.created_at,
+    conversationOriginAt: getConversationOriginAt(conversation),
     messages,
     locale: "zh" as const,
   };
@@ -2470,7 +2476,7 @@ export async function generateConversationSummary(
       schemaVersion: generated.schemaVersion,
       modelId: getEffectiveModelId(settings),
       createdAt: Date.now(),
-      sourceUpdatedAt: conversation.updated_at,
+      sourceUpdatedAt: getConversationCaptureFreshnessAt(conversation),
     });
 
     if (generated.status === "fallback") {
@@ -2599,3 +2605,5 @@ export async function generateWeeklyReport(
     throw error;
   }
 }
+
+

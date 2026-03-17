@@ -57,5 +57,5 @@ This directory consolidates and supersedes web-specific guidance previously scat
 - `documents/engineering_handoffs/2026-02-27-vesti-web-convergence-roadmap.md`
 - `documents/engineering_handoffs/2026-03-07-v1_2_0-rc7-yuanbao-web-dashboard-handoff.md`
 - `documents/ui_refactor/v1_4_ui_refactor_engineering_spec.md`
-- `documents/capture_engine/v1_4_capture_engine_hardening_retrospective.md`
-- `documents/capture_engine/v1_5_capture_engine_refactor_roadmap.md`
+- `documents/capture_engine/capture_engine_current_architecture.md`
+- `documents/capture_engine/capture_engine_engineering_spec.md`

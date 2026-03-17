@@ -49,6 +49,26 @@ function resolveSourceCreatedAt(
   return incomingSourceCreatedAt;
 }
 
+function resolveFirstCapturedAt(
+  existingFirstCapturedAt: number | undefined,
+  incomingFirstCapturedAt: number,
+  fallbackCreatedAt: number
+): number {
+  if (
+    typeof existingFirstCapturedAt === "number" &&
+    Number.isFinite(existingFirstCapturedAt) &&
+    existingFirstCapturedAt > 0
+  ) {
+    return existingFirstCapturedAt;
+  }
+
+  if (Number.isFinite(incomingFirstCapturedAt) && incomingFirstCapturedAt > 0) {
+    return incomingFirstCapturedAt;
+  }
+
+  return fallbackCreatedAt;
+}
+
 export async function deduplicateAndSave(
   conversation: ConversationDraft,
   messages: ParsedMessage[]
@@ -60,6 +80,7 @@ export async function deduplicateAndSave(
 
   await enforceStorageWriteGuard();
   const turnCount = countAiTurns(cleanMessages);
+  const persistedAt = Date.now();
 
   return db.transaction("rw", db.conversations, db.messages, async () => {
     const existing = await db.conversations
@@ -100,13 +121,20 @@ export async function deduplicateAndSave(
         existing.source_created_at ?? null,
         conversation.source_created_at
       );
+      const mergedFirstCapturedAt = resolveFirstCapturedAt(
+        existing.first_captured_at,
+        conversation.first_captured_at,
+        existing.created_at
+      );
 
       await db.conversations.update(existing.id, {
-        updated_at: conversation.updated_at,
+        updated_at: persistedAt,
+        last_captured_at: persistedAt,
         message_count: cleanMessages.length,
         turn_count: turnCount,
         snippet: cleanMessages[0]?.textContent.slice(0, 100) ?? conversation.snippet,
         source_created_at: mergedSourceCreatedAt,
+        first_captured_at: mergedFirstCapturedAt,
       } as Partial<ConversationRecord>);
 
       return {
@@ -118,6 +146,14 @@ export async function deduplicateAndSave(
 
     const record: ConversationRecord = {
       ...conversation,
+      first_captured_at: resolveFirstCapturedAt(
+        undefined,
+        conversation.first_captured_at,
+        persistedAt
+      ),
+      last_captured_at: persistedAt,
+      created_at: persistedAt,
+      updated_at: persistedAt,
       message_count: cleanMessages.length,
       turn_count: turnCount,
       snippet: cleanMessages[0]?.textContent.slice(0, 100) ?? conversation.snippet,

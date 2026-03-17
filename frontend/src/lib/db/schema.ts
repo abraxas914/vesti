@@ -6,7 +6,6 @@ import type {
   SummaryRecord,
   WeeklyReportRecord,
 } from "../types";
-// Note: PACS compression system has been removed
 
 export type ConversationRecord = Omit<Conversation, "id"> & { id?: number };
 export type MessageRecord = Omit<Message, "id" | "content_ast"> & {
@@ -56,8 +55,6 @@ export interface ExploreMessageRecord {
   agentMeta?: string; // JSON serialized ExploreAgentMeta
   timestamp: number;
 }
-
-// Note: CompressionCacheRecord removed along with PACS system
 
 function normalizePersistedPlatform(value: unknown): ConversationRecord["platform"] | undefined {
   if (value === "Yuanbao" || value === "YUANBAO") {
@@ -123,7 +120,6 @@ export class MemoryHubDB extends Dexie {
   notes!: Table<NoteRecord, number>;
   explore_sessions!: Table<ExploreSessionRecord, string>;
   explore_messages!: Table<ExploreMessageRecord, string>;
-  // Note: compression_cache table removed (PACS system deleted)
 
   constructor() {
     super("MemoryHubDB");
@@ -368,9 +364,33 @@ export class MemoryHubDB extends Dexie {
         notes: "++id, created_at, updated_at",
         explore_sessions: "id, updatedAt, createdAt",
         explore_messages: "id, sessionId, timestamp, [sessionId+timestamp]",
-        // Note: compression_cache store removed (PACS system deleted)
       })
-      .upgrade(() => undefined);
+      .upgrade(async (tx) => {
+        await tx
+          .table("conversations")
+          .toCollection()
+          .modify((record: Partial<ConversationRecord>) => {
+            if (
+              typeof record.first_captured_at !== "number" ||
+              !Number.isFinite(record.first_captured_at)
+            ) {
+              record.first_captured_at =
+                typeof record.created_at === "number" && Number.isFinite(record.created_at)
+                  ? record.created_at
+                  : Date.now();
+            }
+
+            if (
+              typeof record.last_captured_at !== "number" ||
+              !Number.isFinite(record.last_captured_at)
+            ) {
+              record.last_captured_at =
+                typeof record.updated_at === "number" && Number.isFinite(record.updated_at)
+                  ? record.updated_at
+                  : record.first_captured_at;
+            }
+          });
+      });
   }
 }
 

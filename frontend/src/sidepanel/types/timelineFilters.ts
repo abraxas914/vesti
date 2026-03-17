@@ -7,10 +7,10 @@ export const DATE_PRESET_OPTIONS: ReadonlyArray<{
   id: DatePreset;
   label: string;
 }> = [
-  { id: "all_time", label: "All time" },
-  { id: "today", label: "Today" },
-  { id: "this_week", label: "This week" },
-  { id: "this_month", label: "This month" },
+  { id: "all_time", label: "Started any time" },
+  { id: "today", label: "Started today" },
+  { id: "this_week", label: "Started this week" },
+  { id: "this_month", label: "Started this month" },
 ];
 
 export const PLATFORM_OPTIONS: ReadonlyArray<Platform> = [

@@ -1,177 +1,356 @@
-/**
- * Export Conversations - 导出功能
- * 使用传统方式导出对话
- */
-
-import type { Conversation, Message } from "~lib/types";
-import type { ExportConfig, ExportResult } from "../components/ExportDialog";
 import { getMessages } from "~lib/services/storageService";
-import { logger } from "~lib/utils/logger";
+import type { Conversation, Message } from "~lib/types";
+import {
+  getConversationCaptureFreshnessAt,
+  getConversationFirstCapturedAt,
+  getConversationOriginAt,
+  getConversationSourceCreatedAt,
+} from "~lib/conversations/timestamps";
+import type {
+  ConversationExportConfig,
+  ConversationExportContentMode,
+  ConversationExportResult,
+} from "../types/export";
+import {
+  compressExportDataset,
+  type CompressedConversationExport,
+  type ConversationExportDatasetItem,
+  type ExportCompressionMode,
+} from "./exportCompression";
 
 function toLocalDateTime(timestamp: number): string {
   const d = new Date(timestamp);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
 }
 
-/**
- * 主导出函数
- */
-export async function exportConversations(
-  conversations: Conversation[],
-  config: ExportConfig
-): Promise<ExportResult> {
-  const { contentMode, format } = config;
-
-  // 传统导出方式
-  return exportWithLegacyFormat(conversations, config);
+function toOrderedMessages(messages: Message[]): Message[] {
+  return [...messages].sort((a, b) => a.created_at - b.created_at);
 }
 
-/**
- * 传统导出方式
- */
-async function exportWithLegacyFormat(
-  conversations: Conversation[],
-  config: ExportConfig
-): Promise<ExportResult> {
-  const { contentMode, format } = config;
-
-  // 获取所有对话的消息
-  const messagesMap = new Map<number, Message[]>();
-  await Promise.all(
-    conversations.map(async (conv) => {
-      const messages = await getMessages(conv.id);
-      messagesMap.set(conv.id, messages);
+async function buildExportDataset(
+  conversations: Conversation[]
+): Promise<ConversationExportDatasetItem[]> {
+  const pairs = await Promise.all(
+    conversations.map(async (conversation) => {
+      const messages = await getMessages(conversation.id);
+      return {
+        conversation,
+        messages: toOrderedMessages(messages),
+      } satisfies ConversationExportDatasetItem;
     })
   );
 
-  const parts: string[] = [];
-
-  for (const conv of conversations) {
-    const messages = messagesMap.get(conv.id) || [];
-
-    if (format === "md") {
-      // Markdown 格式
-      const lines: string[] = [];
-      lines.push(`# ${conv.title || "Untitled"}`);
-      lines.push(`> Platform: ${conv.platform} | Date: ${formatDate(conv.source_created_at || conv.created_at)}`);
-      lines.push("");
-
-      for (const msg of messages) {
-        const role = msg.role === "user" ? "**User**" : "**AI**";
-        lines.push(`${role} (${formatDate(msg.created_at)})`);
-        lines.push("");
-        
-        // 根据 contentMode 处理内容
-        let content = msg.content_text;
-        if (contentMode === "compact") {
-          // Compact 模式：简单截断，保留前 2000 字符
-          content = truncateContent(content, 2000);
-        } else if (contentMode === "summary") {
-          // Summary 模式：保留前 1000 字符
-          content = truncateContent(content, 1000);
-        }
-        // Full 模式：完整内容
-        
-        lines.push(content);
-        lines.push("");
-        lines.push("---");
-        lines.push("");
-      }
-
-      parts.push(lines.join("\n"));
-    } else if (format === "txt") {
-      // 纯文本格式
-      const lines: string[] = [];
-      lines.push(`=${conv.title || "Untitled"}=`);
-      lines.push(`Platform: ${conv.platform}`);
-      lines.push("");
-
-      for (const msg of messages) {
-        const role = msg.role === "user" ? "USER" : "AI";
-        lines.push(`[${role}] ${formatDate(msg.created_at)}`);
-        
-        let content = msg.content_text;
-        if (contentMode === "compact") {
-          content = truncateContent(content, 2000);
-        } else if (contentMode === "summary") {
-          content = truncateContent(content, 1000);
-        }
-        
-        lines.push(content);
-        lines.push("");
-      }
-
-      parts.push(lines.join("\n"));
-    } else if (format === "json") {
-      // JSON 格式
-      const data = {
-        conversation: {
-          id: conv.id,
-          title: conv.title,
-          platform: conv.platform,
-          url: conv.url,
-          created_at: conv.created_at,
-          source_created_at: conv.source_created_at,
-        },
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: contentMode === "full" 
-            ? m.content_text 
-            : truncateContent(m.content_text, contentMode === "compact" ? 2000 : 1000),
-          created_at: m.created_at,
-        })),
-      };
-      parts.push(JSON.stringify(data, null, 2));
-    }
-  }
-
-  const content = parts.join("\n\n" + "=".repeat(50) + "\n\n");
-
-  logger.info("export", "Export completed", {
-    conversationCount: conversations.length,
-    format,
-    contentMode,
-  });
-
-  return {
-    content,
-    filename: generateFilename(conversations.length, format, contentMode),
-  };
+  return pairs;
 }
 
-/**
- * 截断内容
- */
-function truncateContent(content: string, maxLength: number): string {
-  if (content.length <= maxLength) return content;
-  return content.slice(0, maxLength) + "\n\n[...truncated...]";
+function toCompressionMap(
+  items: CompressedConversationExport[]
+): Map<number, CompressedConversationExport> {
+  return new Map(items.map((item) => [item.conversation.id, item]));
 }
 
-/**
- * 格式化日期
- */
-function formatDate(timestamp: number): string {
-  const d = new Date(timestamp);
-  return d.toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function resolveExportMime(format: string): string {
+  return format === "json"
+    ? "application/json"
+    : "text/plain;charset=utf-8";
 }
 
-/**
- * 生成文件名
- */
 function generateFilename(
   count: number,
   format: string,
-  mode: string
+  mode: ConversationExportContentMode
 ): string {
-  const now = new Date();
-  const date = now.toISOString().split("T")[0];
-  const ext = format === "json" ? "json" : format;
-  return `vesti_export_${count}threads_${mode}_${date}.${ext}`;
+  const date = new Date().toISOString().slice(0, 10);
+  const modeSuffix = mode === "full" ? "" : `-${mode}`;
+  return `vesti-${count}threads${modeSuffix}-${date}.${format}`;
+}
+
+function markdownToPlainText(value: string): string {
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/^###\s+/gm, "")
+    .replace(/^##\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function getCompressionLabel(item: CompressedConversationExport): string {
+  return item.source === "llm"
+    ? item.usedFallbackPrompt
+      ? "Current LLM settings (fallback prompt)"
+      : "Current LLM settings"
+    : `Deterministic local fallback${
+        item.fallbackReason ? ` (${item.fallbackReason})` : ""
+      }`;
+}
+
+function toMarkdown(
+  dataset: ConversationExportDatasetItem[],
+  mode: ConversationExportContentMode,
+  compressionMap: Map<number, CompressedConversationExport>
+): string {
+  const lines: string[] = [];
+
+  lines.push("# VESTI Conversation Export");
+  lines.push("");
+  lines.push(`**Exported:** ${new Date().toLocaleString()}`);
+  lines.push(`**Threads:** ${dataset.length}`);
+  lines.push(`**Mode:** ${mode}`);
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+
+  dataset.forEach((item, index) => {
+    const { conversation, messages } = item;
+    lines.push(`## ${index + 1}. ${conversation.title || "Untitled"}`);
+    lines.push("");
+    lines.push(`- **Platform:** ${conversation.platform}`);
+    lines.push(`- **URL:** ${conversation.url || "N/A"}`);
+    lines.push(`- **Started At:** ${toLocalDateTime(getConversationOriginAt(conversation))}`);
+    const sourceCreatedAt = getConversationSourceCreatedAt(conversation);
+    if (sourceCreatedAt !== null) {
+      lines.push(`- **Source Time:** ${toLocalDateTime(sourceCreatedAt)}`);
+    }
+    lines.push(
+      `- **First Captured At:** ${toLocalDateTime(
+        getConversationFirstCapturedAt(conversation)
+      )}`
+    );
+    lines.push(
+      `- **Last Captured At:** ${toLocalDateTime(
+        getConversationCaptureFreshnessAt(conversation)
+      )}`
+    );
+    lines.push(`- **Last Modified:** ${toLocalDateTime(conversation.updated_at)}`);
+    lines.push(`- **Messages:** ${messages.length}`);
+
+    if (mode !== "full") {
+      const compression = compressionMap.get(conversation.id);
+      if (compression) {
+        lines.push(`- **Compression:** ${getCompressionLabel(compression)}`);
+      }
+    }
+
+    lines.push("");
+
+    if (mode === "full") {
+      lines.push("### Conversation");
+      lines.push("");
+      messages.forEach((message) => {
+        const role = message.role === "user" ? "User" : "Assistant";
+        lines.push(`**${role}** (${toLocalDateTime(message.created_at)})`);
+        lines.push("");
+        lines.push(message.content_text);
+        lines.push("");
+      });
+    } else {
+      const compression = compressionMap.get(conversation.id);
+      if (!compression) {
+        throw new Error(`Missing compression payload for conversation ${conversation.id}`);
+      }
+      lines.push(mode === "compact" ? "### Compact Handoff" : "### Summary Note");
+      lines.push("");
+      lines.push(compression.body);
+      lines.push("");
+    }
+
+    lines.push("---");
+    lines.push("");
+  });
+
+  return lines.join("\n");
+}
+
+function toText(
+  dataset: ConversationExportDatasetItem[],
+  mode: ConversationExportContentMode,
+  compressionMap: Map<number, CompressedConversationExport>
+): string {
+  const lines: string[] = [];
+
+  lines.push("VESTI CONVERSATION EXPORT");
+  lines.push("=".repeat(50));
+  lines.push(`Exported: ${new Date().toLocaleString()}`);
+  lines.push(`Threads: ${dataset.length}`);
+  lines.push(`Mode: ${mode}`);
+  lines.push("");
+
+  dataset.forEach((item, index) => {
+    const { conversation, messages } = item;
+    lines.push(`${index + 1}. ${conversation.title || "Untitled"}`);
+    lines.push(`   Platform: ${conversation.platform}`);
+    lines.push(`   Started At: ${toLocalDateTime(getConversationOriginAt(conversation))}`);
+    const sourceCreatedAt = getConversationSourceCreatedAt(conversation);
+    if (sourceCreatedAt !== null) {
+      lines.push(`   Source Time: ${toLocalDateTime(sourceCreatedAt)}`);
+    }
+    lines.push(
+      `   First Captured At: ${toLocalDateTime(
+        getConversationFirstCapturedAt(conversation)
+      )}`
+    );
+    lines.push(
+      `   Last Captured At: ${toLocalDateTime(
+        getConversationCaptureFreshnessAt(conversation)
+      )}`
+    );
+    lines.push(`   Last Modified: ${toLocalDateTime(conversation.updated_at)}`);
+    lines.push(`   URL: ${conversation.url || "N/A"}`);
+    lines.push(`   Messages: ${messages.length}`);
+
+    if (mode === "full") {
+      lines.push("");
+      messages.forEach((message) => {
+        const role = message.role === "user" ? "USER" : "AI";
+        lines.push(`${role} (${toLocalDateTime(message.created_at)}): ${message.content_text}`);
+        lines.push("");
+      });
+    } else {
+      const compression = compressionMap.get(conversation.id);
+      if (!compression) {
+        throw new Error(`Missing compression payload for conversation ${conversation.id}`);
+      }
+      lines.push(`   Compression: ${getCompressionLabel(compression)}`);
+      lines.push("");
+      lines.push(markdownToPlainText(compression.body));
+      lines.push("");
+    }
+
+    lines.push("-".repeat(40));
+    lines.push("");
+  });
+
+  return lines.join("\n");
+}
+
+function toJson(
+  dataset: ConversationExportDatasetItem[],
+  mode: ConversationExportContentMode,
+  compressionMap: Map<number, CompressedConversationExport>
+): string {
+  const conversations = dataset.map((item) => {
+    const { conversation, messages } = item;
+    const base = {
+      id: conversation.id,
+      title: conversation.title,
+      platform: conversation.platform,
+      url: conversation.url,
+      source_created_at: getConversationSourceCreatedAt(conversation),
+      origin_at: getConversationOriginAt(conversation),
+      first_captured_at: getConversationFirstCapturedAt(conversation),
+      last_captured_at: getConversationCaptureFreshnessAt(conversation),
+      created_at: conversation.created_at,
+      updated_at: conversation.updated_at,
+      snippet: conversation.snippet,
+      message_count: messages.length,
+    };
+
+    if (mode === "full") {
+      return {
+        ...base,
+        messages,
+      };
+    }
+
+    const compression = compressionMap.get(conversation.id);
+    if (!compression) {
+      throw new Error(`Missing compression payload for conversation ${conversation.id}`);
+    }
+
+    return {
+      ...base,
+      compressed_content: compression.body,
+      compression: {
+        mode: compression.mode,
+        source: compression.source,
+        route: compression.route || null,
+        used_fallback_prompt: compression.usedFallbackPrompt,
+        fallback_reason: compression.fallbackReason || null,
+      },
+    };
+  });
+
+  return JSON.stringify(
+    {
+      exported_at: new Date().toISOString(),
+      count: dataset.length,
+      content_mode: mode,
+      conversations,
+    },
+    null,
+    2
+  );
+}
+
+function serializeExport(
+  dataset: ConversationExportDatasetItem[],
+  config: ConversationExportConfig,
+  compressionMap: Map<number, CompressedConversationExport>
+): string {
+  switch (config.format) {
+    case "md":
+      return toMarkdown(dataset, config.contentMode, compressionMap);
+    case "txt":
+      return toText(dataset, config.contentMode, compressionMap);
+    case "json":
+      return toJson(dataset, config.contentMode, compressionMap);
+    default:
+      throw new Error(`Unsupported format: ${config.format}`);
+  }
+}
+
+export async function exportConversations(
+  conversations: Conversation[],
+  config: ConversationExportConfig
+): Promise<ConversationExportResult> {
+  const dataset = await buildExportDataset(conversations);
+  let compressionMap = new Map<number, CompressedConversationExport>();
+  let notice: ConversationExportResult["notice"];
+
+  if (config.contentMode !== "full") {
+    const compressed = await compressExportDataset(
+      dataset,
+      config.contentMode as ExportCompressionMode
+    );
+    compressionMap = toCompressionMap(compressed.items);
+    notice = compressed.notice;
+  }
+
+  const content = serializeExport(dataset, config, compressionMap);
+  return {
+    content,
+    filename: generateFilename(conversations.length, config.format, config.contentMode),
+    mime: resolveExportMime(config.format),
+    notice,
+  };
+}
+
+export function downloadConversationExport(
+  result: ConversationExportResult
+): void {
+  const blob = new Blob([result.content], { type: result.mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = result.filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function copyConversationExport(
+  result: ConversationExportResult
+): Promise<void> {
+  if (
+    typeof navigator === "undefined" ||
+    typeof navigator.clipboard?.writeText !== "function"
+  ) {
+    throw new Error("Clipboard copy is unavailable in this context.");
+  }
+
+  await navigator.clipboard.writeText(result.content);
 }

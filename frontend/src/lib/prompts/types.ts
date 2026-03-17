@@ -1,12 +1,18 @@
 import type { Conversation, ConversationSummaryV2, Message } from "../types";
+import type { ExportPromptProfile } from "../services/llmModelProfile";
 
-export type PromptType = "compaction" | "conversationSummary" | "weeklyDigest";
+export type PromptType =
+  | "compaction"
+  | "conversationSummary"
+  | "weeklyDigest"
+  | "exportCompact"
+  | "exportSummary";
 export type PromptVariant = "current" | "experimental";
 
 export interface CompactionPromptPayload {
   conversationTitle?: string;
   conversationPlatform?: string;
-  conversationCreatedAt?: number;
+  conversationOriginAt?: number;
   messages: Message[];
   locale?: "zh" | "en";
 }
@@ -14,7 +20,7 @@ export interface CompactionPromptPayload {
 export interface ConversationSummaryPromptPayload {
   conversationTitle?: string;
   conversationPlatform?: string;
-  conversationCreatedAt?: number;
+  conversationOriginAt?: number;
   messages: Message[];
   locale?: "zh" | "en";
 }
@@ -35,6 +41,15 @@ export interface WeeklyDigestPromptPayload {
   locale?: "zh" | "en";
 }
 
+export interface ExportCompressionPromptPayload {
+  conversationTitle?: string;
+  conversationPlatform?: string;
+  conversationOriginAt?: number;
+  messages: Message[];
+  locale?: "zh" | "en";
+  profile?: ExportPromptProfile;
+}
+
 export interface PromptVersion<TPayload> {
   version: string;
   createdAt: string;
@@ -49,6 +64,8 @@ export interface PromptPayloadMap {
   compaction: CompactionPromptPayload;
   conversationSummary: ConversationSummaryPromptPayload;
   weeklyDigest: WeeklyDigestPromptPayload;
+  exportCompact: ExportCompressionPromptPayload;
+  exportSummary: ExportCompressionPromptPayload;
 }
 
 export type PromptConfig = {

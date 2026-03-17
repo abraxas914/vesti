@@ -5,131 +5,141 @@ Audience: Engineers, QA, release owners, maintainers
 
 ## Purpose
 
-This file is the root index for the repository documentation tree.
+这个 README 是仓库文档树的根索引。
 
-The repository now contains multiple long-lived documentation families with different responsibilities. Without a root index, it becomes too easy to confuse:
-- canonical engineering specs
-- dated handoff notes
-- roadmap material
-- historical drafts and legacy standalone files
+当前文档结构遵循三层模型：
+- `documents/` 根目录：仓库级政策与通用操作文档
+- subsystem canonical directories：长期维护的工程规格与现状诊断
+- `documents/archive/`：历史快照、旧版阶段文档、退役资料
 
-This README is intentionally lightweight.
-Its purpose is to answer three questions quickly:
-1. where a topic should be documented
-2. which directory is the source of truth for that topic
-3. how to distinguish canonical docs from historical handoffs
-
-## Directory map
+## Directory Map
 
 ### `capture_engine/`
-Owns capture/parser/runtime-adjacent documentation.
 
-Use this for:
-- parser strategy
-- DOM extraction and normalization
-- semantic extraction and AST concerns
-- capture debugging playbooks
-- capture sampling and acceptance
-- parser/runtime refactor roadmaps
+负责 capture / parser / observer / pipeline / archival fidelity 相关文档。
 
 Canonical examples:
-- `capture_engine/v1_2_capture_governance_spec.md`
-- `capture_engine/v1_3_platform_expansion_spec.md`
-- `capture_engine/v1_4_capture_engine_hardening_retrospective.md`
-- `capture_engine/v1_5_capture_engine_refactor_roadmap.md`
-
-### `web_dashboard/`
-Owns web dashboard engineering and technical specifications.
-
-Use this for:
-- dashboard / library / explore / network engineering boundaries
-- current web architecture and message flow
-- web-view-specific repair records
-- forward roadmap for web surfaces
-
-Canonical examples:
-- `web_dashboard/web_dashboard_engineering_spec.md`
-- `web_dashboard/web_dashboard_current_architecture.md`
-- `web_dashboard/web_dashboard_rc8_repairs.md`
-- `web_dashboard/web_dashboard_technical_roadmap.md`
-
-### `ui_refactor/`
-Owns global UI, IA, and component-system specifications.
-
-Use this for:
-- sidepanel IA and route contracts
-- component-system and token contracts
-- UI sampling / acceptance rules
-- cross-surface UI refactor specs
+- `capture_engine/README.md`
+- `capture_engine/capture_engine_engineering_spec.md`
+- `capture_engine/capture_engine_current_architecture.md`
+- `capture_engine/capture_engine_operational_playbook.md`
 
 ### `reader_pipeline/`
-Owns reader/data-pipeline docs related to schema, fallback, migration, and pipeline evolution.
+
+负责 reader、export、compression、insights、schema-consumer contract 与时间语义相关文档。
+
+Canonical examples:
+- `reader_pipeline/README.md`
+- `reader_pipeline/reader_pipeline_engineering_spec.md`
+- `reader_pipeline/reader_pipeline_current_architecture.md`
+- `reader_pipeline/reader_pipeline_operational_playbook.md`
+
+### `refactor_tasks/`
+
+负责 active implementation backlog。
+它不是 canonical spec source of truth，而是把跨子系统的实施任务集中在一起，方便按阶段推进。
+
+Canonical examples:
+- `refactor_tasks/README.md`
+- `refactor_tasks/capture_engine_refactor_tasks.md`
+- `refactor_tasks/reader_pipeline_refactor_tasks.md`
+- `refactor_tasks/timestamp_semantics_rollout_tasks.md`
+
+### `web_dashboard/`
+
+负责 web dashboard / library / explore / network 等 web 面文档。
+
+### `ui_refactor/`
+
+负责全局 UI / IA / component system 文档。
 
 ### `floating_capsule/`
-Owns floating capsule specs, state-machine contracts, and acceptance guidance.
+
+负责 floating capsule 文档。
 
 ### `orchestration/`
-Owns feature-flag and multi-agent orchestration design.
+
+负责 feature flag、runtime event 与 multi-agent orchestration 文档。
 
 ### `prompt_engineering/`
-Owns prompt, model-routing, and prompt-UI interaction docs.
+
+负责 prompt、proxy、model routing 与 prompt UI contract 文档。
 
 ### `engineering_handoffs/`
-Owns **dated delivery snapshots and handoff context**.
 
-Important rule:
-- this directory is valuable historical evidence
-- it is **not** the preferred place to discover current canonical specifications
-- when a handoff grows into long-lived guidance, that guidance should be promoted into a canonical directory above
+负责 dated delivery snapshot 与 handoff context。
 
-## Root-level standalone files
+重要规则：
+- handoff 很有价值
+- 但它不是当前 canonical 规格的首选入口
+- 长期有效的知识应提升到上面的 canonical 目录
 
-There are still several root-level files under `documents/`.
-Treat them as one of three categories:
-- historical context
-- transition-era notes not yet absorbed into a dedicated directory
-- project-wide utility docs
+### `archive/`
 
-Notable project-wide utility docs include:
+负责保留历史文档、候选草稿、退役阶段资料。
+
+重要规则：
+- archive 用来保留历史，而不是作为当前实现决策入口
+- 收口时优先迁档，不做硬删除
+
+## Root-Level Keepers
+
+只有仓库级政策或工具文档应直接保留在 `documents/` 根目录。
+
+当前保留：
+- `README.md`
 - `version_control_plan.md`
 - `zip_deploy_guide.md`
-- `mvp_guide.md`
+- `engineering_data_management_v1_2.md`
 
-If a new document clearly belongs to an existing topic family, prefer placing it inside that family directory instead of adding another root-level file.
+## Placement Rules
 
-## Placement rules
+新增文档时，优先按以下规则放置：
 
-When adding a new document, use these rules:
+1. parser / DOM / capture / AST / normalization -> `capture_engine/`
+2. reader / export / compression / insight / timeline / schema consumer -> `reader_pipeline/`
+3. cross-subsystem rollout backlog / implementation task ledger -> `refactor_tasks/`
+4. web dashboard / library / explore / network -> `web_dashboard/`
+5. global UI / IA / component system -> `ui_refactor/`
+6. prompt / proxy / model routing -> `prompt_engineering/`
+7. dated handoff -> `engineering_handoffs/`
+8. superseded draft / retired phase material -> `archive/`
+9. repo-wide policy / deployment utility -> `documents/` root
 
-1. **Parser / DOM / capture / AST / normalization** -> `capture_engine/`
-2. **Web dashboard / Library / Explore / Network / dashboard runtime contract** -> `web_dashboard/`
-3. **Global UI / IA / component system / interaction contract** -> `ui_refactor/`
-4. **Dated delivery snapshot or branch handoff** -> `engineering_handoffs/`
-5. **Feature-specific subsystem docs** -> that subsystem directory (`floating_capsule/`, `reader_pipeline/`, etc.)
+## Recommended Reading Order
 
-## Reading order
+做当前工程工作时，推荐顺序是：
 
-For current product engineering work, the recommended order is:
+1. 子系统 README
+2. 子系统 engineering spec
+3. 子系统 current architecture
+4. 子系统 operational playbook / roadmap
+5. 只有在需要追溯时再看 handoff 与 archive
 
-1. subsystem canonical directory README (if present)
-2. subsystem engineering spec
-3. subsystem current architecture / contract docs
-4. subsystem repair or roadmap docs
-5. only then consult dated handoffs for historical context
+针对 capture engine：
+1. `documents/capture_engine/README.md`
+2. `documents/capture_engine/capture_engine_engineering_spec.md`
+3. `documents/capture_engine/capture_engine_current_architecture.md`
+4. `documents/capture_engine/capture_engine_operational_playbook.md`
 
-## Current canonical entrypoints
+针对 reader pipeline：
+1. `documents/reader_pipeline/README.md`
+2. `documents/reader_pipeline/reader_pipeline_engineering_spec.md`
+3. `documents/reader_pipeline/reader_pipeline_current_architecture.md`
+4. `documents/reader_pipeline/reader_pipeline_operational_playbook.md`
 
-- Capture / parser work: `documents/capture_engine/`
-- Web dashboard work: `documents/web_dashboard/`
-- UI refactor work: `documents/ui_refactor/`
+如果要落实施工，再去：
+1. `documents/refactor_tasks/README.md`
+2. 对应 task ledger
 
-## Naming guidance
+## Naming Guidance
 
-Use these patterns when possible:
+推荐模式：
 - canonical spec: `<topic>_engineering_spec.md`
 - current baseline: `<topic>_current_architecture.md`
-- repair ledger: `<topic>_<release>_repairs.md` or `<topic>_repairs.md`
+- playbook: `<topic>_operational_playbook.md`
 - roadmap: `<topic>_technical_roadmap.md`
 - dated handoff: `YYYY-MM-DD-<topic>-handoff.md`
+- task ledger: `<topic>_refactor_tasks.md`
 
-The goal is not rigid uniformity; the goal is discoverability.
+目标不是形式统一，而是让文档入口清晰、层次稳定、历史可追溯。

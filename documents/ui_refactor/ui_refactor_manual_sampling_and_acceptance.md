@@ -68,6 +68,23 @@ Threads child flow (mandatory):
 22. Insights top header has no extra gray divider line under the title.
 23. Threads top header does not render duplicated brand logo/wordmark (Dock logo remains unchanged).
 24. Threads search button opens inline search input; `Cancel` and `Esc` both exit search mode.
+25. Threads UI baseline regression guard (not a redesign): selection UI defaults to 18px checkbox and no `Click to select` helper text.
+26. Threads header layout baseline: status text is single-line (no wrap), all header elements are vertically centered, and left/right groups keep reasonable spacing.
+27. Thread card footer metadata baseline: no stray `路` character; use a mid-dot separator (e.g., `·`) and keep metadata on one line without wrapping.
+28. BatchActionBar density baseline: padding `7px`, font size `12px`, count badge horizontal padding `7px`, action button vertical padding `5px`.
+29. Threads filter disclosure baseline: opening filter mode shows `Date` and `Source` as independent compact disclosure rows, both collapsed by default; closing and reopening filter mode resets both rows to collapsed.
+30. Threads filter summary baseline: collapsed `Date` always shows the active preset label, and collapsed `Source` shows `All sources` / one name / two comma-joined names / `<first> +<n>` using `PLATFORM_OPTIONS` order.
+31. Threads filter density baseline: date/source pills use compact `11px` rhythm, tighter wrapping, and source tone badges remain color-coded without overflow or awkward wrapping.
+32. Threads overflow menu baseline: card overflow menu and submenu use the same compact Threads utility surface (`rounded-lg`, subtle border/background, `shadow-paper`) instead of generic popover styling.
+33. Threads overflow item density baseline: menu rows use `13px` medium text, compact `min-h-8` spacing, smaller `3.5` icons/chevron, and the open trigger shows a light active state without turning into a heavy accent block.
+34. Threads batch-selection visibility baseline: after choosing `Select` from a card overflow menu, every card in the current filtered result set shows the 18px circular checkbox slot and platform tags shift right consistently.
+35. Threads batch-selection state baseline: selected cards use only a light selected surface and do not reuse hover/expanded snippet/footer behavior; card click toggles selection instead of opening Reader while batch mode is active.
+36. Threads batch action tray baseline: tray actions are `Select All` / `Export` / `Delete` / `Exit`; `Select All` only targets the current filtered result set, and changing search/filter prunes hidden selections instead of preserving stale ids.
+37. Threads batch export baseline: export opens a Data-style format panel with exactly `JSON` / `TXT` / `MD`, and the selected export mode controls whether the current selected threads are emitted as full transcript, compact handoff, or summary note content.
+38. Threads batch delete baseline: delete opens a Data-style danger panel, requires typing `DELETE`, and successful confirmation clears selection and exits batch mode.
+39. Threads export mode selector baseline: batch export panel shows `Full` / `Compact` / `Summary` above the Data-style `JSON` / `TXT` / `MD` rows, with `Full` selected by default and selector density matching the tray surface.
+40. Threads compressed export resilience baseline: `Compact` and `Summary` first try the current LLM settings path, but export must still succeed through deterministic local fallback when the LLM path is unavailable or returns unusable output; post-export feedback must surface when fallback happened.
+41. Threads export architecture baseline: the page must keep using the batch action tray flow and must not regress to the legacy modal-style `ExportDialog`.
 
 ---
 

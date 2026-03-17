@@ -33,6 +33,7 @@ import {
   toChatSummaryData,
   toWeeklySummaryData,
 } from "~lib/services/insightAdapter";
+import { getConversationOriginAt } from "~lib/conversations/timestamps";
 import type { WeeklySummaryData } from "~lib/types/insightsPresentation";
 import { InsightsAccordionItem } from "../components/InsightsAccordionItem";
 import { InsightsWandIcon } from "../components/InsightsWandIcon";
@@ -439,7 +440,7 @@ function getThreadThemeClass(platform: Platform): string {
 }
 
 function formatConversationWeekday(conversation: Conversation): string {
-  const ts = conversation.source_created_at ?? conversation.updated_at;
+  const ts = getConversationOriginAt(conversation);
   return new Date(ts).toLocaleDateString("en-US", { weekday: "short" });
 }
 
@@ -638,14 +639,12 @@ export function InsightsPage({
   const weeklyThreadCount = weeklyConversations.length;
   const weeklyCountLabel = `${weeklyThreadCount} thread${
     weeklyThreadCount === 1 ? "" : "s"
-  }`;
+  } in range`;
 
   const sortedWeeklyConversations = useMemo(() => {
-    return [...weeklyConversations].sort((a, b) => {
-      const left = a.source_created_at ?? a.updated_at;
-      const right = b.source_created_at ?? b.updated_at;
-      return right - left;
-    });
+    return [...weeklyConversations].sort(
+      (a, b) => getConversationOriginAt(b) - getConversationOriginAt(a)
+    );
   }, [weeklyConversations]);
 
   const visibleWeeklyConversations = isWeeklyListExpanded
@@ -1399,7 +1398,7 @@ export function InsightsPage({
           )}
 
           {sortedWeeklyConversations.length === 0 && (
-            <p className="ins-empty">No captured threads in this week yet.</p>
+            <p className="ins-empty">No threads started this week yet.</p>
           )}
         </div>
 
@@ -1687,7 +1686,7 @@ export function InsightsPage({
             </p>
           )}
           <div className="ins-week-sparse-stats">
-            <span>Captured threads: {weeklyThreadCount}</span>
+            <span>Threads started in range: {weeklyThreadCount}</span>
             <span>
               Substantial summaries:{" "}
               {weeklySubstantialCount === null ? "unknown" : weeklySubstantialCount}

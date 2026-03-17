@@ -5,6 +5,12 @@ import type {
   SummaryRecord,
   WeeklyReportRecord,
 } from "../types";
+import {
+  getConversationCaptureFreshnessAt,
+  getConversationFirstCapturedAt,
+  getConversationOriginAt,
+  getConversationSourceCreatedAt,
+} from "../conversations/timestamps";
 
 export interface ExportDataset {
   conversations: Conversation[];
@@ -66,10 +72,6 @@ function toLocalDateTime(value: number): string {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
-function getDisplayCreatedAt(conversation: Conversation): number {
-  return conversation.source_created_at ?? conversation.created_at;
-}
-
 function buildTimestampTag(): string {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -110,8 +112,10 @@ function buildArchiveHeaderMeta(conversations: Conversation[]): ArchiveHeaderMet
     };
   }
 
-  const startTs = Math.min(...conversations.map((item) => getDisplayCreatedAt(item)));
-  const endTs = Math.max(...conversations.map((item) => item.updated_at));
+  const startTs = Math.min(...conversations.map((item) => getConversationOriginAt(item)));
+  const endTs = Math.max(
+    ...conversations.map((item) => getConversationCaptureFreshnessAt(item))
+  );
   const startDate = toLocalDate(startTs);
   const endDate = toLocalDate(endTs);
   const dateRangeLabel = startDate === endDate ? startDate : `${startDate} to ${endDate}`;
@@ -166,7 +170,22 @@ function pushThreadHeader(
   lines.push("");
   lines.push(`* **Source URL:** ${conversation.url}`);
   lines.push(`* **Platform:** ${conversation.platform}`);
-  lines.push(`* **Created At:** ${toLocalDateTime(getDisplayCreatedAt(conversation))}`);
+  lines.push(`* **Started At:** ${toLocalDateTime(getConversationOriginAt(conversation))}`);
+  const sourceCreatedAt = getConversationSourceCreatedAt(conversation);
+  if (sourceCreatedAt !== null) {
+    lines.push(`* **Source Time:** ${toLocalDateTime(sourceCreatedAt)}`);
+  }
+  lines.push(
+    `* **First Captured At:** ${toLocalDateTime(
+      getConversationFirstCapturedAt(conversation)
+    )}`
+  );
+  lines.push(
+    `* **Last Captured At:** ${toLocalDateTime(
+      getConversationCaptureFreshnessAt(conversation)
+    )}`
+  );
+  lines.push(`* **Last Modified:** ${toLocalDateTime(conversation.updated_at)}`);
   lines.push(`* **Message Count:** ${messageCount}`);
   lines.push("");
 }
@@ -203,6 +222,10 @@ export function buildExportJsonV1(dataset: ExportDataset): ExportPayload {
     data: {
       conversations: dataset.conversations.map((item) => ({
         ...item,
+        origin_at: getConversationOriginAt(item),
+        origin_at_iso: toIso(getConversationOriginAt(item)),
+        first_captured_at_iso: toIso(getConversationFirstCapturedAt(item)),
+        last_captured_at_iso: toIso(getConversationCaptureFreshnessAt(item)),
         created_at_iso: toIso(item.created_at),
         source_created_at_iso:
           item.source_created_at !== null ? toIso(item.source_created_at) : null,
@@ -242,7 +265,9 @@ export function buildExportJsonV1(dataset: ExportDataset): ExportPayload {
 
 export function buildExportTxtV1(dataset: ExportDataset): ExportPayload {
   const meta = getMeta();
-  const conversations = [...dataset.conversations].sort((a, b) => a.created_at - b.created_at);
+  const conversations = [...dataset.conversations].sort(
+    (a, b) => getConversationOriginAt(a) - getConversationOriginAt(b)
+  );
   const messagesByConversation = groupMessages(dataset.messages);
   const summariesByConversation = groupSummaries(dataset.summaries);
   const lines: string[] = [];
@@ -302,7 +327,9 @@ export function buildExportTxtV1(dataset: ExportDataset): ExportPayload {
 
 export function buildExportMdV1(dataset: ExportDataset): ExportPayload {
   const meta = getMeta();
-  const conversations = [...dataset.conversations].sort((a, b) => a.created_at - b.created_at);
+  const conversations = [...dataset.conversations].sort(
+    (a, b) => getConversationOriginAt(a) - getConversationOriginAt(b)
+  );
   const messagesByConversation = groupMessages(dataset.messages);
   const summariesByConversation = groupSummaries(dataset.summaries);
   const lines: string[] = [];

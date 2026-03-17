@@ -87,7 +87,7 @@ function toNarrativeTranscript(messages: Message[]): string {
 function buildConversationSummaryPrompt(
   payload: ConversationSummaryPromptPayload
 ): string {
-  const createdAt = payload.conversationCreatedAt ?? Date.now();
+  const originAt = payload.conversationOriginAt ?? Date.now();
   const platform = payload.conversationPlatform ?? "unknown";
   const transcript = toNarrativeTranscript(payload.messages);
   const conversationTitle = payload.conversationTitle ?? "(未命名对话)";
@@ -98,7 +98,7 @@ function buildConversationSummaryPrompt(
 对话元信息：
 - 标题：${conversationTitle}
 - 平台：${platform}
-- 时间：${formatDateTime(createdAt)}
+- 起始时间：${formatDateTime(originAt)}
 - 消息数：${payload.messages.length}
 - locale：${locale}
 

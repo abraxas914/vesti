@@ -46,6 +46,18 @@ For `v1.7.0-rc.x`, enforce the following stable constraints:
 5. v1.7 rollout is flag-gated in `chrome.storage.local` with default-off behavior.
 6. Prompt/schema drift gates must include local strict eval plus PR/nightly workflow checks.
 
+## Operational Hygiene (2026-03-13)
+
+This section captures concrete mistakes and reusable rules from today's work. Keep it updated when new operational lessons are discovered.
+
+| Error | Impact | Correction | Reusable Rule |
+| --- | --- | --- | --- |
+| Skipped `rg-fullpath` usage and misread PowerShell profile noise as failure | Command failure and broken momentum | Treat `PSSecurityException` noise as non-fatal; confirm tool presence via `where rg`; prefer absolute-path `rg` invocation | Assume `rg` is available; use absolute path; ignore shell profile noise unless tool lookup fails |
+| Repeated `apply_patch` failures (format/line matching) | Wasted time and context switching | After 2 failures, switch to a deterministic overwrite path (e.g., `Set-Content`) and re-open to verify | Limit patch retries; fall back to controlled overwrite with explicit encoding; re-read to confirm |
+| Document alignment not fully verified before edits | Risk of misaligned policy updates | Read the relevant sections with correct encoding and cross-check against current engineering decisions | Before changing docs, scan the current policy paragraphs and validate alignment with latest decisions |
+| Conflict check done before fetching latest `origin/main` | PR still showed conflicts after remote moved | Always fetch before declaring conflict status; use merge-tree or a local merge for verification | Conflict status is only valid after a fresh `git fetch origin main` |
+| Over-asking for confirmation when user wanted speed | Slowed delivery | Default to action for low-risk choices; only ask when tradeoffs are material | Prefer execution; ask only when decisions change outcomes or risk |
+
 ## Core Principles of Code Quality
 
 ### Type Safety is the Top Priority

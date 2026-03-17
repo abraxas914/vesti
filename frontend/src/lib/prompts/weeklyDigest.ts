@@ -1,4 +1,5 @@
 import type { Conversation } from "../types";
+import { getConversationOriginAt } from "../conversations/timestamps";
 import type { PromptVersion, WeeklyDigestPromptPayload } from "./types";
 
 const WEEKLY_LITE_SYSTEM = `你是 Vesti 的 Agent C（Weekly Digest 策展器）。
@@ -67,9 +68,11 @@ function toWeeklyConversationsText(conversations: Conversation[]): string {
 
   return conversations
     .map((conversation) => {
-      return `【会话 #${conversation.id}】标题: ${sanitizeLine(conversation.title || "(untitled)")}
+      return `【会话 #${conversation.id}】标题: ${sanitizeLine(
+        conversation.title || "(untitled)"
+      )}
 平台: ${conversation.platform}
-时间: ${formatDateTime(conversation.created_at)}
+起点时间: ${formatDateTime(getConversationOriginAt(conversation))}
 消息数: ${conversation.message_count}
 摘要: ${sanitizeLine(conversation.snippet || "(none)")}`;
     })
@@ -160,9 +163,9 @@ function toLegacyWeeklyTranscript(conversations: Conversation[]): string {
   return conversations
     .map(
       (conversation, index) =>
-        `${index + 1}. [${formatDateTime(conversation.created_at)}] [${conversation.platform}] ${
-          conversation.title
-        }\nSnippet: ${conversation.snippet}`
+        `${index + 1}. [${formatDateTime(getConversationOriginAt(conversation))}] [${
+          conversation.platform
+        }] ${conversation.title}\nSnippet: ${conversation.snippet}`
     )
     .join("\n\n");
 }

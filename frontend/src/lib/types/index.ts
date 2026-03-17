@@ -46,6 +46,8 @@ export interface Conversation {
   snippet: string;
   url: string;
   source_created_at: number | null;
+  first_captured_at: number;
+  last_captured_at: number;
   created_at: number;
   updated_at: number;
   message_count: number;
@@ -56,6 +58,17 @@ export interface Conversation {
   topic_id: number | null;
   is_starred: boolean;
   has_note?: boolean;
+}
+
+export interface SearchConversationMatchesQuery {
+  query: string;
+  conversationIds?: number[];
+}
+
+export interface ConversationMatchSummary {
+  conversationId: number;
+  firstMatchedMessageId: number;
+  bestExcerpt: string;
 }
 
 export interface VectorRecord {
@@ -208,10 +221,10 @@ export interface Note {
 export interface DashboardStats {
   totalConversations: number;
   totalTokens: number;
-  activeStreak: number;
-  todayCount: number;
+  firstCaptureStreak: number;
+  firstCapturedTodayCount: number;
   platformDistribution: Record<Platform, number>;
-  heatmapData: { date: string; count: number }[];
+  firstCaptureHeatmapData: { date: string; count: number }[];
 }
 
 export type ExportFormat = "json" | "txt" | "md";
@@ -300,6 +313,7 @@ export interface ActiveCaptureStatus {
   messageCount?: number;
   turnCount?: number;
   lastDecision?: CaptureDecisionMeta;
+  firstObservedAt?: number;
   updatedAt?: number;
 }
 

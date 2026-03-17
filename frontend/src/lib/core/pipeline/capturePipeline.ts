@@ -1,4 +1,4 @@
-﻿import type { IParser, ParsedMessage } from "../parser/IParser";
+import type { IParser, ParsedMessage } from "../parser/IParser";
 import { countAiTurns } from "../../capture/turn-metrics";
 import type { ConversationDraft } from "../../messaging/protocol";
 import type { CaptureDecisionMeta } from "../../types";
@@ -31,19 +31,39 @@ export class CapturePipeline {
       const platform = this.parser.detect();
       if (!platform) return;
 
+      const sessionUUID = this.parser.getSessionUUID();
+      if (!sessionUUID?.trim()) {
+        logger.info("capture", "Capture skipped", {
+          platform,
+          sessionUUID: null,
+          reason: "missing_conversation_id",
+        });
+        return;
+      }
+
+      if (this.parser.isGenerating()) {
+        logger.info("capture", "Capture skipped", {
+          platform,
+          sessionUUID,
+          reason: "still_generating",
+        });
+        return;
+      }
+
       const messages = this.parser.getMessages();
       if (messages.length === 0) return;
 
       const turnCount = countAiTurns(messages);
       const now = Date.now();
-      const sessionUUID = this.parser.getSessionUUID();
       const conversation: ConversationDraft = {
-        uuid: sessionUUID ?? "",
+        uuid: sessionUUID,
         platform,
         title: this.parser.getConversationTitle(),
         snippet: messages[0]?.textContent.slice(0, 100) || "",
         url: window.location.href,
         source_created_at: this.parser.getSourceCreatedAt(),
+        first_captured_at: now,
+        last_captured_at: now,
         created_at: now,
         updated_at: now,
         message_count: messages.length,
@@ -84,3 +104,4 @@ export class CapturePipeline {
     }
   }
 }
+

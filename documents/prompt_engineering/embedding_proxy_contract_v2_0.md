@@ -1,4 +1,4 @@
-# Vesti Embedding Proxy Contract (v2.0)
+﻿# Vesti Embedding Proxy Contract (v2.0)
 
 - Version: v2.0
 - Scope: local/private proxy routes for extension + web view

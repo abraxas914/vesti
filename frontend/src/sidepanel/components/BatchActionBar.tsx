@@ -3,6 +3,9 @@ import {
   CheckSquare,
   Copy,
   Download,
+  FileCode,
+  FileJson,
+  FileText,
   Loader2,
   Square,
   Trash2,
@@ -81,19 +84,17 @@ const EXPORT_MODE_OPTIONS: Array<{
   {
     mode: "full",
     label: "Full",
-    description: "Keep the complete thread transcript locally.",
+    description: "Complete conversation history.",
   },
   {
     mode: "compact",
-    label: "Compact",
-    description:
-      "AI handoff format. Tries current LLM settings first, then local fallback.",
+    label: "AI Handoff",
+    description: "For other AI assistants. Preserves decisions, code, and context.",
   },
   {
     mode: "summary",
-    label: "Summary",
-    description:
-      "Human note format. Tries current LLM settings first, then local fallback.",
+    label: "Knowledge Export",
+    description: "For notes & docs. Structured knowledge card format.",
   },
 ];
 
@@ -194,53 +195,63 @@ export function BatchActionBar({
             </button>
           </div>
 
-          <p className="mt-3 data-subgroup-label">Export mode</p>
-          <div className="rounded-lg bg-bg-secondary p-1">
-            <div className="grid grid-cols-3 gap-1">
-              {EXPORT_MODE_OPTIONS.map((option) => {
-                const active = exportMode === option.mode;
-                return (
-                  <button
-                    key={option.mode}
-                    type="button"
-                    onClick={() => onExportModeChange(option.mode)}
-                    className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors ${
-                      active
-                        ? "bg-bg-primary text-text-primary shadow-sm"
-                        : "text-text-secondary hover:bg-bg-primary/70 hover:text-text-primary"
+          <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.11em] text-text-secondary">
+            Export mode
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {EXPORT_MODE_OPTIONS.map((option) => {
+              const active = exportMode === option.mode;
+              return (
+                <button
+                  key={option.mode}
+                  type="button"
+                  onClick={() => onExportModeChange(option.mode)}
+                  className={`flex flex-col items-center justify-center rounded-lg border px-2 py-2.5 text-center transition-all ${
+                    active
+                      ? "border-accent-primary bg-accent-primary/10"
+                      : "border-border-subtle bg-bg-secondary hover:bg-bg-tertiary"
+                  }`}
+                >
+                  <span
+                    className={`text-xs font-medium ${
+                      active ? "text-accent-primary" : "text-text-primary"
                     }`}
                   >
                     {option.label}
-                  </button>
-                );
-              })}
-            </div>
+                  </span>
+                  <span className="mt-0.5 text-[10px] text-text-tertiary leading-tight">
+                    {option.description}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <p className="mt-2 text-[11px] leading-[1.45] text-text-secondary">
-            {selectedMode.description}
-          </p>
 
-          <p className="mt-3 data-subgroup-label">Export format</p>
-          <div className="data-format-selector">
+          <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.11em] text-text-secondary">
+            Export format
+          </p>
+          <div className="mt-2 flex gap-2">
             {EXPORT_OPTIONS.map((option) => {
               const active = selectedExportFormat === option.format;
+              const Icon = option.format === "md" ? FileCode : option.format === "txt" ? FileText : FileJson;
               return (
                 <button
                   key={option.format}
                   type="button"
                   onClick={() => onExportFormatChange(option.format)}
                   disabled={Boolean(actionKey)}
-                  className={`data-format-option ${active ? "is-selected" : ""}`}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-all ${
+                    active
+                      ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+                      : "border-border-subtle bg-bg-secondary text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+                  }`}
                 >
-                  <span className="data-format-option-name">{option.name}</span>
-                  <span className="data-format-option-desc">{option.description}</span>
+                  <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  {option.name}
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 text-[11px] leading-[1.45] text-text-secondary">
-            Current format: {selectedFormat.name}
-          </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button

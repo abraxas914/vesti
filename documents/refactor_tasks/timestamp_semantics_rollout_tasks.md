@@ -1,4 +1,4 @@
-﻿# Timestamp Semantics Rollout Tasks
+# Timestamp Semantics Rollout Tasks
 
 Status: Active task ledger  
 Audience: Schema maintainers, capture owners, reader/web contributors, QA
@@ -47,6 +47,7 @@ Audience: Schema maintainers, capture owners, reader/web contributors, QA
 
 这仍然是多时钟并行，但展示层已经不再把它们混成同一种“捕获时间”。
 
+<<<<<<< HEAD
 ## Current Scope Boundary
 
 当前这轮时间方案已经落到这些主表面：
@@ -85,6 +86,8 @@ Audience: Schema maintainers, capture owners, reader/web contributors, QA
 2. `Time Range` 只是前端节点过滤，还是进入 edge / storage contract
 3. 动态动画表达“线程起点”“首次进入系统”还是“最近一次捕获刷新”
 
+=======
+>>>>>>> 5a34526 (feat(time): baseline timestamp semantics and reader/web alignment)
 ## Manual Capture Scenario Clarification
 
 “昨天手动捕获一次，今天又手动捕获一次”会把这三种时间明显拉开。

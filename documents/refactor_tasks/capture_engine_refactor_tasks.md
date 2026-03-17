@@ -1,4 +1,4 @@
-﻿# Capture Engine Refactor Tasks
+# Capture Engine Refactor Tasks
 
 Status: Active task ledger  
 Audience: Parser maintainers, runtime engineers, QA
@@ -47,19 +47,4 @@ Audience: Parser maintainers, runtime engineers, QA
   - capture 入 AST
   - reader KaTeX 渲染
   - 节点级公式复制返回 raw TeX
-
-## Track 4. Consumer Alignment
-
-- reader 接住 attachment / artifact / citation 占位
-- export / compression / search 继承 content package，而不是继续硬挖 `content_text`
-- warm-start / manual transient availability 形成跨平台一致要求
-
-## Current Slice Recommendation
-
-下一轮优先级：
-
-1. ChatGPT / Qwen `platform normalization` stage
-2. math formula normalization and raw-TeX copy baseline
-3. content package schema slots
-4. multimodal sampling and regression fixtures
-5. reader / export / compression 对接第一批新结构
+5a34526 (feat(time): baseline timestamp semantics and reader/web alignment)

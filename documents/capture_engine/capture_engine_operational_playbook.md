@@ -1,4 +1,4 @@
-﻿# Capture Engine Operational Playbook
+# Capture Engine Operational Playbook
 
 Status: Active operational playbook  
 Audience: Parser maintainers, QA, release owners, engineers doing DOM sampling or capture bug triage
@@ -51,6 +51,7 @@ Audience: Parser maintainers, QA, release owners, engineers doing DOM sampling o
 - 不要只采“正在生成”的瞬时状态，要补“历史线程冷打开”。
 - 多模态 case 必须单独建样本，不能混在普通文本 case 里。
 
+<<<<<<< HEAD
 ### 3.1 Math Formula Sampling Notes
 
 数学公式 case 额外记录以下平台分流：
@@ -71,6 +72,8 @@ Audience: Parser maintainers, QA, release owners, engineers doing DOM sampling o
   - `已有 AST math，可由 repair migration 修复 canonical text`
   - `没有 AST，必须重新打开原线程并 recapture`
 
+=======
+>>>>>>> 5a34526 (feat(time): baseline timestamp semantics and reader/web alignment)
 ## 4. Fault Taxonomy
 
 统一使用以下 fault taxonomy：

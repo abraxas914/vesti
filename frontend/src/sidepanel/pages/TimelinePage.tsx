@@ -156,6 +156,7 @@ export function TimelinePage({
     };
   }, []);
 
+<<<<<<< HEAD
   const clearCopySuccess = useCallback(() => {
     setCopyJustSucceeded(false);
     if (copySuccessTimerRef.current !== null) {
@@ -173,6 +174,8 @@ export function TimelinePage({
     }, 1800);
   }, [clearCopySuccess]);
 
+=======
+>>>>>>> 5a34526 (feat(time): baseline timestamp semantics and reader/web alignment)
   const firstCapturedTodayCount = stats?.firstCapturedTodayCount ?? 0;
   const platformDistribution = stats?.platformDistribution ?? null;
   const dateSummary = getDatePresetSummary(datePreset);

@@ -1,4 +1,4 @@
-# Reader Pipeline Current Architecture
+﻿# Reader Pipeline Current Architecture
 
 Status: Active as-is architecture and gap analysis  
 Audience: Reader/export/compression owners, schema maintainers, web contributors

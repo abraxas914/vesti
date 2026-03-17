@@ -8,32 +8,10 @@ Audience: Runtime engineers, capture engineers, prompt engineers, domain experts
 这份文档解释 export pipeline 在 `E0 dataset_builder` 之前依赖的上游层：**cross-platform normalization and semantic annotation**。
 
 它回答一个经常被 export 文档默认带过的问题：
-
-- 为什么 `E0` 在 Vesti 内部看起来是 deterministic 的，
-- 但在跨平台 capture / ingestion 场景里，`E0` 之前还必须有一层更早的归一化与标注。
+- 为什么 `E0` 在 Vesti 内部看起来是 deterministic 的
+- 但在跨平台 capture / ingestion 场景里，`E0` 之前还必须有一层更早的归一化与标注
 
 这份文档不替代 export multi-agent 文档；它负责说明 export 之前的数据准备边界。
-
-## Why pre-E0 matters
-
-如果输入已经是 Vesti 内部统一 schema 的线程，`E0 dataset_builder` 确实可以被视为 deterministic local stage。
-
-但在跨平台场景里，输入可能来自：
-- Claude.ai
-- ChatGPT
-- Cursor
-- Slack
-- 其他聊天或协作工具
-
-这些来源在以下方面都不一致：
-- message role markers
-- tool-call 表达方式
-- metadata 字段命名
-- multi-turn threading 结构
-- code block / artifact 附着方式
-- edited / regenerated turns 的表示方法
-
-因此，export pipeline 需要的“稳定输入面”并不是天然存在的，而是上游预处理出来的。
 
 ## Architecture boundary
 
@@ -42,9 +20,9 @@ Audience: Runtime engineers, capture engineers, prompt engineers, domain experts
 1. `P0 platform_normalizer`
 2. `P1 semantic_annotator`
 3. `E0 dataset_builder`
-4. downstream export stages (`E1/E2/E3/...`)
+4. downstream export stages (`E1/E2/E3/repair`)
 
-### `P0 platform_normalizer`
+## `P0 platform_normalizer`
 
 职责：
 - 把不同平台的 conversation dump 归一成统一内部表示
@@ -61,11 +39,17 @@ Audience: Runtime engineers, capture engineers, prompt engineers, domain experts
 
 `P0` 的目标不是理解对话含义，而是把结构先统一。
 
-### `P1 semantic_annotator`
+## `P1 semantic_annotator`
 
 职责：
 - 对统一结构后的对话补充 heuristic / semantic labels
 - 提前标记后续 export 会依赖的状态信号
+- 输出 **structured sidecar annotation layer**
+
+phase 1 的默认方向是：
+- 以 heuristic / rule-based 标注为主
+- 不把 `P1` 默认设计成 LLM stage
+- 先保证可重复、可调试、可定位问题
 
 典型标注目标：
 - correction turn
@@ -75,15 +59,27 @@ Audience: Runtime engineers, capture engineers, prompt engineers, domain experts
 - artifact-bearing message
 - reusable snippet cue
 - question pivot / topic shift
+- core-question cue
 
-`P1` 不是一个开放式 agent loop，也不应该承担最终 summary/composer 的职责。
-它的角色是：
-- 为 `E0` 之后的 bounded export chain 提供更高质量的输入面
+## Why `P1` uses a sidecar layer
+
+`P1` 的输出格式在这轮文档里被明确锁定为 **structured sidecar annotation layer**，而不是：
+- 散文式注释
+- 描述性长文本
+- 直接把标注结果写回 message content
+
+这样设计的原因是：
+- `E0/E1` 可以稳定消费结构化标注，不必二次从自然语言里解析
+- 平台归一层和语义标注层不会在消息主体上互相污染
+- validator 可以单独检查 annotation completeness 和 label coverage
+- prompt tuning 不会替 schema / annotation 表达问题背锅
+
+具体 shape 见：
+- `export_stage_artifact_schemas.md`
 
 ## Why this is not “just part of E0”
 
 把这些工作全部塞进 `E0` 会带来三个问题：
-
 1. `E0` 的 deterministic 边界会被破坏
 2. export 文档会假装输入天然干净，掩盖真正的 ingestion 风险
 3. downstream prompt tuning 会替上游 schema 问题背锅
@@ -115,13 +111,14 @@ Audience: Runtime engineers, capture engineers, prompt engineers, domain experts
 
 ### Current state
 - Vesti 内部线程场景下，`E0` 可以近似视为 deterministic local stage
-- 跨平台 normalization / annotation 还没有被单独收成一条 canonical 说明
-- 因此 export 文档此前默认了一个比真实系统更干净的输入前提
+- 跨平台 normalization / annotation 还没有 runtime 化为稳定管线
+- export 文档此前默认了一个比真实系统更干净的输入前提
 
 ### Target state
 - `P0/P1` 作为独立架构边界被明确记录
 - 不同平台输入的损失、猜测与标注策略可被单独评估
 - export prompt tuning 不再替 ingestion normalization 缺口背锅
+- `P1` annotation output 可被 `E0/E1` 稳定消费
 
 ## Deliberate non-goals
 
@@ -142,6 +139,8 @@ Audience: Runtime engineers, capture engineers, prompt engineers, domain experts
   - `export_multi_agent_architecture.md`
   - `export_prompt_contract.md`
   - `export_prompt_inventory.md`
+- `P1/E0/E1/E2/E3/repair` 的 artifact shape，继续看：
+  - `export_stage_artifact_schemas.md`
 
 ## Working conclusion
 

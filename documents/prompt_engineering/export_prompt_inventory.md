@@ -4,9 +4,12 @@ Status: Active canonical inventory
 Audience: Prompt engineering, runtime engineering, maintainers
 
 First-read note:
-- For expert-facing bridge documents that summarize current AI Handoff and Knowledge Export behavior before drilling into runtime inventory details, start with:
+- For expert-facing bridge docs and the phase 1 workflow shape, start with:
   - `export_ai_handoff_architecture.md`
   - `export_knowledge_export_architecture.md`
+  - `cross_platform_conversation_normalization_architecture.md`
+  - `export_stage_artifact_schemas.md`
+  - `export_workflow_runner_spec.md`
 
 ## Purpose
 
@@ -28,21 +31,24 @@ The current shipped profiles are also a bridge-state compromise:
 - `summary` still reuses handoff-oriented profile names
 - task intent and model identity are not yet decomposed into separate routing axes
 
-## Target inventory after decomposition
+## Target phase 1 inventory after decomposition
 
-| Stage | Target prompt artifact | Target runtime location |
-| --- | --- | --- |
-| `P0` | source normalization rules | upstream ingestion / normalization layer |
-| `P1` | semantic annotation rules | upstream ingestion / annotation layer |
-| `E1` | `export_e1_structure_planner` | `frontend/src/lib/prompts/export/structurePlanner.ts` |
-| `E2` | `export_e2_evidence_compactor` | `frontend/src/lib/prompts/export/evidenceCompactor.ts` |
-| `E3 compact` | `export_e3_compact_composer` | `frontend/src/lib/prompts/export/compactComposer.ts` |
-| `E3 summary` | `export_e3_summary_composer` | `frontend/src/lib/prompts/export/summaryComposer.ts` |
-| `repair` | `export_repair` | `frontend/src/lib/prompts/export/repair.ts` |
+| Stage | Prompt artifact / implementation | Target runtime location | Phase 1 activation |
+| --- | --- | --- | --- |
+| `P0` | source normalization rules | upstream ingestion / normalization layer | active |
+| `P1` | structured sidecar annotation rules | upstream ingestion / annotation layer | active, heuristic-first |
+| `E1 handoff` | `export_e1_handoff_structure_planner` | `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts` | `kimi + handoff` |
+| `E1 knowledge` | `export_e1_knowledge_structure_planner` | `frontend/src/lib/prompts/export/e1KnowledgeStructurePlanner.ts` | `kimi + knowledge` |
+| `E2 handoff` | `export_e2_handoff_evidence_compactor` | `frontend/src/lib/prompts/export/e2HandoffEvidenceCompactor.ts` | `kimi + handoff` |
+| `E2 knowledge` | `export_e2_knowledge_evidence_compactor` | `frontend/src/lib/prompts/export/e2KnowledgeEvidenceCompactor.ts` | `kimi + knowledge` |
+| `E3 compact` | `export_e3_compact_composer` | `frontend/src/lib/prompts/export/compactComposer.ts` | `kimi + handoff` |
+| `E3 summary` | `export_e3_summary_composer` | `frontend/src/lib/prompts/export/summaryComposer.ts` | `kimi + knowledge` |
+| `repair compact` | `export_compact_repair` | `frontend/src/lib/prompts/export/repairCompact.ts` | on invalid compact output |
+| `repair summary` | `export_summary_repair` | `frontend/src/lib/prompts/export/repairSummary.ts` | on invalid summary output |
 
-Target decomposition notes:
-- `E1/E2` remain shared stage slots, but become mode-parameterized implementations
-- profile routing should eventually split into model axis and task axis
+Notes:
+- `E1/E2` remain shared stage slots, but use separate prompt artifacts
+- `step` remains a compatibility / fallback line until phase 2 task-specific tuning
 
 ## Adjacent systems kept outside export canonical ownership
 

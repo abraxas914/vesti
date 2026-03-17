@@ -52,6 +52,15 @@ It requires only that each bounded pipeline:
 - emits terminal completion or degraded fallback explicitly
 - keeps stage names stable within that pipeline family
 
+Example stage family for export bounded pipelines:
+- `P0`
+- `P1`
+- `E0`
+- `E1`
+- `E2`
+- `E3`
+- `repair`
+
 ## Intended reuse
 
 This contract can be reused by:

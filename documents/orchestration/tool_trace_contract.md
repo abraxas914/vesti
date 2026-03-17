@@ -35,6 +35,8 @@ This contract is the reusable pattern layer for:
 - future export multi-agent stage traces
 - other bounded multi-step flows that need inspectable execution history
 
+Export bounded pipelines are explicitly in scope when they need stage-level trace visibility.
+
 ## Explicit non-goals
 
 This contract does not define:
@@ -42,3 +44,4 @@ This contract does not define:
 - any specific product tab
 - any one feature's tool names
 - open-ended autonomous agent loops
+- a requirement to adopt tool-autonomy before bounded workflows are useful

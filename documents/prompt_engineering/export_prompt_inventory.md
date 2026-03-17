@@ -3,6 +3,11 @@
 Status: Active canonical inventory  
 Audience: Prompt engineering, runtime engineering, maintainers
 
+First-read note:
+- For expert-facing bridge documents that summarize current AI Handoff and Knowledge Export behavior before drilling into runtime inventory details, start with:
+  - `export_ai_handoff_architecture.md`
+  - `export_knowledge_export_architecture.md`
+
 ## Purpose
 
 Keep a single 1:1 inventory of export runtime entries, prompt artifacts, profiles, and migration debt.

@@ -3,6 +3,11 @@
 Status: Active canonical contract  
 Audience: Prompt engineers, runtime engineers
 
+First-read note:
+- For expert-facing bridge documents that explain why compact and summary exist, how the current shipped paths work, and where the contract is heading, start with:
+  - `export_ai_handoff_architecture.md`
+  - `export_knowledge_export_architecture.md`
+
 ## Purpose
 
 Define the long-term runtime ownership and artifact boundaries for export prompts.

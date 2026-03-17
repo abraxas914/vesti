@@ -29,8 +29,21 @@ Two sources of truth now coexist with different responsibilities:
 
 Documentation explains contracts, architecture, inventory, and evaluation. Runtime prompt text is no longer canonical in markdown docs.
 
+For external expert review or fast onboarding on the export direction, start with one of these bridge docs:
+
+- `export_ai_handoff_architecture.md`
+- `export_knowledge_export_architecture.md`
+
 ## Active canonical docs
 
+- `export_ai_handoff_architecture.md`
+  - **first-read**
+  - **expert-facing bridge doc**
+  - the single-file entrypoint for current shipped AI Handoff (compact) + future multi-agent direction
+- `export_knowledge_export_architecture.md`
+  - **first-read**
+  - **expert-facing bridge doc**
+  - the single-file entrypoint for current shipped Knowledge Export (summary) + future multi-agent direction
 - `model_settings.md`
 - `embedding_proxy_contract_v2_0.md`
 - `export_multi_agent_architecture.md`

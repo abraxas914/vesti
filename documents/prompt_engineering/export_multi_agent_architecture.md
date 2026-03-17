@@ -3,6 +3,11 @@
 Status: Active canonical architecture note  
 Audience: Prompt engineering, runtime engineering, release owner
 
+First-read note:
+- For an expert-facing bridge document that combines current shipped behavior with the future bounded-chain direction, start with:
+  - `export_ai_handoff_architecture.md`
+  - `export_knowledge_export_architecture.md`
+
 ## Purpose
 
 Define the export-centric multi-agent baseline that supersedes Insights as the main product architecture for prompt work.

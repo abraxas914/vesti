@@ -33,6 +33,7 @@ For external expert review or fast onboarding on the export direction, start wit
 
 - `export_ai_handoff_architecture.md`
 - `export_knowledge_export_architecture.md`
+- `cross_platform_conversation_normalization_architecture.md` when the discussion needs the pre-`E0` ingestion boundary
 
 ## Active canonical docs
 
@@ -50,6 +51,7 @@ For external expert review or fast onboarding on the export direction, start wit
 - `export_prompt_contract.md`
 - `export_eval_and_drift_gate.md`
 - `export_prompt_inventory.md`
+- `cross_platform_conversation_normalization_architecture.md`
 
 ## Transition / supporting docs
 

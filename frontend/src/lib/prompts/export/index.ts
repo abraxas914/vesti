@@ -3,6 +3,12 @@ export {
   EXPERIMENTAL_EXPORT_COMPACT_PROMPT,
 } from "./compactComposer";
 export {
+  DRAFT_EXPORT_E1_HANDOFF_STRUCTURE_PLANNER_PROMPT,
+} from "./e1HandoffStructurePlanner";
+export {
+  DRAFT_EXPORT_E1_KNOWLEDGE_STRUCTURE_PLANNER_PROMPT,
+} from "./e1KnowledgeStructurePlanner";
+export {
   CURRENT_EXPORT_SUMMARY_PROMPT,
   EXPERIMENTAL_EXPORT_SUMMARY_PROMPT,
 } from "./summaryComposer";

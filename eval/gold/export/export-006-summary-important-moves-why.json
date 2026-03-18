@@ -19,22 +19,22 @@
     },
     {
       "role": "user",
-      "content": "Right, and Reusable Snippets should feel like note-ready anchors: a file, command, API, or pattern plus a short reuse note.",
+      "content": "Right, and Reusable Snippets should feel like note-ready anchors. Do not default to file references only; a reusable pattern or insight is often more valuable for future recall.",
       "timestamp": 1773810840000
     },
     {
       "role": "ai",
-      "content": "Agreed. We'll keep headings fixed as TL;DR, Problem Frame, Important Moves, Reusable Snippets, Next Steps, and Tags, but anchor Important Moves around move plus why-it-mattered.",
+      "content": "Agreed. We'll keep headings fixed as TL;DR, Problem Frame, Important Moves, Reusable Snippets, Next Steps, and Tags, but anchor Important Moves around move plus why-it-mattered and let Reusable Snippets hold grounded patterns, insights, or references.",
       "timestamp": 1773811200000
     },
     {
       "role": "user",
-      "content": "Please preserve the concrete refs too: compactComposer.ts, summaryComposer.ts, and exportCompression.ts.",
+      "content": "Please preserve the concrete refs too: compactComposer.ts, summaryComposer.ts, and exportCompression.ts, but only when those refs actually help someone reuse the idea later.",
       "timestamp": 1773811680000
     },
     {
       "role": "ai",
-      "content": "Those will be preserved as reusable references, along with the note that summary is for future human recall rather than agent execution continuity.",
+      "content": "Those can stay as supporting references, but the stronger reusable snippet here is the pattern: do not narrate every turn, only keep the moves that changed understanding and explain why they mattered for future recall.",
       "timestamp": 1773812040000
     }
   ],
@@ -42,14 +42,15 @@
     "required_facts": [
       "future human recall",
       "why it mattered",
+      "pattern",
+      "moves that changed understanding",
       "compactComposer.ts",
-      "summaryComposer.ts",
-      "exportCompression.ts"
+      "summaryComposer.ts"
     ],
     "forbidden_facts": [
       "RabbitMQ",
       "NFT"
     ],
-    "reference": "## TL;DR\n- The thread tightened Summary so Important Moves explain both what changed and why it mattered, while Reusable Snippets remain note-ready anchors for future human recall.\n\n## Problem Frame\n- Summary should not preserve chronology mechanically.\n- A future reader needs a compact reconstruction of the thread's meaningful turns, plus grounded references that can be reused without rereading the whole conversation.\n\n## Important Moves\n- Move: Reframe `Important Moves` away from raw timeline narration.\n  Why it mattered: This makes the summary useful for future human recall instead of just mirroring transcript order.\n- Move: Define `Reusable Snippets` as grounded note-ready anchors such as files, commands, APIs, or patterns with short reuse notes.\n  Why it mattered: This turns summary output into a usable knowledge artifact rather than a loose recap.\n\n## Reusable Snippets\n- Reference: frontend/src/lib/prompts/export/compactComposer.ts\n  Reuse: Useful when checking how AI Handoff is currently framed at the composer layer.\n- Reference: frontend/src/lib/prompts/export/summaryComposer.ts\n  Reuse: Useful when comparing note-ready wording and section anchoring for Summary.\n- Reference: frontend/src/sidepanel/utils/exportCompression.ts\n  Reuse: Useful when checking runtime validation and fallback context.\n\n## Next Steps\n- Add concrete exemplars to the shipped Summary composer prompt.\n- Re-check whether Kimi follows `Important Moves` more reliably once the exemplar is in place.\n\n## Tags\n- knowledge-export, future-recall, important-moves, reusable-snippets, export-compression"
+    "reference": "## TL;DR\n- The thread tightened Summary so Important Moves explain both what changed and why it mattered, while Reusable Snippets prefer reusable patterns or insights over file references alone.\n\n## Problem Frame\n- Summary should not preserve chronology mechanically.\n- A future reader needs a compact reconstruction of the moves that changed understanding, plus grounded snippets that remain useful without rereading the entire thread.\n\n## Important Moves\n- Move: Reframe `Important Moves` away from raw timeline narration.\n  Why it mattered: This makes the summary useful for future human recall instead of merely mirroring transcript order.\n- Move: Reframe `Reusable Snippets` toward reusable patterns or insights, with file references as supporting anchors when they help.\n  Why it mattered: This turns summary output into a knowledge artifact rather than a list of file paths.\n\n## Reusable Snippets\n- Pattern: Keep `Important Moves` focused on the turns that changed understanding, decisions, or next actions, and explain why each one mattered.\n  Reuse: Useful when turning a long discussion into a future-readable note instead of a timeline dump.\n- Reference: frontend/src/lib/prompts/export/compactComposer.ts\n  Reuse: Useful when comparing how handoff framing differs from knowledge framing.\n- Reference: frontend/src/lib/prompts/export/summaryComposer.ts\n  Reuse: Useful when checking whether Summary keeps future recall as the first priority.\n\n## Next Steps\n- Strengthen the shipped Summary composer so future human recall is the first priority in the system prompt.\n- Re-check whether Kimi follows `Important Moves` and `Reusable Snippets` more reliably once the new exemplar is in place.\n\n## Tags\n- knowledge-export, future-recall, important-moves, reusable-patterns, prompt-composition"
   }
 }

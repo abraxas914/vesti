@@ -50,6 +50,25 @@ export interface ExportCompressionPromptPayload {
   profile?: ExportPromptProfile;
 }
 
+export interface ExportPlannerSignal {
+  label: string;
+  confidence?: "low" | "medium" | "high";
+  note?: string;
+  targetId?: string;
+}
+
+export interface ExportPlannerPromptPayload {
+  datasetId: string;
+  conversationTitle?: string;
+  conversationPlatform?: string;
+  conversationOriginAt?: number;
+  messages: Message[];
+  locale?: "zh" | "en";
+  profile?: ExportPromptProfile;
+  messageSignals?: ExportPlannerSignal[];
+  conversationSignals?: ExportPlannerSignal[];
+}
+
 export interface PromptVersion<TPayload> {
   version: string;
   createdAt: string;

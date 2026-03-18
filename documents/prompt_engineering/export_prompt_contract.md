@@ -40,6 +40,10 @@ Current shipped `E3` ownership is already partially aligned:
 - `frontend/src/lib/prompts/export/compactComposer.ts`
 - `frontend/src/lib/prompts/export/summaryComposer.ts`
 
+Dormant `E1` draft artifacts now exist for review and decomposition prep, but they are not yet wired into runtime:
+- `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts`
+- `frontend/src/lib/prompts/export/e1KnowledgeStructurePlanner.ts`
+
 Legacy compatibility re-export files remain temporarily:
 - `frontend/src/lib/prompts/exportCompact.ts`
 - `frontend/src/lib/prompts/exportSummary.ts`
@@ -65,12 +69,14 @@ The long-term export contract now distinguishes between:
 - mode: `handoff`
 - input: export dataset metadata + ordered messages + locale + profile
 - output: `HandoffPlanningNotes`
+- status: draft prompt artifact only, not runtime-active yet
 
 ### `export_e1_knowledge_structure_planner`
 - stage: `E1`
 - mode: `knowledge`
 - input: export dataset metadata + ordered messages + locale + profile
 - output: `KnowledgePlanningNotes`
+- status: draft prompt artifact only, not runtime-active yet
 
 ### `export_e2_handoff_evidence_compactor`
 - stage: `E2`

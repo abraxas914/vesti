@@ -105,6 +105,13 @@ Use ${payload.locale === "en" ? "English" : "Chinese"}.
 Output markdown only.
 
 Safe anchors:
+## Background
+- Task: <grounded task or thread goal>
+- Status/Constraint: <grounded current state, blocker, or key constraint>
+
+## Key Questions
+- <grounded driving question or conservative placeholder>
+
 ## Decisions And Answers
 - Decision: <grounded decision>
   Answer: <chosen path>
@@ -119,10 +126,10 @@ ${toExportTranscript(payload.messages)}`;
 }
 
 export const CURRENT_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.1-export-compact-exemplar-anchored",
+  version: "v1.2.2-export-compact-fallback-anchored",
   createdAt: "2026-03-18",
   description:
-    "High-fidelity compact export handoff prompt with section exemplars and contract-safe fallback behavior.",
+    "High-fidelity compact export handoff prompt with section exemplars and stronger fallback top-section anchors.",
   system: EXPORT_COMPACT_SYSTEM,
   fallbackSystem: "You are a cautious technical export assistant. Output markdown only.",
   userTemplate: buildCompactPrompt,
@@ -130,9 +137,9 @@ export const CURRENT_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromp
 };
 
 export const EXPERIMENTAL_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.1-export-compact-exemplar-anchored-exp",
+  version: "v1.2.2-export-compact-fallback-anchored-exp",
   createdAt: "2026-03-18",
-  description: "Experimental compact export handoff variant aligned with the current exemplar-anchored prompt.",
+  description: "Experimental compact export handoff variant aligned with the current fallback-anchored prompt.",
   system: EXPORT_COMPACT_SYSTEM,
   fallbackSystem: "You are a cautious technical export assistant. Output markdown only.",
   userTemplate: buildCompactPrompt,

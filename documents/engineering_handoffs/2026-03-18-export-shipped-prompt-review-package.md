@@ -11,7 +11,9 @@ It exists to keep the next expert pass focused on:
 - prompt contract alignment
 - decomposition direction
 - shipped `E3` quality limits
+- stronger recall framing for `summary`
 - section-level exemplar effectiveness
+- reusable pattern / insight anchoring
 - fallback conservatism versus compliance
 
 It does **not** ask the expert to review the full repo or legacy prompt surface.
@@ -38,6 +40,10 @@ The current shipped export prompts to review are:
 - `frontend/src/lib/prompts/export/compactComposer.ts`
 - `frontend/src/lib/prompts/export/summaryComposer.ts`
 
+Dormant extraction-prep drafts also exist now for review, but are not runtime-active:
+- `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts`
+- `frontend/src/lib/prompts/export/e1KnowledgeStructurePlanner.ts`
+
 Registry entry:
 - `frontend/src/lib/prompts/index.ts`
 
@@ -61,8 +67,9 @@ Send only this bundle:
 - `frontend/src/lib/prompts/export/compactComposer.ts`
 - `frontend/src/lib/prompts/export/summaryComposer.ts`
 
-### Runtime validator / fallback context
-- `frontend/src/sidepanel/utils/exportCompression.ts`
+### Dormant extraction-prep prompt drafts
+- `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts`
+- `frontend/src/lib/prompts/export/e1KnowledgeStructurePlanner.ts`
 
 ### Real output samples
 At least:
@@ -75,10 +82,10 @@ At least:
 
 Keep the prompt-review ask narrow:
 
-1. Do the shipped `E3` prompts actually match the intended task split between `AI Handoff` and `Knowledge Export`?
-2. Are the current prompts pushing the model toward the right kind of output contract, or are they still too bridge-state / mixed-purpose?
-3. Do the new exemplars anchor the right sections, or are they still too weak / too generic?
-4. Are the fallback prompts now conservative-in-compliance, or do they still read as merely shorter versions of the main composer?
+1. Does `summaryComposer` now make future human recall the first priority strongly enough, or is the framing still too close to timeline reconstruction?
+2. Do the updated `Reusable Snippets` anchors finally point toward reusable pattern / insight artifacts, rather than defaulting to file references?
+3. Are the fallback prompts now conservative-in-compliance, or do they still read as merely shorter versions of the main composer?
+4. Do the dormant `E1` planner drafts look like the right first step for moving extraction pressure forward out of `E3`?
 
 ## What not to ask in that round
 
@@ -89,4 +96,4 @@ Keep the prompt-review ask narrow:
 
 ## Working conclusion
 
-The next expert prompt-review round should be about whether the shipped `E3` prompts are good transitional composer prompts, whether the new exemplars anchor the right sections, and whether fallback is now conservative-in-compliance instead of merely shorter.
+The next expert prompt-review round should be about whether `summary` now reads like a real knowledge artifact, whether the new snippet anchors point toward reusable patterns or insights, whether fallback is now conservative-in-compliance instead of merely shorter, and whether the dormant `E1` drafts are the right first extraction move.

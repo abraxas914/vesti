@@ -9,7 +9,7 @@ import {
 
 const EXPORT_SUMMARY_SYSTEM = `You are Vesti's export summary assistant.
 
-Your job is to compress one conversation into a note-ready markdown summary for future human recall.
+Your first priority is future human recall: produce a note-ready markdown summary that helps a later reader who did not join the thread quickly recover what changed, why it mattered, and what can be reused.
 
 Output must contain these exact headings:
 ## TL;DR
@@ -35,8 +35,8 @@ const SUMMARY_MOVES_EXEMPLAR = `Example section anchor (illustrative shape only,
   Why it mattered: This turned vague fallback behavior into debuggable contract failures.`;
 
 const SUMMARY_SNIPPET_EXEMPLAR = `## Reusable Snippets
-- Reference: exportCompression.ts
-  Reuse: Useful when tracing heading validation or fallback diagnostics.`;
+- Pattern: Keep fallback stricter on contract compliance than the main composer.
+  Reuse: Useful when a model misses headings or produces low-density sections; reduce ambition without changing the schema.`;
 
 function buildSummaryPrompt(payload: ExportCompressionPromptPayload): string {
   const isStepProfile = payload.profile === "step_flash_concise";
@@ -64,14 +64,15 @@ Output requirements:
 1) Use the exact headings listed in the system prompt.
 2) Keep this optimized for future recall: crisp TL;DR, problem framing, key moves, reusable snippets, next steps, and tags.
 3) Let ## Problem Frame align with the core question and constraints that shaped the thread.
-4) Let ## Important Moves reflect the actual progression of the discussion, but only when that progression helps a future human reconstruct why the thread moved forward.
+4) In ## Important Moves, keep only the moves that materially changed understanding, decisions, or next actions, and explain why each one mattered for future recall.
 5) Let ## Next Steps reflect grounded actionable follow-ups, not generic advice.
-6) Let ## Tags stay concrete and limited to 3-5 useful tags when evidence exists.
-7) ${profileInstruction}
-8) Keep bullets concise and grounded.
-9) If evidence is sparse, keep the structure and use conservative placeholders.
-10) Write the final output in ${payload.locale === "en" ? "natural English" : "natural Chinese"}.
-11) Output markdown only.
+6) Let ## Reusable Snippets prefer grounded patterns or insights that can stand on their own for a future reader; include file, command, or API references when they are the most reusable grounded unit.
+7) Let ## Tags stay concrete and limited to 3-5 useful tags when evidence exists.
+8) ${profileInstruction}
+9) Keep bullets concise and grounded.
+10) If evidence is sparse, keep the structure and use conservative placeholders.
+11) Write the final output in ${payload.locale === "en" ? "natural English" : "natural Chinese"}.
+12) Output markdown only.
 
 Section anchors:
 - Progression matters here only when it helps a future human reconstruct the thread, not as a mechanical timeline dump.
@@ -112,6 +113,14 @@ Requirements:
 10) Output markdown only.
 
 Safe anchors:
+## TL;DR
+- Core takeaway: <grounded conclusion or conservative placeholder>
+- Scope/Boundary: <grounded current applicability or limitation>
+
+## Problem Frame
+- Core question: <grounded problem statement>
+- Constraint: <grounded key constraint or conservative placeholder>
+
 ## Important Moves
 - Move: <grounded step>
   Why it mattered: <brief grounded impact>
@@ -125,10 +134,10 @@ ${toExportTranscript(payload.messages)}`;
 }
 
 export const CURRENT_EXPORT_SUMMARY_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.1-export-summary-exemplar-anchored",
+  version: "v1.2.2-export-summary-recall-pattern-anchored",
   createdAt: "2026-03-18",
   description:
-    "Summary export prompt for human-readable notes with section exemplars and contract-safe fallback behavior.",
+    "Summary export prompt for human-readable notes with stronger recall framing, pattern-oriented snippet anchors, and contract-safe fallback behavior.",
   system: EXPORT_SUMMARY_SYSTEM,
   fallbackSystem: "You are a concise technical export assistant. Output markdown only.",
   userTemplate: buildSummaryPrompt,
@@ -136,9 +145,9 @@ export const CURRENT_EXPORT_SUMMARY_PROMPT: PromptVersion<ExportCompressionPromp
 };
 
 export const EXPERIMENTAL_EXPORT_SUMMARY_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.1-export-summary-exemplar-anchored-exp",
+  version: "v1.2.2-export-summary-recall-pattern-anchored-exp",
   createdAt: "2026-03-18",
-  description: "Experimental summary export variant aligned with the current exemplar-anchored prompt.",
+  description: "Experimental summary export variant aligned with the current recall- and pattern-anchored prompt.",
   system: EXPORT_SUMMARY_SYSTEM,
   fallbackSystem: "You are a concise technical export assistant. Output markdown only.",
   userTemplate: buildSummaryPrompt,

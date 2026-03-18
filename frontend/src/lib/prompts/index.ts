@@ -28,6 +28,8 @@ export type {
   CompactionPromptPayload,
   ConversationSummaryPromptPayload,
   ExportCompressionPromptPayload,
+  ExportPlannerPromptPayload,
+  ExportPlannerSignal,
   PromptConfig,
   PromptPayloadMap,
   PromptType,

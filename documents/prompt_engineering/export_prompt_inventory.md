@@ -31,6 +31,7 @@ The current shipped profiles are also a bridge-state compromise:
 - `summary` still reuses handoff-oriented profile names
 - task intent and model identity are not yet decomposed into separate routing axes
 - compatibility re-export stubs still exist at `frontend/src/lib/prompts/exportCompact.ts` and `frontend/src/lib/prompts/exportSummary.ts` to avoid breaking existing imports while ownership is being cleaned up
+- dormant `E1` planner prompts now exist as review artifacts, but current runtime still starts at `E3`
 
 ## Target phase 1 inventory after decomposition
 
@@ -38,8 +39,8 @@ The current shipped profiles are also a bridge-state compromise:
 | --- | --- | --- | --- |
 | `P0` | source normalization rules | upstream ingestion / normalization layer | active |
 | `P1` | structured sidecar annotation rules | upstream ingestion / annotation layer | active, heuristic-first |
-| `E1 handoff` | `export_e1_handoff_structure_planner` | `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts` | `kimi + handoff` |
-| `E1 knowledge` | `export_e1_knowledge_structure_planner` | `frontend/src/lib/prompts/export/e1KnowledgeStructurePlanner.ts` | `kimi + knowledge` |
+| `E1 handoff` | `export_e1_handoff_structure_planner` | `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts` | `kimi + handoff` (draft only, dormant) |
+| `E1 knowledge` | `export_e1_knowledge_structure_planner` | `frontend/src/lib/prompts/export/e1KnowledgeStructurePlanner.ts` | `kimi + knowledge` (draft only, dormant) |
 | `E2 handoff` | `export_e2_handoff_evidence_compactor` | `frontend/src/lib/prompts/export/e2HandoffEvidenceCompactor.ts` | `kimi + handoff` |
 | `E2 knowledge` | `export_e2_knowledge_evidence_compactor` | `frontend/src/lib/prompts/export/e2KnowledgeEvidenceCompactor.ts` | `kimi + knowledge` |
 | `E3 compact` | `export_e3_compact_composer` | `frontend/src/lib/prompts/export/compactComposer.ts` | `kimi + handoff` |

@@ -36,6 +36,14 @@ Export prompts should converge to this structure:
 - `frontend/src/lib/prompts/export/repairSummary.ts`
 - `frontend/src/lib/prompts/export/shared.ts`
 
+Current shipped `E3` ownership is already partially aligned:
+- `frontend/src/lib/prompts/export/compactComposer.ts`
+- `frontend/src/lib/prompts/export/summaryComposer.ts`
+
+Legacy compatibility re-export files remain temporarily:
+- `frontend/src/lib/prompts/exportCompact.ts`
+- `frontend/src/lib/prompts/exportSummary.ts`
+
 Supporting domain folders:
 - `frontend/src/lib/prompts/explore/`
 - `frontend/src/lib/prompts/legacy/insights/`

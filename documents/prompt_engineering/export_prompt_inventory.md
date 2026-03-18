@@ -24,12 +24,13 @@ Note:
 | Stage | Runtime entry | Prompt source | Profiles | Output |
 | --- | --- | --- | --- | --- |
 | `E0 dataset_builder` | `frontend/src/sidepanel/utils/exportConversations.ts` + export dataset helpers | none (deterministic) | n/a | normalized export dataset |
-| `E3 compact composer` | `frontend/src/sidepanel/utils/exportCompression.ts` | `frontend/src/lib/prompts/exportCompact.ts` | `kimi_handoff_rich`, `step_flash_concise` | compact markdown |
-| `E3 summary composer` | `frontend/src/sidepanel/utils/exportCompression.ts` | `frontend/src/lib/prompts/exportSummary.ts` | `kimi_handoff_rich`, `step_flash_concise` | summary markdown |
+| `E3 compact composer` | `frontend/src/sidepanel/utils/exportCompression.ts` | `frontend/src/lib/prompts/export/compactComposer.ts` | `kimi_handoff_rich`, `step_flash_concise` | compact markdown |
+| `E3 summary composer` | `frontend/src/sidepanel/utils/exportCompression.ts` | `frontend/src/lib/prompts/export/summaryComposer.ts` | `kimi_handoff_rich`, `step_flash_concise` | summary markdown |
 
 The current shipped profiles are also a bridge-state compromise:
 - `summary` still reuses handoff-oriented profile names
 - task intent and model identity are not yet decomposed into separate routing axes
+- compatibility re-export stubs still exist at `frontend/src/lib/prompts/exportCompact.ts` and `frontend/src/lib/prompts/exportSummary.ts` to avoid breaking existing imports while ownership is being cleaned up
 
 ## Target phase 1 inventory after decomposition
 

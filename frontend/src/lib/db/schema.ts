@@ -6,6 +6,11 @@ import type {
   SummaryRecord,
   WeeklyReportRecord,
 } from "../types";
+import {
+  extractAstPlainText,
+  inspectAstStructure,
+  isAstRoot,
+} from "../utils/astText";
 
 export type ConversationRecord = Omit<Conversation, "id"> & { id?: number };
 export type MessageRecord = Omit<Message, "id" | "content_ast"> & {
@@ -391,7 +396,56 @@ export class MemoryHubDB extends Dexie {
             }
           });
       });
+    this.version(13)
+      .stores({
+        conversations:
+          "++id, platform, title, created_at, updated_at, uuid, source_created_at, turn_count, topic_id, is_starred, [platform+created_at], [platform+uuid], [topic_id+updated_at]",
+        messages:
+          "++id, conversation_id, role, created_at, [conversation_id+created_at]",
+        summaries: "++id, conversationId, createdAt",
+        weekly_reports: "++id, rangeStart, rangeEnd, createdAt",
+        topics:
+          "++id, parent_id, name, created_at, updated_at, [parent_id+name]",
+        vectors: "++id, conversation_id, text_hash",
+        notes: "++id, created_at, updated_at",
+        explore_sessions: "id, updatedAt, createdAt",
+        explore_messages: "id, sessionId, timestamp, [sessionId+timestamp]",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("messages")
+          .toCollection()
+          .modify((record: Partial<MessageRecord>) => {
+            const normalizedDegradedCount = normalizePersistedDegradedNodesCount(
+              record.degraded_nodes_count
+            );
+            if (normalizedDegradedCount !== record.degraded_nodes_count) {
+              record.degraded_nodes_count = normalizedDegradedCount;
+            }
+
+            if (record.content_ast_version !== "ast_v1" || !isAstRoot(record.content_ast)) {
+              return;
+            }
+
+            const astStats = inspectAstStructure(record.content_ast);
+            if (!astStats.hasMath) {
+              return;
+            }
+
+            const canonicalText = extractAstPlainText(record.content_ast);
+            if (canonicalText && canonicalText !== record.content_text) {
+              record.content_text = canonicalText;
+            }
+          });
+      });
   }
+}
+
+function normalizePersistedDegradedNodesCount(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor(value));
 }
 
 export const db = new MemoryHubDB();

@@ -37,8 +37,9 @@ Hard rules:
 1) Use only grounded evidence from the supplied dataset.
 2) Optimize for continuation by the next agent or engineer, not for human-friendly summary prose.
 3) Favor preservation of decisions, decision rationale, concrete artifacts, and unresolved work.
-4) If evidence is sparse, keep the JSON shape and use conservative values instead of inventing details.
-5) Output valid JSON only.`;
+4) Treat medium/high signals as stronger inclusion hints. Treat low-confidence signals only as prompts to verify against the transcript, not as facts by themselves.
+5) If evidence is sparse, keep the JSON shape and use conservative values instead of inventing details.
+6) Output valid JSON only.`;
 
 function formatSignalLines(
   payload: ExportPlannerPromptPayload
@@ -102,8 +103,9 @@ Planning requirements:
 4) riskFlags should call out missing evidence, unstable assumptions, or places where chronology matters.
 5) taskFrame should describe the current task boundary and key constraints.
 6) handoffFocus should be 3-5 compact bullets naming the decision, artifact, and unresolved areas that most directly affect continuation.
-7) Set decisionDensity and unresolvedDensity based on the actual thread, not on desired output size.
-8) Output valid JSON only.`;
+7) Use medium/high signals to prioritize inclusion; use low-confidence signals only when the transcript itself supports them.
+8) Set decisionDensity and unresolvedDensity based on the actual thread, not on desired output size.
+9) Output valid JSON only.`;
 }
 
 function buildE1HandoffFallbackPrompt(

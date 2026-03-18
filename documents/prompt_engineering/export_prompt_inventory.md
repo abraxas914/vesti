@@ -32,6 +32,7 @@ The current shipped profiles are also a bridge-state compromise:
 - task intent and model identity are not yet decomposed into separate routing axes
 - compatibility re-export stubs still exist at `frontend/src/lib/prompts/exportCompact.ts` and `frontend/src/lib/prompts/exportSummary.ts` to avoid breaking existing imports while ownership is being cleaned up
 - dormant `E1` planner prompts now exist as review artifacts, but current runtime still starts at `E3`
+- the handoff distillation prototype now exists offline, but it does not alter shipping runtime ownership
 
 ## Target phase 1 inventory after decomposition
 
@@ -41,7 +42,7 @@ The current shipped profiles are also a bridge-state compromise:
 | `P1` | structured sidecar annotation rules | upstream ingestion / annotation layer | active, heuristic-first |
 | `E1 handoff` | `export_e1_handoff_structure_planner` | `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts` | `kimi + handoff` (draft only, dormant) |
 | `E1 knowledge` | `export_e1_knowledge_structure_planner` | `frontend/src/lib/prompts/export/e1KnowledgeStructurePlanner.ts` | `kimi + knowledge` (draft only, dormant) |
-| `E2 handoff` | `export_e2_handoff_evidence_compactor` | `frontend/src/lib/prompts/export/e2HandoffEvidenceCompactor.ts` | `kimi + handoff` |
+| `E2 handoff` | `export_e2_handoff_evidence_compactor` | `frontend/src/lib/prompts/export/e2HandoffEvidenceCompactor.ts` | `kimi + handoff` (draft only, offline prototype) |
 | `E2 knowledge` | `export_e2_knowledge_evidence_compactor` | `frontend/src/lib/prompts/export/e2KnowledgeEvidenceCompactor.ts` | `kimi + knowledge` |
 | `E3 compact` | `export_e3_compact_composer` | `frontend/src/lib/prompts/export/compactComposer.ts` | `kimi + handoff` |
 | `E3 summary` | `export_e3_summary_composer` | `frontend/src/lib/prompts/export/summaryComposer.ts` | `kimi + knowledge` |
@@ -51,6 +52,24 @@ The current shipped profiles are also a bridge-state compromise:
 Notes:
 - `E1/E2` remain shared stage slots, but use separate prompt artifacts
 - `step` remains a compatibility / fallback line until phase 2 task-specific tuning
+
+## Offline handoff distillation prototype
+
+This prototype is intentionally separate from shipping runtime and exists to run one bounded handoff-only chain end to end.
+
+| Stage | Prototype implementation | Status |
+| --- | --- | --- |
+| `P1 heuristic_annotator` | `frontend/src/lib/prompts/export/distillPrototype.ts` | active in offline prototype only |
+| `E1 handoff planner` | `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts` | active in offline prototype only |
+| `E2 handoff evidence compactor` | `frontend/src/lib/prompts/export/e2HandoffEvidenceCompactor.ts` | active in offline prototype only |
+| `E3 handoff composer from evidence` | `frontend/src/lib/prompts/export/e3HandoffComposerFromEvidence.ts` | active in offline prototype only |
+| `repair compact` | inline one-shot repair in `scripts/export-distill-prototype.ts` | active in offline prototype only |
+| runner | `scripts/export-distill-prototype.ts` + `frontend/package.json#distill:handoff` | active in offline prototype only |
+
+Prototype guardrails:
+- handoff only; `Knowledge Export` is not yet part of the runtime prototype
+- low-confidence signals are preserved as hints, not treated as hard facts
+- `repair` may run once and never reopens upstream stages
 
 ## Adjacent systems kept outside export canonical ownership
 

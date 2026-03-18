@@ -44,6 +44,12 @@ Dormant `E1` draft artifacts now exist for review and decomposition prep, but th
 - `frontend/src/lib/prompts/export/e1HandoffStructurePlanner.ts`
 - `frontend/src/lib/prompts/export/e1KnowledgeStructurePlanner.ts`
 
+Handoff-only offline prototype artifacts now also exist for distillation work, but they are not runtime-active:
+- `frontend/src/lib/prompts/export/e2HandoffEvidenceCompactor.ts`
+- `frontend/src/lib/prompts/export/e3HandoffComposerFromEvidence.ts`
+- `frontend/src/lib/prompts/export/distillPrototype.ts`
+- `scripts/export-distill-prototype.ts`
+
 Legacy compatibility re-export files remain temporarily:
 - `frontend/src/lib/prompts/exportCompact.ts`
 - `frontend/src/lib/prompts/exportSummary.ts`
@@ -83,6 +89,7 @@ The long-term export contract now distinguishes between:
 - mode: `handoff`
 - input: dataset + `HandoffPlanningNotes`
 - output: `HandoffEvidenceSkeleton`
+- status: draft prompt artifact, currently used only by the offline handoff distillation prototype
 
 ### `export_e2_knowledge_evidence_compactor`
 - stage: `E2`
@@ -95,12 +102,20 @@ The long-term export contract now distinguishes between:
 - mode: `handoff`
 - input: `CompactComposerInput`
 - output: compact markdown under the shipping headings
+- current shipping runtime still starts here from raw transcript payloads
 
 ### `export_e3_summary_composer`
 - stage: `E3`
 - mode: `knowledge`
 - input: `SummaryComposerInput`
 - output: summary markdown under the shipping headings
+
+### `export_e3_handoff_composer_from_evidence`
+- stage: `E3`
+- mode: `handoff`
+- input: `CompactComposerInput` backed by `HandoffEvidenceSkeleton`
+- output: compact markdown under the shipping headings
+- status: offline-only prototype composer used to validate that `E3` can consume evidence instead of raw transcript
 
 ### `export_compact_repair`
 - stage: repair path after invalid structured compact output
@@ -151,6 +166,22 @@ Phase 1 activation is intentionally narrower:
 - `frontend/src/lib/prompts/index.ts` should remain a registry, not a mixed domain implementation dump
 - export prompt payload types belong in `frontend/src/lib/prompts/types.ts`
 - `E1/E2` output contracts must remain structured artifacts, not final markdown
+- the current shipping runtime still begins at `E3`; dormant and prototype artifacts must be labeled clearly until they are actually wired into runtime
+
+## Offline distillation prototype
+
+The current handoff-only distillation prototype exists to answer one question: can `P1 -> E1 -> E2 -> E3` run once as a bounded offline chain and still satisfy the live compact headings contract?
+
+Prototype scope:
+- handoff only
+- TypeScript / Node runner under `scripts/export-distill-prototype.ts`
+- heuristic `P1`, not LLM-assisted annotation
+- one-shot repair only, never recursive
+
+Prototype non-goals:
+- it does not replace the shipping `exportCompression.ts` path
+- it does not activate `Knowledge Export` runtime decomposition yet
+- it does not reopen the live payload contract or exact headings
 
 ## Current migration debt
 

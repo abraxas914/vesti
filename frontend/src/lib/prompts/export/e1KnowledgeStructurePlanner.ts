@@ -37,9 +37,10 @@ Hard rules:
 1) Use only grounded evidence from the supplied dataset.
 2) Optimize for future recall by a reader who was not part of the thread.
 3) Prefer moves, insights, reusable patterns, and next actions that can stand on their own later.
-4) Do not turn this into final markdown headings or a narrative summary.
-5) If evidence is sparse, keep the JSON shape and use conservative values instead of inventing details.
-6) Output valid JSON only.`;
+4) Treat medium/high signals as stronger inclusion hints. Treat low-confidence signals only as prompts to verify against the transcript, not as facts by themselves.
+5) Do not turn this into final markdown headings or a narrative summary.
+6) If evidence is sparse, keep the JSON shape and use conservative values instead of inventing details.
+7) Output valid JSON only.`;
 
 function formatSignalLines(
   payload: ExportPlannerPromptPayload
@@ -103,8 +104,9 @@ Planning requirements:
 4) exclusionRules should name chatter or detail that can be dropped unless it changes later understanding.
 5) riskFlags should call out missing context, weak grounding, or places where recall value is still uncertain.
 6) knowledgeValue should be 3-5 compact bullets naming the patterns, insights, or reusable anchors E2 should preserve.
-7) Set progressionDensity and actionabilityDensity based on the actual thread, not on desired output size.
-8) Output valid JSON only.`;
+7) Use medium/high signals to prioritize inclusion; use low-confidence signals only when the transcript itself supports them.
+8) Set progressionDensity and actionabilityDensity based on the actual thread, not on desired output size.
+9) Output valid JSON only.`;
 }
 
 function buildE1KnowledgeFallbackPrompt(

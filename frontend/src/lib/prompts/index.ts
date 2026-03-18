@@ -25,16 +25,33 @@ import type {
 } from "./types";
 
 export type {
+  AnnotationConfidence,
+  AnnotationEnvelope,
+  AnnotationSource,
   CompactionPromptPayload,
+  CompactComposerInput,
+  ConversationAnnotation,
   ConversationSummaryPromptPayload,
+  ExportDataset,
+  ExportDatasetMessage,
+  ExportDatasetMetadata,
   ExportCompressionPromptPayload,
+  ExportDensity,
+  ExportDistillMode,
   ExportPlannerPromptPayload,
   ExportPlannerSignal,
+  HandoffEvidenceCompactorPromptPayload,
+  HandoffEvidenceSkeleton,
+  HandoffPlanningNotes,
+  KnowledgePlanningNotes,
+  MessageAnnotation,
+  PlanningNotesBase,
   PromptConfig,
   PromptPayloadMap,
   PromptType,
   PromptVariant,
   PromptVersion,
+  RepairInput,
   WeeklyDigestPromptPayload,
 } from "./types";
 

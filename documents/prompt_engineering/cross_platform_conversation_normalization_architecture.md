@@ -77,6 +77,27 @@ phase 1 的默认方向是：
 具体 shape 见：
 - `export_stage_artifact_schemas.md`
 
+## Boundary protection for `P1`
+
+`P1` 的职责是 heuristic annotation，不是 conversation understanding agent。
+这条边界需要在实现过程中主动防守：
+
+- `P1` 可以输出 bounded labels
+- `P1` 可以做有限的 aggregate signals
+- `P1` 不应开始做开放式主题解释
+- `P1` 不应替 `E1/E2` 做“整段对话到底在讲什么”的语义判断
+
+换句话说，`P1` 可以说：
+- 这里有 correction trace
+- 这里 artifact density 偏高
+- 这里 next-step cues 明显
+
+但不应该默认扩张成：
+- “这段对话整体上是在讨论架构哲学”
+- “这个线程本质上属于实现复盘而不是决策探索”
+
+一旦 `P1` 越过这条线，它就不再是 heuristic sidecar producer，而是在悄悄变成另一个 LLM stage。
+
 ## Why this is not “just part of E0”
 
 把这些工作全部塞进 `E0` 会带来三个问题：
@@ -106,6 +127,21 @@ phase 1 的默认方向是：
 这意味着：
 - `P0/P1` 不等于偏向某一条 export mode
 - 但 `P1 semantic_annotator` 需要足够丰富，才能同时服务 handoff 和 knowledge 两类 downstream stage
+
+## Known architecture debt
+
+### `P1` label set 可能随两条路径一起膨胀
+
+当前 `P1` 仍被设计成 shared upstream annotation layer，这在阶段一是合理的。
+但需要明确记录一个已知风险：
+
+- `AI Handoff` 未来可能需要更细的 decision / unresolved trace
+- `Knowledge Export` 未来可能需要更细的 reusable / narrative / recall cues
+
+如果两条路径对 `P1` 的依赖不断细化，`P1` 的 label set 可能会持续膨胀。
+这条债务当前不要求立刻解决，但需要被持续记录，避免 `P1` 在无计划状态下演变成：
+- 过于宽泛的 label bag
+- 或两套彼此分裂的 annotation strategies
 
 ## Current state vs target state
 

@@ -114,6 +114,8 @@ phase 1 runner 的标准链路是：
 - validator runs again after repair
 - if still invalid: return degraded failure / deterministic fallback
 - repair must not recurse
+- implementation should enforce `maxRepairAttempts = 1`
+- `repair` must not reopen `E2` extraction or trigger any upstream feedback loop
 
 ## Stateless call rule
 
@@ -148,6 +150,43 @@ validator 的基本原则是：
 这意味着：
 - `E1/E2/E3` 的主调优路径先围绕 Kimi 建立
 - `step` 作为兼容 / fallback 路线保留，但不在 phase 1 承担 task-specific tuning 主责
+
+## Delivery sequencing
+
+在 phase 1 的实际落地顺序上，优先级固定为：
+1. 先跑通 `AI Handoff`
+2. 再扩展 `Knowledge Export`
+
+原因不是“先做简单的”，而是：
+- `AI Handoff` 更容易建立 tight feedback loop
+- downstream agent 是否尊重已有 decisions / constraints / unresolved work，可以更快操作化评估
+- 共享的 `P0/P1/E0/E1/E2` 一旦先在 handoff 路径上验证过，knowledge 路径才是基于已验证前段的局部扩展
+
+## Known execution risks
+
+### 1. bounded 约束被质量优化悄悄侵蚀
+
+最需要主动防守的风险不是模型能力，而是 workflow 在“修质量”的名义下重新长出 loop：
+- 让 `E3` 反向驱动 `E2` 重提取
+- 让 `repair` 不断 retry 直到满意
+- 让 stage 在运行时动态改写下一步拓扑
+
+这些都与本文件定义的 bounded chain 基线冲突。
+
+### 2. `repair` 必须是硬边界，不只是文档口头约束
+
+`repair` 之所以存在，是为了修补 final contract failure，而不是把 export runner 变成开放式自修复树。
+因此 phase 1 实现必须在代码层面直接保证：
+- one-shot only
+- no recursive repair
+- no upstream stage reopening
+
+### 3. phase 1 不把 framework complexity 当成质量补偿
+
+当前阶段最主要的不稳定性仍然来自 prompt / artifact / validator，而不是 orchestration runtime。
+因此：
+- 不默认引入 LangChain / LangGraph
+- 不用 graph complexity 掩盖 stage contract 还没钉死的问题
 
 ## Relationship to orchestration docs
 

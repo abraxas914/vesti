@@ -79,6 +79,19 @@ The phase 1 activation strategy is intentionally narrower:
 - active tuning target: `kimi + knowledge`
 - `step` remains a compatibility / fallback line until phase 2 tuning
 
+## Delivery order and known risks
+
+The intended phase 1 order is:
+1. stabilize `AI Handoff`
+2. expand `Knowledge Export` on top of the validated shared upstream chain
+
+This order is chosen for evaluation quality, not because summary is less important.
+
+Known risks that need explicit ongoing management:
+- bounded `repair` turning into a hidden retry loop
+- `P1` label-set growth as both task paths demand richer upstream signals
+- `P1` drifting from heuristic annotation toward open-ended semantic interpretation
+
 ## Relationship to current shipped export compression
 
 Current production export compression remains the live shipping path.

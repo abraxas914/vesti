@@ -222,6 +222,39 @@ Audience: Prompt engineers, runtime engineers, domain experts, release owners
 - 针对 expected contract 做 bounded repair
 - 不能演变成开放式 retry tree
 
+## Why AI Handoff is the first implementation path
+
+在真正进入 runtime decomposition 时，`AI Handoff` 应先于 `Knowledge Export` 落地。
+
+这不是因为 handoff “更简单”，而是因为它有更紧的 feedback loop：
+- 下一段 agent 是否重复追问已经决定的事情
+- 是否尊重已确认的 constraints
+- 是否处理 `Unresolved` 里列出的待办
+
+这些都更容易被操作化评估。
+
+因此 phase 1 的务实顺序是：
+1. 先验证 `P0 -> P1 -> E0 -> E1 -> E2 -> E3` 在 handoff 路径上成立
+2. 再把 knowledge 路径作为共享前段之上的第二条 composer 方向扩展
+
+## Known architecture risks
+
+### 1. bounded `repair` 被悄悄扩成循环
+
+AI Handoff 很容易在“为了让下一个 agent 更顺”这个理由下长出额外回路。
+需要明确防守：
+- `repair` 只能 one-shot
+- `repair` 不能回头驱动 `E2` 重提取
+- `E3` 不能反向要求 workflow 改写拓扑
+
+### 2. handoff 与 knowledge 共用 `P1` 时的 label-set 膨胀
+
+当前 shared upstream annotation layer 是合理的，但中长期需要警惕：
+- handoff 想要更细的 decision / unresolved traces
+- knowledge 想要更细的 reusable / recall cues
+
+如果缺少治理，`P1` 可能变成一个不断膨胀的 label bucket。
+
 ## Deliberate non-goals
 
 AI Handoff 的方向明确 **不包括**：

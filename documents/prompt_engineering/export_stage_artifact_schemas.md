@@ -77,6 +77,9 @@ interface ConversationAnnotation {
 - `knowledge_candidate`
 - `handoff_candidate`
 
+conversation-level annotations 应被理解为 aggregate signals，而不是开放式语义结论。
+它们的目标是帮助 `E0/E1` 稳定消费上游状态，而不是替 downstream stage 完成主题理解。
+
 ## `E0` export dataset
 
 ```ts
@@ -266,6 +269,17 @@ interface RepairInput {
 - `E1/E2` output 不允许退化成最终 markdown
 - `E3` input 必须显式包含 expected headings
 - repair 不重新定义 schema，只修补 contract failure
+
+## Known schema pressure
+
+`P1` sidecar schema 是 shared upstream contract，因此需要预期一个中长期压力：
+- handoff 路径会推动 decision / unresolved labels 继续细化
+- knowledge 路径会推动 reusable / recall labels 继续细化
+
+这不要求现在拆成两套 sidecar schema，但要求后续持续审视：
+- label set 是否还保持 bounded
+- conversation-level annotations 是否仍然是 aggregate signals
+- `P1` 是否开始替 `E1/E2` 做开放式语义判断
 
 ## Relationship to other docs
 

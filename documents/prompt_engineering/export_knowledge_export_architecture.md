@@ -211,6 +211,35 @@ Knowledge Export 的目标不是简单缩短对话，而是把一次执行性很
 - 用于修补 summary contract 不合规的输出
 - 不能演变成开放式 retry loop
 
+## Why this should follow AI Handoff
+
+`Knowledge Export` 应该在 `AI Handoff` 之后推进，而不是与它同时作为第一落地点。
+
+原因不是“summary 更复杂所以晚做”，而是：
+- `AI Handoff` 更容易建立 tight feedback loop
+- shared upstream chain 先在 handoff 路径上验证，knowledge 路径才是真正的局部扩展
+- 如果在 `P0/P1/E0/E1/E2` 还未被验证时就同步调 summary，会把两个不确定性叠在一起
+
+因此更务实的顺序是：
+1. 先跑通 `AI Handoff`
+2. 再把 `Knowledge Export` 建在已验证的 shared upstream stages 之上
+
+## Known architecture risks
+
+### 1. 不要把 knowledge 的复杂性错误地转化成 workflow 拓扑复杂度
+
+Knowledge Export 的难点主要在判断质量，而不是 pipeline 拓扑。
+这意味着：
+- 复杂性应主要消化在 `E1/E2` 的 prompt design 里
+- 不应因为 summary 更主观，就引入开放式 loop 或额外 agent 自主决策
+
+### 2. `P1` label set 与 knowledge 需求之间的长期张力
+
+Knowledge Export 对 reusable snippets、recall quality、narrative usefulness 的依赖会逐渐变细。
+如果这些需求不断前推到 `P1`，就会给 shared annotation layer 带来两种风险：
+- label set 持续膨胀
+- `P1` 越界去做本该由 `E1/E2` 完成的语义判断
+
 ## Deliberate non-goals
 
 Knowledge Export 的方向明确 **不包括**：

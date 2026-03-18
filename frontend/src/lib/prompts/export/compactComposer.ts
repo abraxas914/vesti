@@ -28,6 +28,17 @@ Hard rules:
 7) Output markdown only. Do not wrap the whole answer in code fences.
 8) If the transcript contains reusable code or command snippets, preserve them in markdown-friendly form rather than paraphrasing them away.`;
 
+const COMPACT_DECISION_EXEMPLAR = `Example section anchor (illustrative shape only, not literal content):
+## Decisions And Answers
+- Decision: Keep selection state local to TimelinePage.
+  Answer: Add a one-shot guard so overflow Select enters batch mode without opening Reader.
+  Rationale: This preserves normal card activation while isolating menu-driven selection.`;
+
+const COMPACT_ARTIFACT_EXEMPLAR = `## Reusable Artifacts
+- Path: frontend/src/sidepanel/pages/TimelinePage.tsx
+- API/Function: handleSelectFromMenu(...)
+- Command: pnpm -C frontend build`;
+
 function buildCompactPrompt(payload: ExportCompressionPromptPayload): string {
   const isStepProfile = payload.profile === "step_flash_concise";
   const brevityRule = isStepProfile
@@ -55,13 +66,20 @@ Output requirements:
 2) Optimize for AI handoff, not for skimming: preserve background, key asks, decisions, constraints, artifacts, and unresolved work.
 3) In ## Background, include the task frame, constraints, and any context another assistant would need before acting.
 4) In ## Key Questions, keep only the questions that actually drove the work forward.
-5) In ## Decisions And Answers, capture grounded resolutions, tradeoffs, and chosen implementation paths.
+5) In ## Decisions And Answers, capture grounded resolutions, chosen paths, and short rationales when the transcript supports them.
 6) In ## Reusable Artifacts, preserve filenames, commands, APIs, functions, and code blocks when grounded.
 7) In ## Unresolved, call out what remains open, risky, or needs continuation.
 8) ${brevityRule}
 9) If evidence is sparse, keep the structure and use conservative placeholders.
 10) Write the final output in ${payload.locale === "en" ? "natural English" : "natural Chinese"}.
-11) Output markdown only.`;
+11) Output markdown only.
+
+Section anchors:
+- Chronology matters here only when it helps the next agent reconstruct decision causality and execution state.
+- Use this shape for grounded decisions:
+${COMPACT_DECISION_EXEMPLAR}
+- Use this shape for grounded reusable artifacts:
+${COMPACT_ARTIFACT_EXEMPLAR}`;
 }
 
 function buildCompactFallbackPrompt(
@@ -69,10 +87,10 @@ function buildCompactFallbackPrompt(
 ): string {
   const fallbackNote =
     payload.profile === "step_flash_concise"
-      ? "Keep it tight, but do not lose grounded files, commands, APIs, or unresolved work."
-      : "Preserve grounded files, commands, APIs, code, and unresolved work whenever they appear.";
+      ? "Prefer fewer bullets, but keep the contract safer: preserve grounded files, commands, APIs, and unresolved work."
+      : "Prefer a conservative, contract-safe handoff: preserve grounded files, commands, APIs, code, and unresolved work whenever they appear.";
 
-  return `Write a shorter fallback markdown handoff for this conversation.
+  return `Write a conservative fallback markdown handoff for this conversation.
 You must keep these exact headings:
 ## Background
 ## Key Questions
@@ -80,20 +98,31 @@ You must keep these exact headings:
 ## Reusable Artifacts
 ## Unresolved
 
-Keep it shorter and more conservative than the main prompt.
+The fallback goal is higher compliance, not freer rewriting.
+If evidence is thin, use conservative placeholders rather than dropping headings.
 ${fallbackNote}
 Use ${payload.locale === "en" ? "English" : "Chinese"}.
 Output markdown only.
+
+Safe anchors:
+## Decisions And Answers
+- Decision: <grounded decision>
+  Answer: <chosen path>
+  Rationale: <short grounded reason or conservative placeholder>
+
+## Reusable Artifacts
+- Path: <grounded file path if present>
+- Command: <grounded command if present>
 
 Transcript:
 ${toExportTranscript(payload.messages)}`;
 }
 
 export const CURRENT_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.0-export-compact-kimi-step-profiled",
-  createdAt: "2026-03-16",
+  version: "v1.2.1-export-compact-exemplar-anchored",
+  createdAt: "2026-03-18",
   description:
-    "High-fidelity compact export handoff prompt with Kimi-rich and Step-concise profiles.",
+    "High-fidelity compact export handoff prompt with section exemplars and contract-safe fallback behavior.",
   system: EXPORT_COMPACT_SYSTEM,
   fallbackSystem: "You are a cautious technical export assistant. Output markdown only.",
   userTemplate: buildCompactPrompt,
@@ -101,9 +130,9 @@ export const CURRENT_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromp
 };
 
 export const EXPERIMENTAL_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.0-export-compact-kimi-step-profiled-exp",
-  createdAt: "2026-03-16",
-  description: "Experimental profiled compact export handoff variant.",
+  version: "v1.2.1-export-compact-exemplar-anchored-exp",
+  createdAt: "2026-03-18",
+  description: "Experimental compact export handoff variant aligned with the current exemplar-anchored prompt.",
   system: EXPORT_COMPACT_SYSTEM,
   fallbackSystem: "You are a cautious technical export assistant. Output markdown only.",
   userTemplate: buildCompactPrompt,

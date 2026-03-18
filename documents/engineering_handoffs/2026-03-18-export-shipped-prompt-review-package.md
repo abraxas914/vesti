@@ -11,6 +11,8 @@ It exists to keep the next expert pass focused on:
 - prompt contract alignment
 - decomposition direction
 - shipped `E3` quality limits
+- section-level exemplar effectiveness
+- fallback conservatism versus compliance
 
 It does **not** ask the expert to review the full repo or legacy prompt surface.
 
@@ -75,7 +77,8 @@ Keep the prompt-review ask narrow:
 
 1. Do the shipped `E3` prompts actually match the intended task split between `AI Handoff` and `Knowledge Export`?
 2. Are the current prompts pushing the model toward the right kind of output contract, or are they still too bridge-state / mixed-purpose?
-3. Before implementing `E1/E2`, what changes to the shipped `E3` prompts would most improve decomposition readiness?
+3. Do the new exemplars anchor the right sections, or are they still too weak / too generic?
+4. Are the fallback prompts now conservative-in-compliance, or do they still read as merely shorter versions of the main composer?
 
 ## What not to ask in that round
 
@@ -86,4 +89,4 @@ Keep the prompt-review ask narrow:
 
 ## Working conclusion
 
-The next expert prompt-review round should be about **whether the shipped `E3` prompts are good transitional composer prompts**, not about re-litigating the whole architecture.
+The next expert prompt-review round should be about whether the shipped `E3` prompts are good transitional composer prompts, whether the new exemplars anchor the right sections, and whether fallback is now conservative-in-compliance instead of merely shorter.

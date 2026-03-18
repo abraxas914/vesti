@@ -29,6 +29,15 @@ Hard rules:
 7) Output markdown only. Do not wrap the whole answer in code fences.
 8) Reusable snippets may include commands, files, APIs, or code only when grounded in the transcript.`;
 
+const SUMMARY_MOVES_EXEMPLAR = `Example section anchor (illustrative shape only, not literal content):
+## Important Moves
+- Move: Tighten export validation so all required headings must appear.
+  Why it mattered: This turned vague fallback behavior into debuggable contract failures.`;
+
+const SUMMARY_SNIPPET_EXEMPLAR = `## Reusable Snippets
+- Reference: exportCompression.ts
+  Reuse: Useful when tracing heading validation or fallback diagnostics.`;
+
 function buildSummaryPrompt(payload: ExportCompressionPromptPayload): string {
   const isStepProfile = payload.profile === "step_flash_concise";
   const profileInstruction = isStepProfile
@@ -55,14 +64,21 @@ Output requirements:
 1) Use the exact headings listed in the system prompt.
 2) Keep this optimized for future recall: crisp TL;DR, problem framing, key moves, reusable snippets, next steps, and tags.
 3) Let ## Problem Frame align with the core question and constraints that shaped the thread.
-4) Let ## Important Moves reflect the actual progression of the discussion, similar to a lightweight thinking_journey.
+4) Let ## Important Moves reflect the actual progression of the discussion, but only when that progression helps a future human reconstruct why the thread moved forward.
 5) Let ## Next Steps reflect grounded actionable follow-ups, not generic advice.
 6) Let ## Tags stay concrete and limited to 3-5 useful tags when evidence exists.
 7) ${profileInstruction}
 8) Keep bullets concise and grounded.
 9) If evidence is sparse, keep the structure and use conservative placeholders.
 10) Write the final output in ${payload.locale === "en" ? "natural English" : "natural Chinese"}.
-11) Output markdown only.`;
+11) Output markdown only.
+
+Section anchors:
+- Progression matters here only when it helps a future human reconstruct the thread, not as a mechanical timeline dump.
+- Use this shape for important moves:
+${SUMMARY_MOVES_EXEMPLAR}
+- Use this shape for reusable snippets:
+${SUMMARY_SNIPPET_EXEMPLAR}`;
 }
 
 function buildSummaryFallbackPrompt(
@@ -70,8 +86,8 @@ function buildSummaryFallbackPrompt(
 ): string {
   const fallbackGuidance =
     payload.profile === "step_flash_concise"
-      ? "Prefer compact bullets that preserve the thread's concrete actions and artifacts."
-      : "Prefer stronger problem framing and more explicit important moves when evidence exists.";
+      ? "Prefer compact, contract-safe bullets that preserve concrete actions and artifacts."
+      : "Prefer a conservative, contract-safe note that keeps problem framing and important moves explicit when evidence exists.";
 
   return `Write a markdown export summary for this conversation.
 
@@ -88,19 +104,31 @@ Requirements:
 2) Use grounded evidence only.
 3) Preserve commands, files, APIs, and code references when they exist.
 4) Even if the transcript is sparse, keep all headings and fill them conservatively.
-5) ${fallbackGuidance}
-6) Use ${payload.locale === "en" ? "English" : "Chinese"}.
-7) Output markdown only.
+5) Favor compliance and stability over elegance or compression.
+6) In ## Important Moves, prefer move + why-it-mattered structure when possible.
+7) In ## Reusable Snippets, keep only grounded references that a future reader can reuse.
+8) ${fallbackGuidance}
+9) Use ${payload.locale === "en" ? "English" : "Chinese"}.
+10) Output markdown only.
+
+Safe anchors:
+## Important Moves
+- Move: <grounded step>
+  Why it mattered: <brief grounded impact>
+
+## Reusable Snippets
+- Reference: <grounded file, command, api, or pattern>
+  Reuse: <brief reuse note or conservative placeholder>
 
 Transcript:
 ${toExportTranscript(payload.messages)}`;
 }
 
 export const CURRENT_EXPORT_SUMMARY_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.0-export-summary-kimi-step-profiled",
-  createdAt: "2026-03-16",
+  version: "v1.2.1-export-summary-exemplar-anchored",
+  createdAt: "2026-03-18",
   description:
-    "Summary export prompt for human-readable notes with Kimi-rich and Step-concise profiles.",
+    "Summary export prompt for human-readable notes with section exemplars and contract-safe fallback behavior.",
   system: EXPORT_SUMMARY_SYSTEM,
   fallbackSystem: "You are a concise technical export assistant. Output markdown only.",
   userTemplate: buildSummaryPrompt,
@@ -108,9 +136,9 @@ export const CURRENT_EXPORT_SUMMARY_PROMPT: PromptVersion<ExportCompressionPromp
 };
 
 export const EXPERIMENTAL_EXPORT_SUMMARY_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.0-export-summary-kimi-step-profiled-exp",
-  createdAt: "2026-03-16",
-  description: "Experimental profiled summary export variant.",
+  version: "v1.2.1-export-summary-exemplar-anchored-exp",
+  createdAt: "2026-03-18",
+  description: "Experimental summary export variant aligned with the current exemplar-anchored prompt.",
   system: EXPORT_SUMMARY_SYSTEM,
   fallbackSystem: "You are a concise technical export assistant. Output markdown only.",
   userTemplate: buildSummaryPrompt,

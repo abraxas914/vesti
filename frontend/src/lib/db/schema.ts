@@ -396,7 +396,6 @@ export class MemoryHubDB extends Dexie {
             }
           });
       });
-<<<<<<< HEAD
     this.version(13)
       .stores({
         conversations:
@@ -439,8 +438,6 @@ export class MemoryHubDB extends Dexie {
             }
           });
       });
-=======
->>>>>>> 5a34526 (feat(time): baseline timestamp semantics and reader/web alignment)
   }
 }
 

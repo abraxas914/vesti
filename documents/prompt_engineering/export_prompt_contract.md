@@ -15,6 +15,16 @@ First-read note:
 
 Define the long-term runtime ownership and artifact boundaries for export prompts.
 
+## Current seal status
+
+For the current review cycle, `compact` experimental is considered **sealed for review and observation**:
+- the working goal is now `distilled execution state handoff`
+- current quality is considered usable even when a soft density warning is still present
+- soft density warnings are treated as human-review signals, not as a reason to reopen scope immediately
+- expert review should focus on downloaded handoff artifacts, not on prompt modules in isolation
+- `summary` remains frozen on the shipping note-schema path for this round
+- proxy-side token-cap behavior now depends on the separately deployed `vesti-proxy`; online validation requires the latest proxy redeploy
+
 ## Runtime source of truth
 
 The only long-term runtime prompt source is:
@@ -181,6 +191,7 @@ Phase 1 activation is intentionally narrower:
 - downloaded experimental handoffs must preserve section completeness: no dangling cue lines, no half-open code blocks, and no empty conditional sections after a heading is opened
 - downloaded experimental handoffs must include a prose-like `## State Overview`; bullet-only overviews or empty shell paragraphs are invalid
 - experimental diagnostics must distinguish failed LLM attempt lengths from the final delivered artifact length so notice text does not conflate invalid LLM output with the locally delivered fallback body
+- user-facing export feedback should stay product-oriented; technical summaries remain available in JSON exports, diagnostics, and logs, but are no longer part of the default export-panel callout
 
 ## Offline distillation prototype
 

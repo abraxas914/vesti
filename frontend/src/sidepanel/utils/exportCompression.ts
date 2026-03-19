@@ -2315,9 +2315,11 @@ function buildSoftCompressionWarning(
   return [
     label ? `${label}.` : null,
     label === "Potential over-compressed risk"
-      ? "The handoff lacks enough situational density for confident continuation."
+      ? "The handoff may not carry enough situational density for confident continuation."
       : null,
-    `Output is below the soft density floor (${metrics.normalizedOutputChars}/${metrics.softMinChars} chars; transcript ${metrics.transcriptChars} chars).`,
+    label === "Potential over-compressed risk"
+      ? "Review the downloaded handoff before sharing it externally."
+      : "This handoff looks lighter than expected for a long thread. Review it before sharing it externally.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -2860,8 +2862,7 @@ function buildCompressionNotice(
       ? buildCompressionTechnicalSummary(validationFallback)
       : undefined;
   const detail = diagnostic
-    ? `${diagnostic.userMessage}
-${diagnostic.technicalSummary}`
+    ? diagnostic.userMessage
     : validationFeedback?.detail;
   const hint = diagnostic
     ? "Check Settings > Model Access."

@@ -123,7 +123,6 @@ export function TimelinePage({
     tone: "default" | "warning" | "error";
     title?: string;
     detail?: string;
-    technicalSummary?: string;
     hint?: string;
   } | null>(null);
   const [copyJustSucceeded, setCopyJustSucceeded] = useState(false);
@@ -281,7 +280,6 @@ export function TimelinePage({
       if (
         result.notice?.title ||
         result.notice?.detail ||
-        result.notice?.technicalSummary ||
         result.notice?.hint
       ) {
         return {
@@ -289,7 +287,6 @@ export function TimelinePage({
           tone: result.notice.tone,
           title: result.notice.title,
           detail: result.notice.detail,
-          technicalSummary: result.notice.technicalSummary,
           hint: result.notice.hint
             ? `${result.notice.hint} ${actionHint}`
             : actionHint,
@@ -341,7 +338,6 @@ export function TimelinePage({
               detail:
                 result.notice?.detail ||
                 getErrorMessage(error),
-              technicalSummary: result.notice?.technicalSummary,
               hint: result.notice?.hint
                 ? `${result.notice.hint} Check clipboard permissions or use Download instead.`
                 : "Check clipboard permissions or use Download instead.",

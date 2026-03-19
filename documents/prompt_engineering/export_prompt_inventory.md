@@ -15,6 +15,15 @@ First-read note:
 
 Keep a single 1:1 inventory of export runtime entries, prompt artifacts, profiles, and migration debt.
 
+## Current seal status
+
+`compact` experimental is now in a **sealed review/observation** phase:
+- it is good enough to evaluate as a downloaded handoff artifact
+- soft density warnings may still appear and should be read as review prompts, not as automatic blockers
+- proxy token-cap observability is now part of the runtime picture, and online validation depends on the latest `vesti-proxy` deployment
+- ordinary users should see minimal export feedback; detailed diagnostics stay in JSON exports and internal logs
+- `summary` remains intentionally frozen outside this experiment
+
 ## Active shipping inventory
 
 Note:
@@ -45,6 +54,7 @@ The current shipped profiles are also a bridge-state compromise:
   - a required prose `## State Overview` section that gives the next agent situational awareness before any conditional headings appear
   - middle evidence windows instead of one-line middle signals, so omitted turns still contribute fuller rationale evidence
   - a diagnostic-only deterministic fallback; expert-ready review samples should come from the experimental LLM line, not from deterministic fallback output
+  - a sealed-for-review status: current work is focused on artifact quality, minimal user-facing export UX, and expert evaluation rather than on reopening scope
 - `summary` is intentionally frozen on the shipping note-schema path for this round; it is not part of the conditional-handoff experiment
 
 ## Target phase 1 inventory after decomposition

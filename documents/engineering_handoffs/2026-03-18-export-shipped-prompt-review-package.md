@@ -23,6 +23,15 @@ It exists to keep the next expert pass focused on downloaded handoff artifacts r
 
 It does **not** ask the expert to review the full repo or legacy prompt surface.
 
+## Current review posture
+
+For this round, the distilled-handoff experiment is treated as **sealed for review**:
+- the team considers the current experimental handoff line good enough to evaluate as a downloaded artifact
+- soft density warnings may still be present; they are review signals, not automatic reopen-the-scope triggers
+- reviewer attention should stay on artifact usefulness, overview quality, reasoning preservation, and false-artifact control
+- `summary` remains frozen and is not being reopened in this review package
+- online validation of the experimental line depends on the proxy-side token-cap change in `vesti-proxy` commit `9ffea11`, plus a Vercel redeploy with `VESTI_CHAT_MAX_TOKENS_LIMIT=5000`
+
 ## What is already settled before prompt review
 
 These higher-level architecture decisions are already documented and should be treated as the current baseline:
@@ -106,6 +115,15 @@ Keep the prompt-review ask narrow:
 4. Does the experimental line now preserve completeness and situational awareness well enough to be judged as a handoff artifact, or are there still signs of truncation, half-open sections, weak overview prose, missing anchor content, or packing-induced omissions?
 5. Are the fallback prompts now conservative-in-compliance, or do they still read as merely shorter versions of the main composer?
 6. Do the dormant `E1` planner drafts look like the right first step for moving extraction pressure forward out of `E3`?
+
+## Reviewer setup note
+
+Before validating new plugin samples, reviewers/testers should ensure:
+1. `vesti-proxy` has been redeployed from commit `9ffea11`
+2. Vercel includes `VESTI_CHAT_MAX_TOKENS_LIMIT=5000`
+3. comparison is based on downloaded artifacts from the same thread:
+   - `Current compact`
+   - `Experimental handoff`
 
 ## What not to ask in that round
 

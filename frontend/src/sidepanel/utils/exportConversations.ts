@@ -337,25 +337,157 @@ function toJson(
           llm_attempt: {
             primary: compression.llmAttemptMetrics?.primary
               ? {
+                  prompt_chars:
+                    compression.llmAttemptMetrics.primary.promptChars,
+                  truncated_prompt_chars:
+                    compression.llmAttemptMetrics.primary.truncatedPromptChars,
                   raw_output_chars:
                     compression.llmAttemptMetrics.primary.rawOutputChars,
-                  normalized_output_chars:
-                    compression.llmAttemptMetrics.primary.normalizedOutputChars,
+	                  normalized_output_chars:
+	                    compression.llmAttemptMetrics.primary.normalizedOutputChars,
+	                  finish_reason:
+	                    compression.llmAttemptMetrics.primary.finishReason || null,
+	                  usage: {
+	                    prompt_tokens:
+	                      compression.llmAttemptMetrics.primary.promptTokens ?? null,
+	                    completion_tokens:
+	                      compression.llmAttemptMetrics.primary.completionTokens ?? null,
+	                    total_tokens:
+	                      compression.llmAttemptMetrics.primary.totalTokens ?? null,
+	                  },
+	                  proxy_max_tokens: {
+	                    requested:
+	                      compression.llmAttemptMetrics.primary
+	                        .requestedMaxTokens ?? null,
+	                    effective:
+	                      compression.llmAttemptMetrics.primary
+	                        .effectiveMaxTokens ?? null,
+	                    limit:
+	                      compression.llmAttemptMetrics.primary
+	                        .proxyMaxTokensLimit ?? null,
+	                  },
+	                  incomplete_output_risk:
+	                    compression.llmAttemptMetrics.primary.incompleteOutputRisk ??
+	                    false,
                   invalid_reason:
                     compression.llmAttemptMetrics.primary.invalidReason || null,
-                }
+                  continuation: compression.llmAttemptMetrics.primary.continuation
+                    ? {
+                        raw_output_chars:
+                          compression.llmAttemptMetrics.primary.continuation
+                            .rawOutputChars,
+	                        normalized_output_chars:
+	                          compression.llmAttemptMetrics.primary.continuation
+	                            .normalizedOutputChars,
+	                        finish_reason:
+	                          compression.llmAttemptMetrics.primary.continuation
+	                            .finishReason || null,
+	                        usage: {
+	                          prompt_tokens:
+	                            compression.llmAttemptMetrics.primary.continuation
+	                              .promptTokens ?? null,
+	                          completion_tokens:
+	                            compression.llmAttemptMetrics.primary.continuation
+	                              .completionTokens ?? null,
+	                          total_tokens:
+	                            compression.llmAttemptMetrics.primary.continuation
+	                              .totalTokens ?? null,
+	                        },
+	                        proxy_max_tokens: {
+	                          requested:
+	                            compression.llmAttemptMetrics.primary.continuation
+	                              .requestedMaxTokens ?? null,
+	                          effective:
+	                            compression.llmAttemptMetrics.primary.continuation
+	                              .effectiveMaxTokens ?? null,
+	                          limit:
+	                            compression.llmAttemptMetrics.primary.continuation
+	                              .proxyMaxTokensLimit ?? null,
+	                        },
+	                      }
+	                    : null,
+	                }
               : null,
             fallback_prompt: compression.llmAttemptMetrics?.fallbackPrompt
               ? {
+                  prompt_chars:
+                    compression.llmAttemptMetrics.fallbackPrompt.promptChars,
+                  truncated_prompt_chars:
+                    compression.llmAttemptMetrics.fallbackPrompt
+                      .truncatedPromptChars,
                   raw_output_chars:
                     compression.llmAttemptMetrics.fallbackPrompt.rawOutputChars,
-                  normalized_output_chars:
-                    compression.llmAttemptMetrics.fallbackPrompt
-                      .normalizedOutputChars,
+	                  normalized_output_chars:
+	                    compression.llmAttemptMetrics.fallbackPrompt
+	                      .normalizedOutputChars,
+	                  finish_reason:
+	                    compression.llmAttemptMetrics.fallbackPrompt.finishReason ||
+	                    null,
+	                  usage: {
+	                    prompt_tokens:
+	                      compression.llmAttemptMetrics.fallbackPrompt.promptTokens ??
+	                      null,
+	                    completion_tokens:
+	                      compression.llmAttemptMetrics.fallbackPrompt
+	                        .completionTokens ?? null,
+	                    total_tokens:
+	                      compression.llmAttemptMetrics.fallbackPrompt.totalTokens ??
+	                      null,
+	                  },
+	                  proxy_max_tokens: {
+	                    requested:
+	                      compression.llmAttemptMetrics.fallbackPrompt
+	                        .requestedMaxTokens ?? null,
+	                    effective:
+	                      compression.llmAttemptMetrics.fallbackPrompt
+	                        .effectiveMaxTokens ?? null,
+	                    limit:
+	                      compression.llmAttemptMetrics.fallbackPrompt
+	                        .proxyMaxTokensLimit ?? null,
+	                  },
+	                  incomplete_output_risk:
+	                    compression.llmAttemptMetrics.fallbackPrompt
+	                      .incompleteOutputRisk ?? false,
                   invalid_reason:
                     compression.llmAttemptMetrics.fallbackPrompt.invalidReason ||
                     null,
-                }
+                  continuation: compression.llmAttemptMetrics.fallbackPrompt
+                    .continuation
+                    ? {
+                        raw_output_chars:
+                          compression.llmAttemptMetrics.fallbackPrompt
+                            .continuation.rawOutputChars,
+	                        normalized_output_chars:
+	                          compression.llmAttemptMetrics.fallbackPrompt
+	                            .continuation.normalizedOutputChars,
+	                        finish_reason:
+	                          compression.llmAttemptMetrics.fallbackPrompt
+	                            .continuation.finishReason || null,
+	                        usage: {
+	                          prompt_tokens:
+	                            compression.llmAttemptMetrics.fallbackPrompt
+	                              .continuation.promptTokens ?? null,
+	                          completion_tokens:
+	                            compression.llmAttemptMetrics.fallbackPrompt
+	                              .continuation.completionTokens ?? null,
+	                          total_tokens:
+	                            compression.llmAttemptMetrics.fallbackPrompt
+	                              .continuation.totalTokens ?? null,
+	                        },
+	                        proxy_max_tokens: {
+	                          requested:
+	                            compression.llmAttemptMetrics.fallbackPrompt
+	                              .continuation.requestedMaxTokens ?? null,
+	                          effective:
+	                            compression.llmAttemptMetrics.fallbackPrompt
+	                              .continuation.effectiveMaxTokens ?? null,
+	                          limit:
+	                            compression.llmAttemptMetrics.fallbackPrompt
+	                              .continuation.proxyMaxTokensLimit ?? null,
+	                        },
+	                      }
+	                    : null,
+	                }
               : null,
           },
           delivered_artifact: {

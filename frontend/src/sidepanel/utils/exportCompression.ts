@@ -17,6 +17,8 @@ import {
 import {
   callInference,
   getLlmDiagnostic,
+  type InferenceCallResult,
+  type InferenceUsage,
   type LlmDiagnostic,
   sanitizeSummaryText,
   truncateForContext,
@@ -116,9 +118,32 @@ interface ExportCompressionRuntimeMetrics {
 }
 
 interface ExportCompressionAttemptMetrics {
+  promptChars: number;
+  truncatedPromptChars: number;
   rawOutputChars: number;
   normalizedOutputChars: number;
+  finishReason?: string | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  totalTokens?: number | null;
+  requestedMaxTokens?: number | null;
+  effectiveMaxTokens?: number | null;
+  proxyMaxTokensLimit?: number | null;
+  incompleteOutputRisk?: boolean;
   invalidReason?: ExportCompressionInvalidReasonCode;
+  continuation?: ExportCompressionContinuationMetrics;
+}
+
+interface ExportCompressionContinuationMetrics {
+  rawOutputChars: number;
+  normalizedOutputChars: number;
+  finishReason?: string | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  totalTokens?: number | null;
+  requestedMaxTokens?: number | null;
+  effectiveMaxTokens?: number | null;
+  proxyMaxTokensLimit?: number | null;
 }
 
 interface ExportCompressionLlmAttemptMetrics {
@@ -389,6 +414,46 @@ function findDanglingCueLines(value: string): string[] {
   }
 
   return unique(dangling).slice(0, 4);
+}
+
+function findIncompleteTerminalLine(value: string): string | null {
+  const lines = value.replace(/\r\n/g, "\n").split("\n");
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const trimmed = lines[index].trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (
+      trimmed.startsWith("StartedAt:") ||
+      trimmed.startsWith("Conversation Type:") ||
+      trimmed.startsWith("## ")
+    ) {
+      return null;
+    }
+
+    const candidate = stripBulletPrefix(trimmed);
+    if (!hasMeaningfulText(candidate)) {
+      return null;
+    }
+    if (/[。！？.!?][)"'`]*$/.test(candidate)) {
+      return null;
+    }
+    if (/[:：]$/.test(candidate)) {
+      return trimmed;
+    }
+
+    const cjkCount = countCjkChars(candidate);
+    const asciiWordCount = countAsciiWords(candidate);
+    const compactLen = candidate.replace(/\s+/g, " ").trim().length;
+    if (cjkCount >= 12 || asciiWordCount >= 6 || compactLen >= 45) {
+      return trimmed;
+    }
+
+    return null;
+  }
+
+  return null;
 }
 
 function toOrderedMessages(messages: Message[]): Message[] {
@@ -672,6 +737,84 @@ function buildPromptPayload(
 
 function normalizeCompressionBody(value: string): string {
   return value.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function buildFallbackTranscript(payload: ExportCompressionPromptPayload): string {
+  return payload.messages
+    .map((message, index) => {
+      const role = message.role === "user" ? "User" : "AI";
+      return `${index + 1}. [${role}] ${shorten(message.content_text, 900)}`;
+    })
+    .join("\n");
+}
+
+function getPayloadTranscript(payload: ExportCompressionPromptPayload): string {
+  return payload.transcriptOverride || buildFallbackTranscript(payload);
+}
+
+function hasTruncationLikeFinishReason(finishReason: string | null | undefined): boolean {
+  const normalized = (finishReason || "").toLowerCase();
+  return (
+    normalized.includes("length") ||
+    normalized.includes("max_token") ||
+    normalized.includes("max_tokens") ||
+    normalized.includes("token_limit") ||
+    normalized.includes("content_filter")
+  );
+}
+
+function hasIncompleteOutputRisk(
+  body: string,
+  result: InferenceCallResult
+): boolean {
+  if (hasTruncationLikeFinishReason(result.finishReason)) {
+    return true;
+  }
+  return findIncompleteTerminalLine(body) !== null;
+}
+
+function buildExperimentalContinuationPrompt(
+  payload: ExportCompressionPromptPayload,
+  partialBody: string
+): string {
+  const transcript = getPayloadTranscript(payload);
+  return `The previous experimental handoff stopped before it fully completed.
+
+Continue exactly from where the draft stops.
+
+Rules:
+1) Do not restart from StartedAt, Conversation Type, or repeat sections that are already complete.
+2) If the draft stops mid-sentence, finish that sentence first.
+3) Then finish the current section and add any remaining grounded whitelist sections that are still missing.
+4) Keep the same locale and contract as the original handoff.
+5) Return only the continuation text, not the full handoff again.
+
+Current draft:
+${partialBody}
+
+Grounded transcript:
+${transcript}`;
+}
+
+function stitchContinuation(base: string, continuation: string): string {
+  const cleaned = normalizeCompressionBody(continuation);
+  if (!cleaned) {
+    return base;
+  }
+
+  const joinDirectly =
+    /[\p{L}\p{N}\u3400-\u9FFF]$/u.test(base.trimEnd()) &&
+    /^[\p{L}\p{N}\u3400-\u9FFF(（]/u.test(cleaned);
+
+  if (joinDirectly) {
+    return `${base}${cleaned}`;
+  }
+
+  if (base.endsWith("\n")) {
+    return `${base}${cleaned}`;
+  }
+
+  return `${base}\n${cleaned}`;
 }
 
 function unique(values: string[]): string[] {
@@ -1735,6 +1878,76 @@ function describeCompressionRoute(
   }
 }
 
+function formatAttemptMetricsSummary(
+  label: string,
+  metrics: ExportCompressionAttemptMetrics
+): string {
+  const parts = [
+    `${label} prompt/raw/normalized: ${metrics.promptChars}/${metrics.rawOutputChars}/${metrics.normalizedOutputChars}`,
+    `truncated prompt: ${metrics.truncatedPromptChars}`,
+  ];
+
+  if (metrics.finishReason) {
+    parts.push(`finish=${metrics.finishReason}`);
+  }
+  if (
+    metrics.promptTokens !== null &&
+    metrics.promptTokens !== undefined &&
+    metrics.completionTokens !== null &&
+    metrics.completionTokens !== undefined
+  ) {
+    parts.push(
+      `usage=${metrics.promptTokens}/${metrics.completionTokens}/${metrics.totalTokens ?? "?"}`
+    );
+  }
+  if (
+    metrics.requestedMaxTokens !== null &&
+    metrics.requestedMaxTokens !== undefined &&
+    metrics.effectiveMaxTokens !== null &&
+    metrics.effectiveMaxTokens !== undefined
+  ) {
+    parts.push(
+      `proxy_max_tokens=${metrics.requestedMaxTokens}/${metrics.effectiveMaxTokens}/${metrics.proxyMaxTokensLimit ?? "?"}`
+    );
+  }
+  if (metrics.invalidReason) {
+    parts.push(metrics.invalidReason);
+  }
+  if (metrics.incompleteOutputRisk) {
+    parts.push("incomplete_output_risk");
+  }
+  if (metrics.continuation) {
+    parts.push(
+      `continuation raw/normalized=${metrics.continuation.rawOutputChars}/${metrics.continuation.normalizedOutputChars}`
+    );
+    if (metrics.continuation.finishReason) {
+      parts.push(`continuation_finish=${metrics.continuation.finishReason}`);
+    }
+    if (
+      metrics.continuation.promptTokens !== null &&
+      metrics.continuation.promptTokens !== undefined &&
+      metrics.continuation.completionTokens !== null &&
+      metrics.continuation.completionTokens !== undefined
+    ) {
+      parts.push(
+        `continuation_usage=${metrics.continuation.promptTokens}/${metrics.continuation.completionTokens}/${metrics.continuation.totalTokens ?? "?"}`
+      );
+    }
+    if (
+      metrics.continuation.requestedMaxTokens !== null &&
+      metrics.continuation.requestedMaxTokens !== undefined &&
+      metrics.continuation.effectiveMaxTokens !== null &&
+      metrics.continuation.effectiveMaxTokens !== undefined
+    ) {
+      parts.push(
+        `continuation_proxy_max_tokens=${metrics.continuation.requestedMaxTokens}/${metrics.continuation.effectiveMaxTokens}/${metrics.continuation.proxyMaxTokensLimit ?? "?"}`
+      );
+    }
+  }
+
+  return parts.join(" ");
+}
+
 function buildCompressionTechnicalSummary(
   result: CompressedConversationExport
 ): string | undefined {
@@ -1769,20 +1982,18 @@ function buildCompressionTechnicalSummary(
     }
     if (result.llmAttemptMetrics?.primary) {
       parts.push(
-        `LLM primary raw/normalized: ${result.llmAttemptMetrics.primary.rawOutputChars}/${result.llmAttemptMetrics.primary.normalizedOutputChars}${
-          result.llmAttemptMetrics.primary.invalidReason
-            ? ` (${result.llmAttemptMetrics.primary.invalidReason})`
-            : ""
-        }`
+        formatAttemptMetricsSummary(
+          "LLM primary",
+          result.llmAttemptMetrics.primary
+        )
       );
     }
     if (result.llmAttemptMetrics?.fallbackPrompt) {
       parts.push(
-        `LLM fallback raw/normalized: ${result.llmAttemptMetrics.fallbackPrompt.rawOutputChars}/${result.llmAttemptMetrics.fallbackPrompt.normalizedOutputChars}${
-          result.llmAttemptMetrics.fallbackPrompt.invalidReason
-            ? ` (${result.llmAttemptMetrics.fallbackPrompt.invalidReason})`
-            : ""
-        }`
+        formatAttemptMetricsSummary(
+          "LLM fallback",
+          result.llmAttemptMetrics.fallbackPrompt
+        )
       );
     }
     if (
@@ -1791,6 +2002,25 @@ function buildCompressionTechnicalSummary(
       result.reviewReady === false
     ) {
       parts.push("Deterministic experimental fallback is diagnostic only, not ideal for expert review.");
+    }
+  }
+
+  if (result.source === "llm") {
+    if (result.llmAttemptMetrics?.primary) {
+      parts.push(
+        formatAttemptMetricsSummary(
+          "LLM primary",
+          result.llmAttemptMetrics.primary
+        )
+      );
+    }
+    if (result.usedFallbackPrompt && result.llmAttemptMetrics?.fallbackPrompt) {
+      parts.push(
+        formatAttemptMetricsSummary(
+          "LLM fallback",
+          result.llmAttemptMetrics.fallbackPrompt
+        )
+      );
     }
   }
 
@@ -2010,15 +2240,47 @@ function buildRuntimeMetrics(
   };
 }
 
-function buildAttemptMetrics(
-  rawOutput: string,
-  normalizedOutput: string,
-  invalidReason?: ExportCompressionInvalidReasonCode
-): ExportCompressionAttemptMetrics {
+function buildContinuationMetrics(
+  result: InferenceCallResult,
+  normalizedOutput: string
+): ExportCompressionContinuationMetrics {
   return {
-    rawOutputChars: rawOutput.length,
+    rawOutputChars: result.content.length,
     normalizedOutputChars: normalizedOutput.length,
-    invalidReason,
+    finishReason: result.finishReason ?? null,
+    promptTokens: result.usage?.promptTokens ?? null,
+    completionTokens: result.usage?.completionTokens ?? null,
+    totalTokens: result.usage?.totalTokens ?? null,
+    requestedMaxTokens: result.proxyTokenMetrics?.requestedMaxTokens ?? null,
+    effectiveMaxTokens: result.proxyTokenMetrics?.effectiveMaxTokens ?? null,
+    proxyMaxTokensLimit: result.proxyTokenMetrics?.proxyMaxTokensLimit ?? null,
+  };
+}
+
+function buildAttemptMetrics(input: {
+  promptChars: number;
+  truncatedPromptChars: number;
+  result: InferenceCallResult;
+  normalizedOutput: string;
+  invalidReason?: ExportCompressionInvalidReasonCode;
+  incompleteOutputRisk?: boolean;
+  continuation?: ExportCompressionContinuationMetrics;
+}): ExportCompressionAttemptMetrics {
+  return {
+    promptChars: input.promptChars,
+    truncatedPromptChars: input.truncatedPromptChars,
+    rawOutputChars: input.result.content.length,
+    normalizedOutputChars: input.normalizedOutput.length,
+    finishReason: input.result.finishReason ?? null,
+    promptTokens: input.result.usage?.promptTokens ?? null,
+    completionTokens: input.result.usage?.completionTokens ?? null,
+    totalTokens: input.result.usage?.totalTokens ?? null,
+    requestedMaxTokens: input.result.proxyTokenMetrics?.requestedMaxTokens ?? null,
+    effectiveMaxTokens: input.result.proxyTokenMetrics?.effectiveMaxTokens ?? null,
+    proxyMaxTokensLimit: input.result.proxyTokenMetrics?.proxyMaxTokensLimit ?? null,
+    incompleteOutputRisk: input.incompleteOutputRisk ?? false,
+    invalidReason: input.invalidReason,
+    continuation: input.continuation,
   };
 }
 
@@ -2071,6 +2333,11 @@ function buildIntegrityWarnings(value: string): string[] {
   const danglingLines = findDanglingCueLines(value);
   if (danglingLines.length > 0) {
     warnings.push(`dangling_cue:${danglingLines.join(" | ")}`);
+  }
+
+  const incompleteTerminalLine = findIncompleteTerminalLine(value);
+  if (incompleteTerminalLine) {
+    warnings.push(`incomplete_terminal:${shorten(incompleteTerminalLine, 120)}`);
   }
 
   return warnings;
@@ -2263,6 +2530,65 @@ function validateCompressionOutput(
   };
 }
 
+async function continueExperimentalIfNeeded(input: {
+  settings: LlmConfig;
+  promptBudget: number;
+  payload: ExportCompressionPromptPayload;
+  systemPrompt: string;
+  body: string;
+  result: InferenceCallResult;
+}): Promise<{
+  body: string;
+  incompleteOutputRisk: boolean;
+  continuation?: ExportCompressionContinuationMetrics;
+}> {
+  const initialRisk = hasIncompleteOutputRisk(input.body, input.result);
+  if (!initialRisk) {
+    return {
+      body: input.body,
+      incompleteOutputRisk: false,
+    };
+  }
+
+  logger.warn("llm", "Experimental handoff output looks incomplete; attempting bounded continuation", {
+    finishReason: input.result.finishReason || null,
+    rawOutputChars: input.result.content.length,
+    normalizedOutputChars: input.body.length,
+  });
+
+  const continuationPromptRaw = buildExperimentalContinuationPrompt(
+    input.payload,
+    input.body
+  );
+  const continuationPrompt = truncateForContext(
+    continuationPromptRaw,
+    input.promptBudget
+  );
+  const continuationResult = await callInference(
+    withExperimentalMaxTokens(
+      input.settings,
+      EXPERIMENTAL_COMPACT_MAX_TOKENS.fallback
+    ),
+    continuationPrompt,
+    {
+      systemPrompt: input.systemPrompt,
+    }
+  );
+  const continuationBody = normalizeCompressionBody(continuationResult.content);
+  const stitchedBody = continuationBody
+    ? stitchContinuation(input.body, continuationBody)
+    : input.body;
+
+  return {
+    body: stitchedBody,
+    incompleteOutputRisk: hasIncompleteOutputRisk(stitchedBody, continuationResult),
+    continuation: buildContinuationMetrics(
+      continuationResult,
+      continuationBody
+    ),
+  };
+}
+
 async function compressWithCurrentLlmSettings(
   item: ConversationExportDatasetItem,
   mode: ExportCompressionMode,
@@ -2282,10 +2608,8 @@ async function compressWithCurrentLlmSettings(
     variant: isExperimentalCompact(mode, options) ? "experimental" : "current",
   });
   const payload = buildPromptPayload(item, exportProfile, mode, options);
-  const primaryPrompt = truncateForContext(
-    prompt.userTemplate(payload),
-    promptBudget.primary
-  );
+  const primaryPromptRaw = prompt.userTemplate(payload);
+  const primaryPrompt = truncateForContext(primaryPromptRaw, promptBudget.primary);
 
   const primarySettings = isExperimentalCompact(mode, options)
     ? withExperimentalMaxTokens(settings, EXPERIMENTAL_COMPACT_MAX_TOKENS.primary)
@@ -2293,13 +2617,34 @@ async function compressWithCurrentLlmSettings(
   const primary = await callInference(primarySettings, primaryPrompt, {
     systemPrompt: prompt.system,
   });
-  const primaryBody = normalizeCompressionBody(primary.content);
+  let primaryBody = normalizeCompressionBody(primary.content);
+  let primaryContinuation:
+    | ExportCompressionContinuationMetrics
+    | undefined;
+  let primaryIncompleteRisk = false;
+  if (isExperimentalCompact(mode, options)) {
+    const continued = await continueExperimentalIfNeeded({
+      settings,
+      promptBudget: promptBudget.fallback,
+      payload,
+      systemPrompt: prompt.system,
+      body: primaryBody,
+      result: primary,
+    });
+    primaryBody = continued.body;
+    primaryContinuation = continued.continuation;
+    primaryIncompleteRisk = continued.incompleteOutputRisk;
+  }
   const primaryValidation = validateCompressionOutput(primaryBody, item, mode, options);
-  const primaryAttemptMetrics = buildAttemptMetrics(
-    primary.content,
-    primaryBody,
-    primaryValidation.valid ? undefined : primaryValidation.issueCode
-  );
+  const primaryAttemptMetrics = buildAttemptMetrics({
+    promptChars: primaryPromptRaw.length,
+    truncatedPromptChars: primaryPrompt.length,
+    result: primary,
+    normalizedOutput: primaryBody,
+    invalidReason: primaryValidation.valid ? undefined : primaryValidation.issueCode,
+    incompleteOutputRisk: primaryIncompleteRisk,
+    continuation: primaryContinuation,
+  });
   if (primaryValidation.valid) {
     return {
       conversation: item.conversation,
@@ -2338,8 +2683,9 @@ async function compressWithCurrentLlmSettings(
     softCompressionWarning: primaryValidation.softCompressionWarning,
   });
 
+  const fallbackPromptRaw = prompt.fallbackTemplate(payload);
   const fallbackPrompt = truncateForContext(
-    prompt.fallbackTemplate(payload),
+    fallbackPromptRaw,
     promptBudget.fallback
   );
   const fallbackSettings = isExperimentalCompact(mode, options)
@@ -2348,13 +2694,34 @@ async function compressWithCurrentLlmSettings(
   const fallback = await callInference(fallbackSettings, fallbackPrompt, {
     systemPrompt: prompt.fallbackSystem || prompt.system,
   });
-  const fallbackBody = normalizeCompressionBody(fallback.content);
+  let fallbackBody = normalizeCompressionBody(fallback.content);
+  let fallbackContinuation:
+    | ExportCompressionContinuationMetrics
+    | undefined;
+  let fallbackIncompleteRisk = false;
+  if (isExperimentalCompact(mode, options)) {
+    const continued = await continueExperimentalIfNeeded({
+      settings,
+      promptBudget: promptBudget.fallback,
+      payload,
+      systemPrompt: prompt.fallbackSystem || prompt.system,
+      body: fallbackBody,
+      result: fallback,
+    });
+    fallbackBody = continued.body;
+    fallbackContinuation = continued.continuation;
+    fallbackIncompleteRisk = continued.incompleteOutputRisk;
+  }
   const fallbackValidation = validateCompressionOutput(fallbackBody, item, mode, options);
-  const fallbackAttemptMetrics = buildAttemptMetrics(
-    fallback.content,
-    fallbackBody,
-    fallbackValidation.valid ? undefined : fallbackValidation.issueCode
-  );
+  const fallbackAttemptMetrics = buildAttemptMetrics({
+    promptChars: fallbackPromptRaw.length,
+    truncatedPromptChars: fallbackPrompt.length,
+    result: fallback,
+    normalizedOutput: fallbackBody,
+    invalidReason: fallbackValidation.valid ? undefined : fallbackValidation.issueCode,
+    incompleteOutputRisk: fallbackIncompleteRisk,
+    continuation: fallbackContinuation,
+  });
   if (fallbackValidation.valid) {
     return {
       conversation: item.conversation,

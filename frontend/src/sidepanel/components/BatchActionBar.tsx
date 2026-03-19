@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import type {
+  ConversationExportCompactVariant,
   ConversationExportContentMode,
   ConversationExportFormat,
 } from "../types/export";
@@ -29,6 +30,7 @@ interface BatchFeedback {
 interface BatchActionBarProps {
   mode: BatchActionMode;
   exportMode: ConversationExportContentMode;
+  compactVariant: ConversationExportCompactVariant;
   selectedExportFormat: ConversationExportFormat;
   selectedCount: number;
   totalCount: number;
@@ -39,6 +41,7 @@ interface BatchActionBarProps {
   feedback?: BatchFeedback | null;
   onDeleteConfirmValueChange: (value: string) => void;
   onExportModeChange: (mode: ConversationExportContentMode) => void;
+  onCompactVariantChange: (variant: ConversationExportCompactVariant) => void;
   onExportFormatChange: (format: ConversationExportFormat) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
@@ -97,9 +100,28 @@ const EXPORT_MODE_OPTIONS: Array<{
   },
 ];
 
+const COMPACT_VARIANT_OPTIONS: Array<{
+  variant: ConversationExportCompactVariant;
+  label: string;
+  description: string;
+}> = [
+  {
+    variant: "current",
+    label: "Current",
+    description: "Shipping compact line with exact headings and current validator/fallback behavior.",
+  },
+  {
+    variant: "experimental",
+    label: "Experimental",
+    description:
+      "Conditional handoff line. Classifies the thread first and only emits relevant sections.",
+  },
+];
+
 export function BatchActionBar({
   mode,
   exportMode,
+  compactVariant,
   selectedExportFormat,
   selectedCount,
   totalCount,
@@ -110,6 +132,7 @@ export function BatchActionBar({
   feedback = null,
   onDeleteConfirmValueChange,
   onExportModeChange,
+  onCompactVariantChange,
   onExportFormatChange,
   onSelectAll,
   onClearSelection,
@@ -129,6 +152,9 @@ export function BatchActionBar({
   const selectedMode =
     EXPORT_MODE_OPTIONS.find((option) => option.mode === exportMode) ||
     EXPORT_MODE_OPTIONS[0];
+  const selectedCompactVariant =
+    COMPACT_VARIANT_OPTIONS.find((option) => option.variant === compactVariant) ||
+    COMPACT_VARIANT_OPTIONS[0];
   const selectedFormat =
     EXPORT_OPTIONS.find((option) => option.format === selectedExportFormat) ||
     EXPORT_OPTIONS[0];
@@ -219,6 +245,36 @@ export function BatchActionBar({
           <p className="mt-2 text-[11px] leading-[1.45] text-text-secondary">
             {selectedMode.description}
           </p>
+
+          {exportMode === "compact" && (
+            <>
+              <p className="mt-3 data-subgroup-label">Compact line</p>
+              <div className="rounded-lg bg-bg-secondary p-1">
+                <div className="grid grid-cols-2 gap-1">
+                  {COMPACT_VARIANT_OPTIONS.map((option) => {
+                    const active = compactVariant === option.variant;
+                    return (
+                      <button
+                        key={option.variant}
+                        type="button"
+                        onClick={() => onCompactVariantChange(option.variant)}
+                        className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                          active
+                            ? "bg-bg-primary text-text-primary shadow-sm"
+                            : "text-text-secondary hover:bg-bg-primary/70 hover:text-text-primary"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] leading-[1.45] text-text-secondary">
+                {selectedCompactVariant.description}
+              </p>
+            </>
+          )}
 
           <p className="mt-3 data-subgroup-label">Export format</p>
           <div className="data-format-selector">

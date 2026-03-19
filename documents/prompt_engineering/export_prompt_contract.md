@@ -103,12 +103,20 @@ The long-term export contract now distinguishes between:
 - input: `CompactComposerInput`
 - output: compact markdown under the shipping headings
 - current shipping runtime still starts here from raw transcript payloads
+- note: the same prompt file now also contains a plugin-visible `conditional_handoff_v0` experimental variant; shipping default remains the exact-heading `current` line, and users must opt into the experimental line from the Compact export panel
+- note: the experimental line now carries explicit completeness guards, type-driven routing for doc paths versus reusable technical evidence, and runtime weak-density diagnostics (`absolute floor + soft warning`) so downloaded handoffs can be reviewed as artifacts instead of as prompt modules
+- note: the experimental line is now framed as distilled execution state, not brevity-oriented compression
+- note: the experimental taxonomy now accepts six labels: `decision`, `debugging`, `architecture_tradeoff`, `explanation_teaching`, `process_agreement`, `generation`
+- note: experimental runtime now uses dedicated transcript packing (`first 4 turns + Middle Signals + last 12 turns`) instead of blind full-transcript truncation
+- note: experimental runtime also applies export-scoped `maxTokens` overrides so long-thread handoffs are not limited by the global default token ceiling
+- note: deterministic experimental fallback is diagnostic-only; expert-facing sample readiness currently requires the experimental LLM line, not the deterministic fallback body
 
 ### `export_e3_summary_composer`
 - stage: `E3`
 - mode: `knowledge`
 - input: `SummaryComposerInput`
 - output: summary markdown under the shipping headings
+- note: `summary` remains on the shipping note-schema path for now and is not part of the conditional-handoff experiment
 
 ### `export_e3_handoff_composer_from_evidence`
 - stage: `E3`
@@ -167,6 +175,9 @@ Phase 1 activation is intentionally narrower:
 - export prompt payload types belong in `frontend/src/lib/prompts/types.ts`
 - `E1/E2` output contracts must remain structured artifacts, not final markdown
 - the current shipping runtime still begins at `E3`; dormant and prototype artifacts must be labeled clearly until they are actually wired into runtime
+- `summary` remains frozen on the shipping note-schema path for this round; conditional-structure work is limited to `compact/handoff`
+- downloaded experimental handoffs must preserve section completeness: no dangling cue lines, no half-open code blocks, and no empty conditional sections after a heading is opened
+- experimental diagnostics must distinguish failed LLM attempt lengths from the final delivered artifact length so notice text does not conflate invalid LLM output with the locally delivered fallback body
 
 ## Offline distillation prototype
 

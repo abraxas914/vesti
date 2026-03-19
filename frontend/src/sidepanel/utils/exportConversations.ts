@@ -8,6 +8,7 @@ import {
 } from "~lib/conversations/timestamps";
 import type {
   ConversationExportConfig,
+  ConversationExportCompactVariant,
   ConversationExportContentMode,
   ConversationExportResult,
 } from "../types/export";
@@ -61,10 +62,16 @@ function resolveExportMime(format: string): string {
 function generateFilename(
   count: number,
   format: string,
-  mode: ConversationExportContentMode
+  mode: ConversationExportContentMode,
+  compactVariant: ConversationExportCompactVariant = "current"
 ): string {
   const date = new Date().toISOString().slice(0, 10);
-  const modeSuffix = mode === "full" ? "" : `-${mode}`;
+  const modeSuffix =
+    mode === "full"
+      ? ""
+      : mode === "compact" && compactVariant === "experimental"
+        ? "-compact-experimental"
+        : `-${mode}`;
   return `vesti-${count}threads${modeSuffix}-${date}.${format}`;
 }
 
@@ -79,7 +86,28 @@ function markdownToPlainText(value: string): string {
     .trim();
 }
 
+function getCompactLineLabel(
+  compactVariant: ConversationExportCompactVariant | undefined
+): string {
+  return compactVariant === "experimental"
+    ? "Experimental conditional handoff"
+    : "Current compact";
+}
+
 function getCompressionLabel(item: CompressedConversationExport): string {
+  if (item.mode === "compact") {
+    const lineLabel = getCompactLineLabel(item.compactVariant);
+    return item.source === "llm"
+      ? item.usedFallbackPrompt
+        ? `${lineLabel} (fallback prompt)`
+        : lineLabel
+      : `Deterministic ${lineLabel.toLowerCase()} fallback${
+          item.mode === "compact" && item.compactVariant === "experimental"
+            ? " [diagnostic]"
+            : ""
+        }${item.fallbackReason ? ` (${item.fallbackReason})` : ""}`;
+  }
+
   return item.source === "llm"
     ? item.usedFallbackPrompt
       ? "Current LLM settings (fallback prompt)"
@@ -92,7 +120,8 @@ function getCompressionLabel(item: CompressedConversationExport): string {
 function toMarkdown(
   dataset: ConversationExportDatasetItem[],
   mode: ConversationExportContentMode,
-  compressionMap: Map<number, CompressedConversationExport>
+  compressionMap: Map<number, CompressedConversationExport>,
+  compactVariant: ConversationExportCompactVariant = "current"
 ): string {
   const lines: string[] = [];
 
@@ -101,6 +130,9 @@ function toMarkdown(
   lines.push(`**Exported:** ${new Date().toLocaleString()}`);
   lines.push(`**Threads:** ${dataset.length}`);
   lines.push(`**Mode:** ${mode}`);
+  if (mode === "compact") {
+    lines.push(`**Compact Line:** ${getCompactLineLabel(compactVariant)}`);
+  }
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -133,6 +165,13 @@ function toMarkdown(
       const compression = compressionMap.get(conversation.id);
       if (compression) {
         lines.push(`- **Compression:** ${getCompressionLabel(compression)}`);
+        if (mode === "compact") {
+          lines.push(
+            `- **Compact Line:** ${getCompactLineLabel(
+              compression.compactVariant
+            )}`
+          );
+        }
       }
     }
 
@@ -153,7 +192,13 @@ function toMarkdown(
       if (!compression) {
         throw new Error(`Missing compression payload for conversation ${conversation.id}`);
       }
-      lines.push(mode === "compact" ? "### Compact Handoff" : "### Summary Note");
+      lines.push(
+        mode === "compact" && compression.compactVariant === "experimental"
+          ? "### Experimental Handoff"
+          : mode === "compact"
+            ? "### Compact Handoff"
+            : "### Summary Note"
+      );
       lines.push("");
       lines.push(compression.body);
       lines.push("");
@@ -169,7 +214,8 @@ function toMarkdown(
 function toText(
   dataset: ConversationExportDatasetItem[],
   mode: ConversationExportContentMode,
-  compressionMap: Map<number, CompressedConversationExport>
+  compressionMap: Map<number, CompressedConversationExport>,
+  compactVariant: ConversationExportCompactVariant = "current"
 ): string {
   const lines: string[] = [];
 
@@ -178,6 +224,9 @@ function toText(
   lines.push(`Exported: ${new Date().toLocaleString()}`);
   lines.push(`Threads: ${dataset.length}`);
   lines.push(`Mode: ${mode}`);
+  if (mode === "compact") {
+    lines.push(`Compact Line: ${getCompactLineLabel(compactVariant)}`);
+  }
   lines.push("");
 
   dataset.forEach((item, index) => {
@@ -216,6 +265,11 @@ function toText(
         throw new Error(`Missing compression payload for conversation ${conversation.id}`);
       }
       lines.push(`   Compression: ${getCompressionLabel(compression)}`);
+      if (mode === "compact") {
+        lines.push(
+          `   Compact Line: ${getCompactLineLabel(compression.compactVariant)}`
+        );
+      }
       lines.push("");
       lines.push(markdownToPlainText(compression.body));
       lines.push("");
@@ -231,7 +285,8 @@ function toText(
 function toJson(
   dataset: ConversationExportDatasetItem[],
   mode: ConversationExportContentMode,
-  compressionMap: Map<number, CompressedConversationExport>
+  compressionMap: Map<number, CompressedConversationExport>,
+  compactVariant: ConversationExportCompactVariant = "current"
 ): string {
   const conversations = dataset.map((item) => {
     const { conversation, messages } = item;
@@ -267,10 +322,59 @@ function toJson(
       compressed_content: compression.body,
       compression: {
         mode: compression.mode,
+        compact_variant:
+          compression.mode === "compact" ? compression.compactVariant || "current" : null,
+        line_label:
+          compression.mode === "compact"
+            ? getCompactLineLabel(compression.compactVariant)
+            : null,
         source: compression.source,
         route: compression.route || null,
         used_fallback_prompt: compression.usedFallbackPrompt,
         fallback_reason: compression.fallbackReason || null,
+        review_ready: compression.reviewReady ?? null,
+        diagnostics: {
+          llm_attempt: {
+            primary: compression.llmAttemptMetrics?.primary
+              ? {
+                  raw_output_chars:
+                    compression.llmAttemptMetrics.primary.rawOutputChars,
+                  normalized_output_chars:
+                    compression.llmAttemptMetrics.primary.normalizedOutputChars,
+                  invalid_reason:
+                    compression.llmAttemptMetrics.primary.invalidReason || null,
+                }
+              : null,
+            fallback_prompt: compression.llmAttemptMetrics?.fallbackPrompt
+              ? {
+                  raw_output_chars:
+                    compression.llmAttemptMetrics.fallbackPrompt.rawOutputChars,
+                  normalized_output_chars:
+                    compression.llmAttemptMetrics.fallbackPrompt
+                      .normalizedOutputChars,
+                  invalid_reason:
+                    compression.llmAttemptMetrics.fallbackPrompt.invalidReason ||
+                    null,
+                }
+              : null,
+          },
+          delivered_artifact: {
+            raw_output_chars:
+              compression.deliveredArtifactMetrics?.rawOutputChars ?? null,
+            normalized_output_chars:
+              compression.deliveredArtifactMetrics?.normalizedOutputChars ?? null,
+            serialized_output_chars:
+              compression.deliveredArtifactMetrics?.serializedOutputChars ?? null,
+            transcript_chars:
+              compression.deliveredArtifactMetrics?.transcriptChars ?? null,
+            absolute_min_chars:
+              compression.deliveredArtifactMetrics?.absoluteMinChars ?? null,
+            soft_min_chars:
+              compression.deliveredArtifactMetrics?.softMinChars ?? null,
+          },
+          integrity_warnings: compression.integrityWarnings || [],
+          soft_compression_warning: compression.softCompressionWarning || null,
+        },
       },
     };
   });
@@ -280,6 +384,7 @@ function toJson(
       exported_at: new Date().toISOString(),
       count: dataset.length,
       content_mode: mode,
+      compact_variant: mode === "compact" ? compactVariant : null,
       conversations,
     },
     null,
@@ -294,11 +399,16 @@ function serializeExport(
 ): string {
   switch (config.format) {
     case "md":
-      return toMarkdown(dataset, config.contentMode, compressionMap);
+      return toMarkdown(
+        dataset,
+        config.contentMode,
+        compressionMap,
+        config.compactVariant
+      );
     case "txt":
-      return toText(dataset, config.contentMode, compressionMap);
+      return toText(dataset, config.contentMode, compressionMap, config.compactVariant);
     case "json":
-      return toJson(dataset, config.contentMode, compressionMap);
+      return toJson(dataset, config.contentMode, compressionMap, config.compactVariant);
     default:
       throw new Error(`Unsupported format: ${config.format}`);
   }
@@ -315,7 +425,10 @@ export async function exportConversations(
   if (config.contentMode !== "full") {
     const compressed = await compressExportDataset(
       dataset,
-      config.contentMode as ExportCompressionMode
+      config.contentMode as ExportCompressionMode,
+      {
+        compactVariant: config.compactVariant,
+      }
     );
     compressionMap = toCompressionMap(compressed.items);
     notice = compressed.notice;
@@ -324,7 +437,12 @@ export async function exportConversations(
   const content = serializeExport(dataset, config, compressionMap);
   return {
     content,
-    filename: generateFilename(conversations.length, config.format, config.contentMode),
+    filename: generateFilename(
+      conversations.length,
+      config.format,
+      config.contentMode,
+      config.compactVariant
+    ),
     mime: resolveExportMime(config.format),
     notice,
   };

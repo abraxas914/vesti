@@ -1,6 +1,10 @@
 ﻿import { getPrompt } from "~lib/prompts";
 import type { ExportCompressionPromptPayload } from "~lib/prompts";
 import {
+  CONDITIONAL_HANDOFF_SECTION_WHITELIST,
+  CONDITIONAL_HANDOFF_TYPES,
+} from "~lib/prompts/export/compactComposer";
+import {
   FUTURE_MODELSCOPE_EXPORT_MODEL_CANDIDATES,
   FUTURE_MOONSHOT_DIRECT_EXPORT_MODEL_CANDIDATES,
   getEffectiveModelId,
@@ -18,9 +22,10 @@ import {
 } from "~lib/services/llmService";
 import { getLlmSettings } from "~lib/services/llmSettingsService";
 import { getConversationOriginAt } from "~lib/conversations/timestamps";
-import type { Conversation, Message } from "~lib/types";
+import type { Conversation, LlmConfig, Message } from "~lib/types";
 import { logger } from "~lib/utils/logger";
 import type {
+  ConversationExportCompactVariant,
   ConversationExportContentMode,
   ConversationExportNotice,
 } from "../types/export";
@@ -49,6 +54,7 @@ export interface CompressedConversationExport {
   messages: Message[];
   body: string;
   mode: ExportCompressionMode;
+  compactVariant?: ConversationExportCompactVariant;
   source: ExportCompressionSource;
   route?: ExportCompressionRoute;
   usedFallbackPrompt: boolean;
@@ -58,28 +64,69 @@ export interface CompressedConversationExport {
   exportPromptProfile?: ExportPromptProfile;
   primaryInvalidReason?: ExportCompressionInvalidReasonCode;
   fallbackInvalidReason?: ExportCompressionInvalidReasonCode;
+  llmAttemptMetrics?: ExportCompressionLlmAttemptMetrics;
+  deliveredArtifactMetrics?: ExportCompressionDeliveredArtifactMetrics;
+  integrityWarnings?: string[];
+  softCompressionWarning?: string;
+  reviewReady?: boolean;
 }
 
 interface ExportCompressionAdapter {
   route: ExportCompressionRoute;
   compress: (
     item: ConversationExportDatasetItem,
-    mode: ExportCompressionMode
+    mode: ExportCompressionMode,
+    options?: ExportCompressionOptions
   ) => Promise<CompressedConversationExport>;
 }
 
 interface ExportCompressionValidationResult {
   valid: boolean;
   issueCode?: ExportCompressionInvalidReasonCode;
+  runtimeMetrics: Omit<
+    ExportCompressionRuntimeMetrics,
+    "rawOutputChars" | "serializedOutputChars"
+  >;
+  integrityWarnings: string[];
+  softCompressionWarning?: string;
 }
 
 interface ExportCompressionFailureContext {
   route: ExportCompressionRoute;
+  compactVariant?: ConversationExportCompactVariant;
   modelId?: string;
   exportPromptProfile?: ExportPromptProfile;
   primaryInvalidReason?: ExportCompressionInvalidReasonCode;
   fallbackInvalidReason?: ExportCompressionInvalidReasonCode;
+  llmAttemptMetrics?: ExportCompressionLlmAttemptMetrics;
 }
+
+interface ExportCompressionOptions {
+  compactVariant?: ConversationExportCompactVariant;
+}
+
+interface ExportCompressionRuntimeMetrics {
+  transcriptChars: number;
+  rawOutputChars: number;
+  normalizedOutputChars: number;
+  serializedOutputChars: number;
+  absoluteMinChars: number;
+  softMinChars: number | null;
+}
+
+interface ExportCompressionAttemptMetrics {
+  rawOutputChars: number;
+  normalizedOutputChars: number;
+  invalidReason?: ExportCompressionInvalidReasonCode;
+}
+
+interface ExportCompressionLlmAttemptMetrics {
+  primary?: ExportCompressionAttemptMetrics;
+  fallbackPrompt?: ExportCompressionAttemptMetrics;
+}
+
+type ExportCompressionDeliveredArtifactMetrics =
+  ExportCompressionRuntimeMetrics;
 
 class ExportCompressionValidationError extends Error {
   readonly context: ExportCompressionFailureContext;
@@ -113,7 +160,21 @@ const PROMPT_BUDGETS: Record<
     fallback: 9000,
   },
 };
+const EXPERIMENTAL_COMPACT_PROMPT_BUDGET = {
+  primary: 28000,
+  fallback: 22000,
+} as const;
+const EXPERIMENTAL_COMPACT_MAX_TOKENS = {
+  primary: 5000,
+  fallback: 4200,
+} as const;
 const MIN_VALID_OUTPUT_LENGTH = 48;
+const COMPACT_MIN_VALID_OUTPUT_LENGTH = 300;
+const COMPACT_SOFT_MIN_RATIO = 0.08;
+const EXPERIMENTAL_PACKING = {
+  keepFirstMessages: 4,
+  keepLastMessages: 12,
+} as const;
 const QUESTION_CUE =
   /(?:[?？]$|^(?:how|why|what|which|should|can|could|would|is|are|do|does|did|where|when|whether|how do|how should|what should|如何|为什么|为何|怎么|是否|能否|需不需要|应该|要不要))/i;
 const CONSTRAINT_CUE =
@@ -129,6 +190,25 @@ const COMMAND_PATTERN =
 const API_PATTERN = /\b[A-Za-z_][A-Za-z0-9_]*\([^()\n]{0,80}\)/g;
 const BACKTICK_PATTERN = /`[^`\n]{2,120}`/g;
 const CODE_BLOCK_PATTERN = /```[\s\S]*?```/g;
+const EXPLANATION_TEACHING_CUE =
+  /(?:\b(?:explain|explanation|help me understand|walk me through|teach me|what is|why does|how does)\b|解释|讲解|理解|原理|推导|概念|是什么意思|为什么)/i;
+const DEBUGGING_CUE =
+  /(?:\b(?:bug|debug|debugging|error|failed|failure|fix|broken|regression|stack trace|timeout|401|invalid|not working|fallback)\b|报错|失败|排查|修复|异常|不生效|fallback|子码)/i;
+const ARCHITECTURE_TRADEOFF_CUE =
+  /(?:\b(?:trade[- ]?off|architecture|architectural|constraint|constraints|option|options|compare|comparison|alternative|alternatives|pros and cons|rejected path)\b|架构|权衡|约束|方案|比较|备选|替代路径)/i;
+const PROCESS_AGREEMENT_CUE =
+  /(?:\b(?:scope|branch|workflow|working agreement|style|communication|reporting|do not reopen|maintenance-only|keep the work scoped|do not mix)\b|范围|分支|协作|工作方式|约定|不要重开|维护模式|只做|不要混入|明确失败模式)/i;
+const GENERATION_CUE =
+  /(?:\b(?:brainstorm|brainstorming|idea|ideas|draft|drafts|variant|variants|creative|concept|concepts|frame|frames|explore options|multiple options|candidate directions|generate|generated)\b|创作|生成|草案|框架构建|框架|变体|点子|脑暴|候选方向|并列方案)/i;
+const MATH_HEAVY_CUE =
+  /(?:\\(?:boxed|lambda|frac|sum|int|alpha|beta|gamma|theta|cdot|times|left|right|begin|end)|\$\$|\\\(|\\\)|\\\[|\\\]|[_^][{(A-Za-z0-9])/i;
+const SYMBOL_DENSE_LINE = /^[^A-Za-z0-9\u3400-\u9FFF]*[=+\-*/_^{}()[\]\\|<>.,:;]{3,}[^A-Za-z0-9\u3400-\u9FFF]*$/;
+const META_CONTENT_LINE_PATTERNS = [
+  /^\s*"?(?:messages|role|content|timestamp|required_facts|key_facts|reference|experimental_reference)"?\s*[:\[]/i,
+  /^\s*[{[\]},]\s*$/,
+  /^\s*"[^"]+"\s*:\s*(?:\[|{|"|[-\d])/,
+  /(?:请你帮我评估|请你判断|是不是该|是否应该|should we|do you recommend|can you assess|help us judge)/i,
+] as const;
 const PLACEHOLDER_PATTERNS = [
   /no .*captured/i,
   /no .*available/i,
@@ -158,6 +238,19 @@ const EXPECTED_HEADINGS: Record<ExportCompressionMode, string[]> = {
     "## Tags",
   ],
 };
+const CONDITIONAL_HANDOFF_TYPE_SET = new Set<string>(CONDITIONAL_HANDOFF_TYPES);
+const CONDITIONAL_HANDOFF_SECTION_ORDER: string[] = [
+  ...CONDITIONAL_HANDOFF_SECTION_WHITELIST,
+];
+const EXPERIMENTAL_MIDDLE_SIGNAL_SECTIONS = [
+  "Decision Candidates",
+  "Rejected Paths",
+  "User Context",
+  "Candidate Frames",
+  "Selection Criteria",
+  "Open Risks",
+  "Key Understanding",
+] as const;
 
 const ROUTE_STATUS: Record<
   ExportCompressionRoute,
@@ -172,6 +265,37 @@ const ROUTE_STATUS: Record<
     note: "Dormant seam reserved for future Moonshot official API validation.",
   },
 };
+
+type ConditionalHandoffParseResult = {
+  startedAt: string;
+  conversationTypes: string[];
+  sections: Record<string, string>;
+};
+
+function resolveCompactVariant(
+  mode: ExportCompressionMode,
+  options?: ExportCompressionOptions
+): ConversationExportCompactVariant | undefined {
+  if (mode !== "compact") {
+    return undefined;
+  }
+  return options?.compactVariant ?? "current";
+}
+
+function isExperimentalCompact(
+  mode: ExportCompressionMode,
+  options?: ExportCompressionOptions
+): boolean {
+  return resolveCompactVariant(mode, options) === "experimental";
+}
+
+function describeCompactLine(
+  compactVariant: ConversationExportCompactVariant | undefined
+): string {
+  return compactVariant === "experimental"
+    ? "Experimental conditional handoff"
+    : "Current compact";
+}
 
 function hasRegexMatch(value: string, pattern: RegExp): boolean {
   const flags = pattern.flags.replace(/g/g, "");
@@ -190,6 +314,75 @@ function shorten(value: string, maxChars = 180): string {
   return `${normalized.slice(0, maxChars - 3).trimEnd()}...`;
 }
 
+function getTranscriptChars(messages: Message[]): number {
+  return messages.map((message) => message.content_text).join("\n").length;
+}
+
+function getAbsoluteMinChars(mode: ExportCompressionMode): number {
+  return mode === "compact"
+    ? COMPACT_MIN_VALID_OUTPUT_LENGTH
+    : MIN_VALID_OUTPUT_LENGTH;
+}
+
+function getSoftMinChars(
+  messages: Message[],
+  mode: ExportCompressionMode,
+  absoluteMinChars: number
+): number | null {
+  if (mode !== "compact") {
+    return null;
+  }
+  return Math.max(
+    absoluteMinChars,
+    Math.floor(getTranscriptChars(messages) * COMPACT_SOFT_MIN_RATIO)
+  );
+}
+
+function countCodeFenceMarkers(value: string): number {
+  return (value.match(/```/g) || []).length;
+}
+
+function findDanglingCueLines(value: string): string[] {
+  const lines = value.replace(/\r\n/g, "\n").split("\n");
+  const dangling: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index].trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (
+      trimmed.startsWith("StartedAt:") ||
+      trimmed.startsWith("Conversation Type:") ||
+      trimmed.startsWith("## ")
+    ) {
+      continue;
+    }
+    if (!/[:：]$/.test(trimmed)) {
+      continue;
+    }
+
+    let nextMeaningful: string | null = null;
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const nextTrimmed = lines[cursor].trim();
+      if (!nextTrimmed) {
+        continue;
+      }
+      nextMeaningful = nextTrimmed;
+      break;
+    }
+
+    if (
+      nextMeaningful === null ||
+      nextMeaningful.startsWith("## ")
+    ) {
+      dangling.push(trimmed);
+    }
+  }
+
+  return unique(dangling).slice(0, 4);
+}
+
 function toOrderedMessages(messages: Message[]): Message[] {
   return [...messages].sort((a, b) => a.created_at - b.created_at);
 }
@@ -201,15 +394,180 @@ function detectLocale(): "zh" | "en" {
   return navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
 }
 
+function resolvePromptBudget(
+  exportProfile: ExportPromptProfile,
+  mode: ExportCompressionMode,
+  options?: ExportCompressionOptions
+): { primary: number; fallback: number } {
+  if (isExperimentalCompact(mode, options)) {
+    return EXPERIMENTAL_COMPACT_PROMPT_BUDGET;
+  }
+  return PROMPT_BUDGETS[exportProfile];
+}
+
+function withExperimentalMaxTokens(
+  settings: LlmConfig,
+  maxTokens: number
+): LlmConfig {
+  return {
+    ...settings,
+    maxTokens,
+  };
+}
+
+function formatPackedTranscriptLine(
+  message: Message,
+  index: number,
+  maxChars: number
+): string {
+  const role = message.role === "user" ? "User" : "AI";
+  const time = new Date(message.created_at).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${index + 1}. [${time}] [${role}] ${shorten(message.content_text, maxChars)}`;
+}
+
+function isMetaContentLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (META_CONTENT_LINE_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+    return true;
+  }
+
+  const withoutQuote = trimmed.replace(/^["'>\s]+/, "");
+  return META_CONTENT_LINE_PATTERNS.some((pattern) => pattern.test(withoutQuote));
+}
+
+function sanitizeExperimentalMessageContent(value: string): string {
+  const lines = value.replace(/\r\n/g, "\n").split("\n");
+  const filtered = lines.filter((line) => !isMetaContentLine(line));
+  return filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function sanitizeMessagesForExperimentalProcessing(messages: Message[]): Message[] {
+  return toOrderedMessages(messages)
+    .map((message) => ({
+      ...message,
+      content_text: sanitizeExperimentalMessageContent(message.content_text),
+    }))
+    .filter((message) => normalizeWhitespace(message.content_text).length > 0);
+}
+
+function buildMiddleSignalBlock(messages: Message[]): string | undefined {
+  if (messages.length === 0) {
+    return undefined;
+  }
+
+  const buckets: Array<{ label: (typeof EXPERIMENTAL_MIDDLE_SIGNAL_SECTIONS)[number]; values: string[] }> = [
+    {
+      label: "Decision Candidates",
+      values: collectDecisionLines(messages, 4),
+    },
+    {
+      label: "Rejected Paths",
+      values: collectRejectedPathLines(messages, 3),
+    },
+    {
+      label: "User Context",
+      values: collectUserContextLines(messages, 3),
+    },
+    {
+      label: "Candidate Frames",
+      values: collectGenerationDirectionLines(messages, 3),
+    },
+    {
+      label: "Selection Criteria",
+      values: collectSelectionCriteriaLines(messages, 3),
+    },
+    {
+      label: "Open Risks",
+      values: collectUnresolvedLines(messages, 3),
+    },
+    {
+      label: "Key Understanding",
+      values: collectKeyUnderstandingLines(messages, 3),
+    },
+  ].filter((bucket) => bucket.values.length > 0);
+
+  if (buckets.length === 0) {
+    return undefined;
+  }
+
+  const lines: string[] = [];
+  for (const bucket of buckets) {
+    lines.push(`${bucket.label}:`);
+    lines.push(...bucket.values.map((value) => `- ${value}`));
+  }
+  return lines.join("\n");
+}
+
+function buildExperimentalPackedTranscript(messages: Message[]): string {
+  const sanitized = sanitizeMessagesForExperimentalProcessing(messages);
+  if (sanitized.length === 0) {
+    return "[No grounded transcript available after experimental filtering]";
+  }
+
+  const ordered = sanitized;
+  if (
+    ordered.length <=
+    EXPERIMENTAL_PACKING.keepFirstMessages + EXPERIMENTAL_PACKING.keepLastMessages
+  ) {
+    return ordered
+      .map((message, index) => formatPackedTranscriptLine(message, index, 900))
+      .join("\n");
+  }
+
+  const head = ordered.slice(0, EXPERIMENTAL_PACKING.keepFirstMessages);
+  const tailStart = Math.max(
+    EXPERIMENTAL_PACKING.keepFirstMessages,
+    ordered.length - EXPERIMENTAL_PACKING.keepLastMessages
+  );
+  const middle = ordered.slice(EXPERIMENTAL_PACKING.keepFirstMessages, tailStart);
+  const tail = ordered.slice(tailStart);
+  const middleSignals = buildMiddleSignalBlock(middle);
+
+  const sections = [
+    "[Opening Context]",
+    ...head.map((message, index) => formatPackedTranscriptLine(message, index, 950)),
+  ];
+
+  if (middleSignals) {
+    sections.push(
+      "",
+      `[Middle Signals | grounded evidence summary from omitted ${middle.length} turns]`,
+      middleSignals
+    );
+  }
+
+  sections.push(
+    "",
+    "[Latest Context]",
+    ...tail.map((message, index) =>
+      formatPackedTranscriptLine(message, tailStart + index, 850)
+    )
+  );
+
+  return sections.join("\n");
+}
+
 function buildPromptPayload(
   item: ConversationExportDatasetItem,
-  profile: ExportPromptProfile
+  profile: ExportPromptProfile,
+  mode: ExportCompressionMode,
+  options?: ExportCompressionOptions
 ): ExportCompressionPromptPayload {
   return {
     conversationTitle: item.conversation.title,
     conversationPlatform: item.conversation.platform,
     conversationOriginAt: getConversationOriginAt(item.conversation),
     messages: item.messages,
+    transcriptOverride: isExperimentalCompact(mode, options)
+      ? buildExperimentalPackedTranscript(item.messages)
+      : undefined,
     locale: detectLocale(),
     profile,
   };
@@ -416,12 +774,125 @@ function collectCodeBlocks(messages: Message[], maxItems = 2): string[] {
   return dedupeAndRank(snippets, maxItems);
 }
 
-function collectFilePathLines(messages: Message[], maxItems = 4): string[] {
+function detectFallbackCompressionContext(messages: Message[]): {
+  mathHeavy: boolean;
+  explanationTeaching: boolean;
+} {
+  const transcript = messages.map((message) => message.content_text).join("\n");
+  const questionHeavyUserText = messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.content_text)
+    .join("\n");
+  const mathHeavy =
+    MATH_HEAVY_CUE.test(transcript) ||
+    transcript
+      .split(/\r?\n/)
+      .some((line) => SYMBOL_DENSE_LINE.test(line.trim()));
+  const explanationTeaching =
+    EXPLANATION_TEACHING_CUE.test(questionHeavyUserText) &&
+    collectDecisionLines(messages, 2).length === 0;
+
+  return {
+    mathHeavy,
+    explanationTeaching,
+  };
+}
+
+function isLatexNoise(value: string): boolean {
+  const compact = normalizeWhitespace(value);
+  return (
+    !compact ||
+    MATH_HEAVY_CUE.test(compact) ||
+    /^\.?[\\/](?:[A-Za-z]+|[A-Za-z]+[{}()[\]])$/.test(compact) ||
+    /^[A-Za-z]\/[A-Za-z]$/.test(compact) ||
+    /^[0-9A-Za-z]+[-+*/][0-9A-Za-z]+$/.test(compact)
+  );
+}
+
+function isExplicitPathCandidate(value: string): boolean {
+  const compact = normalizeWhitespace(value);
+  if (!compact || isLatexNoise(compact)) {
+    return false;
+  }
+
+  if (
+    /[{}[\]"]/.test(compact) ||
+    /^(?:[PE]\d(?:\/|\\))+[PE]?\d$/i.test(compact)
+  ) {
+    return false;
+  }
+
+  if (/^[A-Za-z]:\\/.test(compact)) {
+    return true;
+  }
+
+  if (!/[\\/]/.test(compact)) {
+    return false;
+  }
+
+  const stripped = compact.replace(/^\.{0,2}[\\/]/, "");
+  const segments = stripped.split(/[\\/]+/).filter(Boolean);
+  if (segments.length === 0) {
+    return false;
+  }
+
+  if (
+    segments.every(
+      (segment) => segment.length <= 2 && /^[A-Za-z0-9]+$/.test(segment)
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    segments.length === 1 &&
+    !/\.[A-Za-z0-9]+$/.test(segments[0]) &&
+    segments[0].length < 6
+  ) {
+    return false;
+  }
+
+  const meaningfulSegments = segments.filter(
+    (segment) =>
+      /[A-Za-z]/.test(segment) &&
+      segment.replace(/\.[A-Za-z0-9]+$/, "").length >= 2 &&
+      !/^\\?[A-Za-z]+$/.test(segment)
+  );
+
+  return meaningfulSegments.length > 0;
+}
+
+function isLikelyDocumentationPath(value: string): boolean {
+  const compact = normalizeWhitespace(value);
+  return (
+    /\.mdx?$/i.test(compact) ||
+    /\.txt$/i.test(compact) ||
+    /(^|[\\/])README(?:\.[A-Za-z0-9]+)?$/i.test(compact) ||
+    /(^|[\\/])documents?[\\/]/i.test(compact)
+  );
+}
+
+function collectFilePathLines(
+  messages: Message[],
+  maxItems = 4,
+  options?: {
+    includeDocs?: boolean;
+    docsOnly?: boolean;
+  }
+): string[] {
   const matches: string[] = [];
   for (const message of messages) {
     for (const found of message.content_text.match(PATH_PATTERN) || []) {
-      if (!/[\\/.]/.test(found)) continue;
-      matches.push(`Path: ${shorten(found, 140)}`);
+      if (!isExplicitPathCandidate(found)) continue;
+      const normalized = shorten(found, 140);
+      const isDocPath = isLikelyDocumentationPath(normalized);
+      if (options?.docsOnly && !isDocPath) {
+        continue;
+      }
+      if (options?.includeDocs !== true && isDocPath) {
+        continue;
+      }
+      matches.push(`Path: ${normalized}`);
     }
   }
 
@@ -442,14 +913,20 @@ function collectCommandLines(messages: Message[], maxItems = 4): string[] {
   return dedupeAndRank(matches, maxItems);
 }
 
-function collectApiHints(messages: Message[], maxItems = 4): string[] {
+function collectApiHints(
+  messages: Message[],
+  maxItems = 4,
+  options?: { strict?: boolean }
+): string[] {
   const matches: string[] = [];
   for (const message of messages) {
     for (const found of message.content_text.match(API_PATTERN) || []) {
       matches.push(`API/Function: ${shorten(found, 120)}`);
     }
-    for (const found of message.content_text.match(BACKTICK_PATTERN) || []) {
-      matches.push(`Reference: ${shorten(found, 120)}`);
+    if (!options?.strict) {
+      for (const found of message.content_text.match(BACKTICK_PATTERN) || []) {
+        matches.push(`Reference: ${shorten(found, 120)}`);
+      }
     }
   }
 
@@ -457,11 +934,14 @@ function collectApiHints(messages: Message[], maxItems = 4): string[] {
 }
 
 function collectArtifactLines(messages: Message[], maxItems = 5): string[] {
+  const context = detectFallbackCompressionContext(messages);
+  const strictArtifacts = context.mathHeavy || context.explanationTeaching;
+
   return unique([
     ...collectFilePathLines(messages, maxItems),
     ...collectCommandLines(messages, maxItems),
-    ...collectApiHints(messages, maxItems),
-    ...collectCodeBlocks(messages, maxItems),
+    ...collectApiHints(messages, maxItems, { strict: strictArtifacts }),
+    ...(strictArtifacts ? [] : collectCodeBlocks(messages, maxItems)),
   ]).slice(0, maxItems);
 }
 
@@ -498,6 +978,308 @@ function pickContextLine(
       "No context captured.",
     220
   );
+}
+
+function collectRejectedPathLines(messages: Message[], maxItems = 3): string[] {
+  const candidates = toOrderedMessages(messages)
+    .flatMap((message) => splitIntoSentences(message.content_text))
+    .filter(
+      (sentence) =>
+        /(?:\b(?:reject|rejected|avoid|failed because|didn't work|did not work|not the issue|ruled out|not the blocker|do not reopen)\b|排除|否掉|不走这条路|不是主因|不要重开|失败因为)/i.test(
+          sentence
+        )
+    )
+    .map((sentence) => shorten(sentence, 220));
+
+  return dedupeAndRank(candidates, maxItems);
+}
+
+function collectKeyUnderstandingLines(messages: Message[], maxItems = 3): string[] {
+  const ordered = toOrderedMessages(messages);
+  const candidates = [
+    ...ordered
+      .filter((message) => message.role === "ai")
+      .flatMap((message) => splitIntoSentences(message.content_text))
+      .filter(
+        (sentence) =>
+          EXPLANATION_TEACHING_CUE.test(sentence) ||
+          MATH_HEAVY_CUE.test(sentence) ||
+          /\b(?:means|therefore|because|intuition|understanding|core idea|bridge)\b/i.test(
+            sentence
+          )
+      )
+      .map((sentence) => shorten(sentence, 220)),
+    ...ordered
+      .filter((message) => message.role === "user")
+      .flatMap((message) => splitIntoSentences(message.content_text))
+      .filter((sentence) => EXPLANATION_TEACHING_CUE.test(sentence))
+      .map((sentence) => shorten(sentence, 220)),
+  ];
+
+  if (candidates.length === 0) {
+    const latestAi = [...ordered].reverse().find((message) => message.role === "ai");
+    if (latestAi) {
+      candidates.push(shorten(latestAi.content_text, 220));
+    }
+  }
+
+  return dedupeAndRank(candidates, maxItems);
+}
+
+function collectGenerationDirectionLines(
+  messages: Message[],
+  maxItems = 4
+): string[] {
+  const candidates = toOrderedMessages(messages)
+    .flatMap((message) => splitIntoSentences(message.content_text))
+    .filter(
+      (sentence) =>
+        GENERATION_CUE.test(sentence) ||
+        /\b(?:candidate|option|direction|variant|frame|draft|concept)\b/i.test(
+          sentence
+        )
+    )
+    .map((sentence) => shorten(sentence, 220));
+
+  return dedupeAndRank(candidates, maxItems);
+}
+
+function collectSelectionCriteriaLines(
+  messages: Message[],
+  maxItems = 3
+): string[] {
+  const candidates = toOrderedMessages(messages)
+    .flatMap((message) => splitIntoSentences(message.content_text))
+    .filter(
+      (sentence) =>
+        /\b(?:criteria|criterion|select|selection|screen|evaluate|judge|trade[- ]?off|constraint)\b/i.test(
+          sentence
+        ) ||
+        /(?:标准|筛选|判断依据|约束条件|取舍依据|评估标准)/.test(sentence)
+    )
+    .map((sentence) => shorten(sentence, 220));
+
+  return dedupeAndRank(candidates, maxItems);
+}
+
+function collectUserContextLines(messages: Message[], maxItems = 4): string[] {
+  const candidates = toOrderedMessages(messages)
+    .filter((message) => message.role === "user")
+    .flatMap((message) => splitIntoSentences(message.content_text))
+    .filter(
+      (sentence) =>
+        CONSTRAINT_CUE.test(sentence) ||
+        PROCESS_AGREEMENT_CUE.test(sentence) ||
+        /\b(?:do not|don't|keep|preserve|avoid|only|maintenance-only|exact failure mode)\b/i.test(
+          sentence
+        )
+    )
+    .map((sentence) => shorten(sentence, 220));
+
+  return dedupeAndRank(candidates, maxItems);
+}
+
+function classifyConditionalConversation(
+  item: ConversationExportDatasetItem
+): string[] {
+  const messages = item.messages;
+  const transcript = messages.map((message) => message.content_text).join("\n");
+  const context = detectFallbackCompressionContext(messages);
+  const decisions = collectDecisionLines(messages, 4);
+  const unresolved = collectUnresolvedLines(messages, 3);
+  const rejected = collectRejectedPathLines(messages, 3);
+  const userContext = collectUserContextLines(messages, 4);
+  const keyUnderstanding = collectKeyUnderstandingLines(messages, 3);
+  const generationDirections = collectGenerationDirectionLines(messages, 4);
+  const selectionCriteria = collectSelectionCriteriaLines(messages, 3);
+
+  const scores: Record<string, number> = {
+    decision: 0,
+    debugging: 0,
+    architecture_tradeoff: 0,
+    explanation_teaching: 0,
+    process_agreement: 0,
+    generation: 0,
+  };
+
+  scores.decision += decisions.length * 3 + unresolved.length;
+  scores.debugging += rejected.length * 3;
+  scores.architecture_tradeoff += rejected.length * 2 + userContext.length;
+  scores.explanation_teaching += keyUnderstanding.length * 2;
+  scores.process_agreement += userContext.length * 3;
+  scores.generation += generationDirections.length * 3 + selectionCriteria.length * 2;
+
+  if (DEBUGGING_CUE.test(transcript)) scores.debugging += 4;
+  if (ARCHITECTURE_TRADEOFF_CUE.test(transcript)) scores.architecture_tradeoff += 4;
+  if (PROCESS_AGREEMENT_CUE.test(transcript)) scores.process_agreement += 5;
+  if (EXPLANATION_TEACHING_CUE.test(transcript)) scores.explanation_teaching += 4;
+  if (GENERATION_CUE.test(transcript)) scores.generation += 5;
+  if (context.mathHeavy) scores.explanation_teaching += 5;
+  if (context.explanationTeaching) scores.explanation_teaching += 4;
+  if (decisions.length === 0 && userContext.length > 0) scores.process_agreement += 2;
+  if (decisions.length > 0 && rejected.length > 0) scores.debugging += 2;
+  if (decisions.length > 0 && userContext.length > 0) scores.decision += 1;
+  if (generationDirections.length > 1 && decisions.length <= 1) scores.generation += 2;
+  if (
+    GENERATION_CUE.test(transcript) &&
+    ARCHITECTURE_TRADEOFF_CUE.test(transcript)
+  ) {
+    scores.generation += 1;
+    scores.architecture_tradeoff += 1;
+  }
+
+  const ranked = Object.entries(scores)
+    .sort((a, b) => b[1] - a[1])
+    .filter((entry) => entry[1] > 0)
+    .map((entry) => entry[0]);
+
+  if (ranked.length === 0) {
+    return ["decision"];
+  }
+
+  const [first, second] = ranked;
+  if (
+    second &&
+    scores[second] >= 4 &&
+    scores[first] - scores[second] <= 2 &&
+    first !== second
+  ) {
+    return [first, second];
+  }
+
+  return [first];
+}
+
+function buildConditionalSections(
+  item: ConversationExportDatasetItem
+): Array<{ heading: string; lines: string[] }> {
+  const messages = item.messages;
+  const conversationTypes = classifyConditionalConversation(item);
+  const context = detectFallbackCompressionContext(messages);
+  const decisions = collectDecisionLines(messages, 4);
+  const rejected = collectRejectedPathLines(messages, 3);
+  const userContext = collectUserContextLines(messages, 4);
+  const generationDirections = collectGenerationDirectionLines(messages, 4);
+  const selectionCriteria = collectSelectionCriteriaLines(messages, 3);
+  const docAnchors = collectFilePathLines(messages, 4, {
+    includeDocs: true,
+    docsOnly: true,
+  });
+  const technicalAnchors = unique([
+    ...collectFilePathLines(messages, 4),
+    ...collectCommandLines(messages, 3),
+    ...collectApiHints(messages, 3, { strict: true }),
+  ]).slice(0, 4);
+  const anchors =
+    context.mathHeavy || conversationTypes.includes("explanation_teaching")
+      ? unique([...docAnchors, ...technicalAnchors]).slice(0, 4)
+      : conversationTypes.includes("architecture_tradeoff") ||
+          (conversationTypes.includes("decision") &&
+            !conversationTypes.includes("debugging"))
+        ? unique([
+            ...docAnchors,
+            ...collectCommandLines(messages, 2),
+            ...collectApiHints(messages, 2, { strict: true }),
+            ...collectFilePathLines(messages, 2),
+          ]).slice(0, 4)
+        : collectArtifactLines(messages, 5);
+  const understanding = collectKeyUnderstandingLines(messages, 3);
+  const unresolved = collectUnresolvedLines(messages, 3);
+  const generationUnderstanding = unique([
+    ...generationDirections,
+    ...selectionCriteria,
+    ...understanding,
+  ]).slice(0, 4);
+
+  const sections: Array<{ heading: string; lines: string[] }> = [];
+
+  const shouldEmitDecisionSection =
+    decisions.length > 0 &&
+    (!conversationTypes.includes("generation") || rejected.length > 0 || selectionCriteria.length > 0);
+
+  if (shouldEmitDecisionSection) {
+    sections.push({
+      heading: "## Decisions And Reasoning",
+      lines: decisions.map((line) => `- ${line}`),
+    });
+  }
+
+  if (rejected.length > 0) {
+    sections.push({
+      heading: "## Failed Or Rejected Paths",
+      lines: rejected.map((line) => `- ${line}`),
+    });
+  }
+
+  if (userContext.length > 0) {
+    sections.push({
+      heading: "## User Context And Corrections",
+      lines: userContext.map((line) => `- ${line}`),
+    });
+  }
+
+  if (anchors.length > 0) {
+    sections.push({
+      heading: "## Descriptive Anchors",
+      lines: anchors.map((line) => `- ${line.replace(/^[-*]\s+/, "")}`),
+    });
+  }
+
+  if (generationUnderstanding.length > 0) {
+    sections.push({
+      heading: "## Key Understanding",
+      lines: generationUnderstanding.map((line) => `- ${line}`),
+    });
+  }
+
+  if (unresolved.length > 0) {
+    sections.push({
+      heading: "## Open Risks And Next Actions",
+      lines: unresolved.map((line) => `- ${line}`),
+    });
+  }
+
+  return CONDITIONAL_HANDOFF_SECTION_ORDER.map((heading) =>
+    sections.find((section) => section.heading === heading)
+  ).filter((section): section is { heading: string; lines: string[] } => Boolean(section));
+}
+
+function buildExperimentalCompactFallback(
+  item: ConversationExportDatasetItem,
+  reason: string
+): string {
+  const filteredItem: ConversationExportDatasetItem = {
+    ...item,
+    messages: sanitizeMessagesForExperimentalProcessing(item.messages),
+  };
+  const startedAt = item.conversation
+    ? new Date(getConversationOriginAt(item.conversation)).toISOString()
+    : "unknown";
+  const conversationTypes = classifyConditionalConversation(filteredItem);
+  const sections = buildConditionalSections(filteredItem);
+
+  const lines = [
+    `StartedAt: ${startedAt || "unknown"}`,
+    `Conversation Type: ${conversationTypes.join(" + ")}`,
+  ];
+
+  if (sections.length === 0) {
+    lines.push(
+      "",
+      "## Open Risks And Next Actions",
+      `- Local experimental fallback could not derive a richer handoff. Reason: ${reason}.`
+    );
+    return lines.join("\n");
+  }
+
+  lines.push("");
+  for (const section of sections) {
+    lines.push(section.heading);
+    lines.push(...section.lines);
+    lines.push("");
+  }
+
+  return lines.join("\n").trim();
 }
 
 function toBulletLines(values: string[], emptyLine: string): string[] {
@@ -620,20 +1402,27 @@ function buildSummaryFallback(
 function buildLocalFallback(
   item: ConversationExportDatasetItem,
   mode: ExportCompressionMode,
+  options: ExportCompressionOptions | undefined,
   reason: string,
   diagnostic?: LlmDiagnostic | null,
   failureContext?: ExportCompressionFailureContext | null
 ): CompressedConversationExport {
+  const compactVariant =
+    failureContext?.compactVariant ?? resolveCompactVariant(mode, options);
   const body =
     mode === "compact"
-      ? buildCompactFallback(item, reason)
+      ? compactVariant === "experimental"
+        ? buildExperimentalCompactFallback(item, reason)
+        : buildCompactFallback(item, reason)
       : buildSummaryFallback(item, reason);
+  const validation = validateCompressionOutput(body, item, mode, options);
 
   return {
     conversation: item.conversation,
     messages: item.messages,
     body,
     mode,
+    compactVariant,
     source: "local_fallback",
     route: failureContext?.route,
     usedFallbackPrompt: false,
@@ -643,10 +1432,36 @@ function buildLocalFallback(
     exportPromptProfile: failureContext?.exportPromptProfile,
     primaryInvalidReason: failureContext?.primaryInvalidReason,
     fallbackInvalidReason: failureContext?.fallbackInvalidReason,
+    llmAttemptMetrics: failureContext?.llmAttemptMetrics,
+    deliveredArtifactMetrics: buildDeliveredArtifactMetrics(
+      validation.runtimeMetrics,
+      body
+    ),
+    integrityWarnings: validation.integrityWarnings,
+    softCompressionWarning: validation.softCompressionWarning,
+    reviewReady: !(
+      mode === "compact" && compactVariant === "experimental"
+    ),
   };
 }
 
-function getExportValidationFeedback(reason: string | undefined):
+function getExportLabel(
+  mode: ExportCompressionMode,
+  compactVariant?: ConversationExportCompactVariant
+): string {
+  if (mode === "compact") {
+    return compactVariant === "experimental"
+      ? "Experimental handoff"
+      : "Compact";
+  }
+  return "Summary";
+}
+
+function getExportValidationFeedback(
+  reason: string | undefined,
+  mode: ExportCompressionMode,
+  compactVariant?: ConversationExportCompactVariant
+):
   | { detail: string; hint: string }
   | null {
   switch (reason) {
@@ -654,13 +1469,21 @@ function getExportValidationFeedback(reason: string | undefined):
       return {
         detail:
           "LLM returned text, but it was too short to satisfy the export compression baseline. Validation: export_output_too_short.",
-        hint: "Try the other model path later or use Full export while we tune this profile.",
+        hint:
+          compactVariant === "experimental"
+            ? "Try the other model path later or use Current compact while we tune the experimental handoff line."
+            : "Try the other model path later or use Full export while we tune this profile.",
       };
     case "export_missing_required_headings":
       return {
         detail:
-          "LLM returned text, but the required markdown sections were missing. Validation: export_missing_required_headings.",
-        hint: "We expect the shipping export headings exactly; this is usually a prompt/profile compliance issue rather than an auth or routing failure.",
+          compactVariant === "experimental"
+            ? "LLM returned text, but the conditional handoff markers were missing or malformed. Validation: export_missing_required_headings."
+            : "LLM returned text, but the required markdown sections were missing. Validation: export_missing_required_headings.",
+        hint:
+          compactVariant === "experimental"
+            ? "Experimental handoff expects StartedAt, Conversation Type, and one or more grounded whitelist sections."
+            : "We expect the shipping export headings exactly; this is usually a prompt/profile compliance issue rather than an auth or routing failure.",
       };
     case "export_grounded_sections_insufficient":
       return {
@@ -705,6 +1528,10 @@ function buildCompressionTechnicalSummary(
     parts.push(`Compression route: ${describeCompressionRoute(result.route)}`);
   }
 
+  if (result.mode === "compact") {
+    parts.push(`Compact line: ${describeCompactLine(result.compactVariant)}`);
+  }
+
   if (result.modelId) {
     parts.push(`Model: ${result.modelId}`);
   }
@@ -713,12 +1540,57 @@ function buildCompressionTechnicalSummary(
     parts.push(`Profile: ${result.exportPromptProfile}`);
   }
 
-  if (result.primaryInvalidReason) {
-    parts.push(`Primary: ${result.primaryInvalidReason}`);
+  if (result.source === "local_fallback") {
+    if (result.primaryInvalidReason) {
+      parts.push(`Primary: ${result.primaryInvalidReason}`);
+    }
+    if (result.fallbackInvalidReason) {
+      parts.push(`Fallback: ${result.fallbackInvalidReason}`);
+    }
+    if (result.llmAttemptMetrics?.primary) {
+      parts.push(
+        `LLM primary raw/normalized: ${result.llmAttemptMetrics.primary.rawOutputChars}/${result.llmAttemptMetrics.primary.normalizedOutputChars}${
+          result.llmAttemptMetrics.primary.invalidReason
+            ? ` (${result.llmAttemptMetrics.primary.invalidReason})`
+            : ""
+        }`
+      );
+    }
+    if (result.llmAttemptMetrics?.fallbackPrompt) {
+      parts.push(
+        `LLM fallback raw/normalized: ${result.llmAttemptMetrics.fallbackPrompt.rawOutputChars}/${result.llmAttemptMetrics.fallbackPrompt.normalizedOutputChars}${
+          result.llmAttemptMetrics.fallbackPrompt.invalidReason
+            ? ` (${result.llmAttemptMetrics.fallbackPrompt.invalidReason})`
+            : ""
+        }`
+      );
+    }
+    if (
+      result.mode === "compact" &&
+      result.compactVariant === "experimental" &&
+      result.reviewReady === false
+    ) {
+      parts.push("Deterministic experimental fallback is diagnostic only, not ideal for expert review.");
+    }
   }
 
-  if (result.fallbackInvalidReason) {
-    parts.push(`Fallback: ${result.fallbackInvalidReason}`);
+  if (result.deliveredArtifactMetrics) {
+    parts.push(
+      `${result.source === "local_fallback" ? "Delivered fallback" : "Delivered artifact"} raw/normalized/serialized: ${result.deliveredArtifactMetrics.rawOutputChars}/${result.deliveredArtifactMetrics.normalizedOutputChars}/${result.deliveredArtifactMetrics.serializedOutputChars}`
+    );
+    if (result.deliveredArtifactMetrics.softMinChars !== null) {
+      parts.push(
+        `Soft floor: ${result.deliveredArtifactMetrics.softMinChars} chars (transcript ${result.deliveredArtifactMetrics.transcriptChars})`
+      );
+    }
+  }
+
+  if (result.integrityWarnings && result.integrityWarnings.length > 0) {
+    parts.push(`Integrity warnings: ${result.integrityWarnings.join(", ")}`);
+  }
+
+  if (result.softCompressionWarning) {
+    parts.push(result.softCompressionWarning);
   }
 
   return parts.length > 0 ? parts.join(" · ") : undefined;
@@ -757,6 +1629,196 @@ function extractSections(
   return sections;
 }
 
+function parseConditionalConversationType(value: string): string[] | null {
+  const normalized = value
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (normalized.length < 1 || normalized.length > 2) {
+    return null;
+  }
+
+  if (normalized.some((part) => !CONDITIONAL_HANDOFF_TYPE_SET.has(part))) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function extractConditionalHandoff(
+  value: string
+): ConditionalHandoffParseResult | null {
+  const lines = value.replace(/\r\n/g, "\n").split("\n");
+  const nonEmptyLines = lines.map((line) => line.trim()).filter(Boolean);
+  const startedLine = nonEmptyLines[0] || "";
+  const typeLine = nonEmptyLines[1] || "";
+
+  if (!startedLine.startsWith("StartedAt:")) {
+    return null;
+  }
+  if (!typeLine.startsWith("Conversation Type:")) {
+    return null;
+  }
+
+  const startedAt = startedLine.replace(/^StartedAt:\s*/, "").trim();
+  const conversationTypes = parseConditionalConversationType(
+    typeLine.replace(/^Conversation Type:\s*/, "").trim()
+  );
+  if (!conversationTypes) {
+    return null;
+  }
+
+  const rawSections: Record<string, string> = {};
+  const sectionOrder: string[] = [];
+  let currentHeading: string | null = null;
+
+  for (const rawLine of lines.slice(2)) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) {
+      if (currentHeading) {
+        rawSections[currentHeading] = `${rawSections[currentHeading]}\n`;
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("## ")) {
+      if (!CONDITIONAL_HANDOFF_SECTION_ORDER.includes(trimmed)) {
+        return null;
+      }
+      if (rawSections[trimmed] !== undefined) {
+        return null;
+      }
+      rawSections[trimmed] = "";
+      sectionOrder.push(trimmed);
+      currentHeading = trimmed;
+      continue;
+    }
+
+    if (!currentHeading) {
+      return null;
+    }
+
+    rawSections[currentHeading] = rawSections[currentHeading]
+      ? `${rawSections[currentHeading]}\n${rawLine}`
+      : rawLine;
+  }
+
+  if (sectionOrder.length === 0) {
+    return null;
+  }
+
+  const observedOrder = sectionOrder.map((heading) =>
+    CONDITIONAL_HANDOFF_SECTION_ORDER.indexOf(heading)
+  );
+  const sortedOrder = [...observedOrder].sort((a, b) => a - b);
+  if (observedOrder.some((value, index) => value !== sortedOrder[index])) {
+    return null;
+  }
+
+  const sections: Record<string, string> = {};
+  for (const heading of sectionOrder) {
+    const sectionBody = (rawSections[heading] || "").trim();
+    if (!sectionBody || !hasMeaningfulText(sectionBody)) {
+      return null;
+    }
+    sections[heading] = sectionBody;
+  }
+
+  return {
+    startedAt,
+    conversationTypes,
+    sections,
+  };
+}
+
+function buildRuntimeMetrics(
+  item: ConversationExportDatasetItem,
+  normalizedOutputChars: number,
+  mode: ExportCompressionMode
+): Omit<
+  ExportCompressionRuntimeMetrics,
+  "rawOutputChars" | "serializedOutputChars"
+> {
+  const transcriptChars = getTranscriptChars(item.messages);
+  const absoluteMinChars = getAbsoluteMinChars(mode);
+  const softMinChars = getSoftMinChars(
+    item.messages,
+    mode,
+    absoluteMinChars
+  );
+
+  return {
+    transcriptChars,
+    normalizedOutputChars,
+    absoluteMinChars,
+    softMinChars,
+  };
+}
+
+function buildAttemptMetrics(
+  rawOutput: string,
+  normalizedOutput: string,
+  invalidReason?: ExportCompressionInvalidReasonCode
+): ExportCompressionAttemptMetrics {
+  return {
+    rawOutputChars: rawOutput.length,
+    normalizedOutputChars: normalizedOutput.length,
+    invalidReason,
+  };
+}
+
+function buildDeliveredArtifactMetrics(
+  validationMetrics: Omit<
+    ExportCompressionRuntimeMetrics,
+    "rawOutputChars" | "serializedOutputChars"
+  >,
+  body: string
+): ExportCompressionDeliveredArtifactMetrics {
+  return {
+    ...validationMetrics,
+    rawOutputChars: body.length,
+    serializedOutputChars: body.length,
+  };
+}
+
+function buildSoftCompressionWarning(
+  metrics: Omit<
+    ExportCompressionRuntimeMetrics,
+    "rawOutputChars" | "serializedOutputChars"
+  >,
+  label?: string
+): string | undefined {
+  if (
+    metrics.softMinChars === null ||
+    metrics.normalizedOutputChars >= metrics.softMinChars
+  ) {
+    return undefined;
+  }
+
+  return [
+    label ? `${label}.` : null,
+    `Output is below the soft density floor (${metrics.normalizedOutputChars}/${metrics.softMinChars} chars; transcript ${metrics.transcriptChars} chars).`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildIntegrityWarnings(value: string): string[] {
+  const warnings: string[] = [];
+
+  if (countCodeFenceMarkers(value) % 2 !== 0) {
+    warnings.push("unclosed_code_block");
+  }
+
+  const danglingLines = findDanglingCueLines(value);
+  if (danglingLines.length > 0) {
+    warnings.push(`dangling_cue:${danglingLines.join(" | ")}`);
+  }
+
+  return warnings;
+}
+
 function countGroundedSections(sections: Record<string, string>): number {
   return Object.values(sections).filter((body) => {
     const lines = body
@@ -774,10 +1836,13 @@ function detectArtifactSignals(messages: Message[]): {
   hasApi: boolean;
 } {
   const transcript = messages.map((message) => message.content_text).join("\n");
+  const pathSignals = Array.from(transcript.matchAll(new RegExp(PATH_PATTERN.source, "g")))
+    .map((match) => match[0])
+    .filter((value) => isExplicitPathCandidate(value));
   return {
     hasCode: hasRegexMatch(transcript, CODE_BLOCK_PATTERN),
     hasCommand: hasRegexMatch(transcript, COMMAND_PATTERN),
-    hasPath: hasRegexMatch(transcript, PATH_PATTERN),
+    hasPath: pathSignals.length > 0,
     hasApi:
       hasRegexMatch(transcript, API_PATTERN) ||
       hasRegexMatch(transcript, BACKTICK_PATTERN),
@@ -796,7 +1861,10 @@ function preservesArtifactSignal(
   return (
     (signals.hasCode && /```|Code:\s*`/i.test(body)) ||
     (signals.hasCommand && hasRegexMatch(body, COMMAND_PATTERN)) ||
-    (signals.hasPath && hasRegexMatch(body, PATH_PATTERN)) ||
+    (signals.hasPath &&
+      Array.from(body.matchAll(new RegExp(PATH_PATTERN.source, "g"))).some((match) =>
+        isExplicitPathCandidate(match[0])
+      )) ||
     (signals.hasApi &&
       (hasRegexMatch(body, API_PATTERN) || hasRegexMatch(body, BACKTICK_PATTERN)))
   );
@@ -805,13 +1873,95 @@ function preservesArtifactSignal(
 function validateCompressionOutput(
   value: string,
   item: ConversationExportDatasetItem,
-  mode: ExportCompressionMode
+  mode: ExportCompressionMode,
+  options?: ExportCompressionOptions
 ): ExportCompressionValidationResult {
   const normalized = sanitizeSummaryText(value);
-  if (normalized.length < MIN_VALID_OUTPUT_LENGTH) {
+  const runtimeMetrics = buildRuntimeMetrics(item, normalized.length, mode);
+  const integrityWarnings = isExperimentalCompact(mode, options)
+    ? buildIntegrityWarnings(normalized)
+    : [];
+
+  if (normalized.length < runtimeMetrics.absoluteMinChars) {
     return {
       valid: false,
       issueCode: "export_output_too_short",
+      runtimeMetrics,
+      integrityWarnings,
+      softCompressionWarning: undefined,
+    };
+  }
+
+  if (isExperimentalCompact(mode, options)) {
+    const parsed = extractConditionalHandoff(value);
+    if (!parsed || integrityWarnings.length > 0) {
+      return {
+        valid: false,
+        issueCode: "export_missing_required_headings",
+        runtimeMetrics,
+        integrityWarnings,
+        softCompressionWarning: buildSoftCompressionWarning(
+          runtimeMetrics
+        ),
+      };
+    }
+
+    const groundedSectionCount = countGroundedSections(parsed.sections);
+    if (groundedSectionCount < 1) {
+      return {
+        valid: false,
+        issueCode: "export_grounded_sections_insufficient",
+        runtimeMetrics,
+        integrityWarnings,
+        softCompressionWarning: buildSoftCompressionWarning(
+          runtimeMetrics
+        ),
+      };
+    }
+
+    const sectionCount = Object.keys(parsed.sections).length;
+    const hasDecisionSection = Boolean(
+      parsed.sections["## Decisions And Reasoning"]
+    );
+    const hasRejectedSection = Boolean(
+      parsed.sections["## Failed Or Rejected Paths"]
+    );
+    const hasUserContextSection = Boolean(
+      parsed.sections["## User Context And Corrections"]
+    );
+    const hasUnderstandingSection = Boolean(
+      parsed.sections["## Key Understanding"]
+    );
+    const hasRiskSection = Boolean(
+      parsed.sections["## Open Risks And Next Actions"]
+    );
+
+    const overCompressedRisk =
+      runtimeMetrics.softMinChars !== null &&
+      runtimeMetrics.normalizedOutputChars < runtimeMetrics.softMinChars &&
+      (
+        sectionCount <= 2 ||
+        (parsed.conversationTypes.includes("debugging") &&
+          (!hasRejectedSection || !hasRiskSection)) ||
+        ((parsed.conversationTypes.includes("decision") ||
+          parsed.conversationTypes.includes("architecture_tradeoff")) &&
+          !hasDecisionSection) ||
+        (parsed.conversationTypes.includes("process_agreement") &&
+          !hasUserContextSection) ||
+        (parsed.conversationTypes.includes("explanation_teaching") &&
+          !hasUnderstandingSection)
+      );
+
+    const softCompressionWarning = buildSoftCompressionWarning(
+      runtimeMetrics,
+      overCompressedRisk ? "Potential over-compressed risk" : undefined
+    );
+
+    return {
+      valid: true,
+      runtimeMetrics,
+      integrityWarnings,
+      softCompressionWarning,
     };
   }
 
@@ -820,6 +1970,9 @@ function validateCompressionOutput(
     return {
       valid: false,
       issueCode: "export_missing_required_headings",
+      runtimeMetrics,
+      integrityWarnings,
+      softCompressionWarning: buildSoftCompressionWarning(runtimeMetrics),
     };
   }
 
@@ -829,6 +1982,9 @@ function validateCompressionOutput(
     return {
       valid: false,
       issueCode: "export_grounded_sections_insufficient",
+      runtimeMetrics,
+      integrityWarnings,
+      softCompressionWarning: buildSoftCompressionWarning(runtimeMetrics),
     };
   }
 
@@ -836,15 +1992,24 @@ function validateCompressionOutput(
     return {
       valid: false,
       issueCode: "export_artifact_signal_missing",
+      runtimeMetrics,
+      integrityWarnings,
+      softCompressionWarning: buildSoftCompressionWarning(runtimeMetrics),
     };
   }
 
-  return { valid: true };
+  return {
+    valid: true,
+    runtimeMetrics,
+    integrityWarnings,
+    softCompressionWarning: buildSoftCompressionWarning(runtimeMetrics),
+  };
 }
 
 async function compressWithCurrentLlmSettings(
   item: ConversationExportDatasetItem,
-  mode: ExportCompressionMode
+  mode: ExportCompressionMode,
+  options?: ExportCompressionOptions
 ): Promise<CompressedConversationExport> {
   const settings = await getLlmSettings();
   if (!settings) {
@@ -854,71 +2019,124 @@ async function compressWithCurrentLlmSettings(
   const modelId = getEffectiveModelId(settings);
   const modelProfile = getLlmModelProfile(modelId);
   const exportProfile = modelProfile.exportPromptProfile;
-  const promptBudget = PROMPT_BUDGETS[exportProfile];
+  const promptBudget = resolvePromptBudget(exportProfile, mode, options);
+  const compactVariant = resolveCompactVariant(mode, options);
   const prompt = getPrompt(mode === "compact" ? "exportCompact" : "exportSummary", {
-    variant: "current",
+    variant: isExperimentalCompact(mode, options) ? "experimental" : "current",
   });
-  const payload = buildPromptPayload(item, exportProfile);
+  const payload = buildPromptPayload(item, exportProfile, mode, options);
   const primaryPrompt = truncateForContext(
     prompt.userTemplate(payload),
     promptBudget.primary
   );
 
-  const primary = await callInference(settings, primaryPrompt, {
+  const primarySettings = isExperimentalCompact(mode, options)
+    ? withExperimentalMaxTokens(settings, EXPERIMENTAL_COMPACT_MAX_TOKENS.primary)
+    : settings;
+  const primary = await callInference(primarySettings, primaryPrompt, {
     systemPrompt: prompt.system,
   });
   const primaryBody = normalizeCompressionBody(primary.content);
-  const primaryValidation = validateCompressionOutput(primaryBody, item, mode);
+  const primaryValidation = validateCompressionOutput(primaryBody, item, mode, options);
+  const primaryAttemptMetrics = buildAttemptMetrics(
+    primary.content,
+    primaryBody,
+    primaryValidation.valid ? undefined : primaryValidation.issueCode
+  );
   if (primaryValidation.valid) {
     return {
       conversation: item.conversation,
       messages: item.messages,
       body: primaryBody,
       mode,
+      compactVariant,
       source: "llm",
       route: "current_llm_settings",
       usedFallbackPrompt: false,
+      llmAttemptMetrics: {
+        primary: primaryAttemptMetrics,
+      },
+      deliveredArtifactMetrics: buildDeliveredArtifactMetrics(
+        primaryValidation.runtimeMetrics,
+        primaryBody
+      ),
+      integrityWarnings: primaryValidation.integrityWarnings,
+      softCompressionWarning: primaryValidation.softCompressionWarning,
+      reviewReady: true,
     };
   }
 
   logger.warn("llm", "Export compression primary output failed validation", {
     route: "current_llm_settings",
     mode,
+    compactVariant,
     conversationId: item.conversation.id,
     modelId,
     exportPromptProfile: exportProfile,
     invalidReason: primaryValidation.issueCode,
+    llmAttemptMetrics: {
+      primary: primaryAttemptMetrics,
+    },
+    integrityWarnings: primaryValidation.integrityWarnings,
+    softCompressionWarning: primaryValidation.softCompressionWarning,
   });
 
   const fallbackPrompt = truncateForContext(
     prompt.fallbackTemplate(payload),
     promptBudget.fallback
   );
-  const fallback = await callInference(settings, fallbackPrompt, {
+  const fallbackSettings = isExperimentalCompact(mode, options)
+    ? withExperimentalMaxTokens(settings, EXPERIMENTAL_COMPACT_MAX_TOKENS.fallback)
+    : settings;
+  const fallback = await callInference(fallbackSettings, fallbackPrompt, {
     systemPrompt: prompt.fallbackSystem || prompt.system,
   });
   const fallbackBody = normalizeCompressionBody(fallback.content);
-  const fallbackValidation = validateCompressionOutput(fallbackBody, item, mode);
+  const fallbackValidation = validateCompressionOutput(fallbackBody, item, mode, options);
+  const fallbackAttemptMetrics = buildAttemptMetrics(
+    fallback.content,
+    fallbackBody,
+    fallbackValidation.valid ? undefined : fallbackValidation.issueCode
+  );
   if (fallbackValidation.valid) {
     return {
       conversation: item.conversation,
       messages: item.messages,
       body: fallbackBody,
       mode,
+      compactVariant,
       source: "llm",
       route: "current_llm_settings",
       usedFallbackPrompt: true,
+      llmAttemptMetrics: {
+        primary: primaryAttemptMetrics,
+        fallbackPrompt: fallbackAttemptMetrics,
+      },
+      deliveredArtifactMetrics: buildDeliveredArtifactMetrics(
+        fallbackValidation.runtimeMetrics,
+        fallbackBody
+      ),
+      integrityWarnings: fallbackValidation.integrityWarnings,
+      softCompressionWarning: fallbackValidation.softCompressionWarning,
+      reviewReady: true,
     };
   }
 
   logger.warn("llm", "Export compression fallback prompt failed validation", {
     route: "current_llm_settings",
     mode,
+    compactVariant,
     conversationId: item.conversation.id,
     modelId,
     exportPromptProfile: exportProfile,
     invalidReason: fallbackValidation.issueCode,
     primaryInvalidReason: primaryValidation.issueCode,
+    llmAttemptMetrics: {
+      primary: primaryAttemptMetrics,
+      fallbackPrompt: fallbackAttemptMetrics,
+    },
+    integrityWarnings: fallbackValidation.integrityWarnings,
+    softCompressionWarning: fallbackValidation.softCompressionWarning,
   });
 
   throw new ExportCompressionValidationError(
@@ -927,10 +2145,15 @@ async function compressWithCurrentLlmSettings(
       "export_output_too_short",
     {
       route: "current_llm_settings",
+      compactVariant,
       modelId,
       exportPromptProfile: exportProfile,
       primaryInvalidReason: primaryValidation.issueCode,
       fallbackInvalidReason: fallbackValidation.issueCode,
+      llmAttemptMetrics: {
+        primary: primaryAttemptMetrics,
+        fallbackPrompt: fallbackAttemptMetrics,
+      },
     }
   );
 }
@@ -942,25 +2165,52 @@ const ADAPTERS: Record<ExportCompressionRoute, ExportCompressionAdapter> = {
   },
   moonshot_direct: {
     route: "moonshot_direct",
-    async compress(item, mode) {
-      return buildLocalFallback(item, mode, "moonshot_direct_not_enabled");
+    async compress(item, mode, options) {
+      return buildLocalFallback(
+        item,
+        mode,
+        options,
+        "moonshot_direct_not_enabled"
+      );
     },
   },
 };
 
 function buildCompressionNotice(
   results: CompressedConversationExport[],
-  mode: ExportCompressionMode
+  mode: ExportCompressionMode,
+  options?: ExportCompressionOptions
 ): ConversationExportNotice {
+  const compactVariant = resolveCompactVariant(mode, options);
+  const exportLabel = getExportLabel(mode, compactVariant);
   const fallbackCount = results.filter(
     (result) => result.source === "local_fallback"
   ).length;
   const llmCount = results.length - fallbackCount;
+  const warningResult = results.find(
+    (result) =>
+      (result.integrityWarnings?.length ?? 0) > 0 ||
+      Boolean(result.softCompressionWarning)
+  );
 
-  if (fallbackCount === 0) {
+  if (fallbackCount === 0 && !warningResult) {
     return {
       tone: "default",
-      message: `${mode === "compact" ? "Compact" : "Summary"} export used the current LLM path for all selected threads.`,
+      message: `${exportLabel} export used the current LLM path for all selected threads.`,
+    };
+  }
+
+  if (fallbackCount === 0 && warningResult) {
+    return {
+      tone: "warning",
+      message: `${exportLabel} export completed with quality warnings for ${results.length} selected thread${results.length === 1 ? "" : "s"}.`,
+      title: "Export completed with quality warnings",
+      detail:
+        warningResult.softCompressionWarning ||
+        "The export passed validation, but diagnostics found potential completeness issues.",
+      technicalSummary: buildCompressionTechnicalSummary(warningResult),
+      hint: "Review the downloaded handoff before sharing it externally.",
+      diagnostic: null,
     };
   }
 
@@ -973,7 +2223,11 @@ function buildCompressionNotice(
   );
   const validationFeedback = diagnostic
     ? null
-    : getExportValidationFeedback(validationFallback?.fallbackReason);
+    : getExportValidationFeedback(
+        validationFallback?.fallbackReason,
+        mode,
+        validationFallback?.compactVariant ?? compactVariant
+      );
   const technicalSummary = diagnostic
     ? representativeFallback
       ? buildCompressionTechnicalSummary(representativeFallback)
@@ -988,26 +2242,31 @@ ${diagnostic.technicalSummary}`
   const hint = diagnostic
     ? "Check Settings > Model Access."
     : validationFeedback?.hint;
+  const expertHint =
+    mode === "compact" && compactVariant === "experimental"
+      ? "Deterministic experimental fallback is diagnostic only; use an experimental LLM output before sending samples to the expert."
+      : undefined;
+  const combinedHint = [hint, expertHint].filter(Boolean).join(" ") || undefined;
 
   if (llmCount === 0) {
     return {
       tone: "warning",
-      message: `${mode === "compact" ? "Compact" : "Summary"} export used structured local fallback for all selected threads.`,
+      message: `${exportLabel} export used structured local fallback for all selected threads.`,
       title: "Local fallback used for all selected threads",
       detail,
       technicalSummary,
-      hint,
+      hint: combinedHint,
       diagnostic: diagnostic || null,
     };
   }
 
   return {
     tone: "warning",
-    message: `${mode === "compact" ? "Compact" : "Summary"} export used structured local fallback for ${fallbackCount} of ${results.length} selected threads.`,
+    message: `${exportLabel} export used structured local fallback for ${fallbackCount} of ${results.length} selected threads.`,
     title: `Local fallback used for ${fallbackCount} of ${results.length} selected threads`,
     detail,
     technicalSummary,
-    hint,
+    hint: combinedHint,
     diagnostic: diagnostic || null,
   };
 }
@@ -1035,7 +2294,8 @@ export function getExportCompressionRouteInfo() {
 
 export async function compressExportDataset(
   dataset: ConversationExportDatasetItem[],
-  mode: ExportCompressionMode
+  mode: ExportCompressionMode,
+  options?: ExportCompressionOptions
 ): Promise<{
   items: CompressedConversationExport[];
   notice: ConversationExportNotice;
@@ -1051,12 +2311,12 @@ export async function compressExportDataset(
     };
 
     if (!isExportCompressionRouteEnabled(route)) {
-      items.push(buildLocalFallback(item, mode, `${route}_disabled`));
+      items.push(buildLocalFallback(item, mode, options, `${route}_disabled`));
       continue;
     }
 
     try {
-      items.push(await adapter.compress(item, mode));
+      items.push(await adapter.compress(item, mode, options));
     } catch (error) {
       const reason = error instanceof Error ? error.message : "compression_failed";
       const diagnostic = getLlmDiagnostic(error);
@@ -1075,13 +2335,16 @@ export async function compressExportDataset(
         exportPromptProfile: failureContext?.exportPromptProfile,
         primaryInvalidReason: failureContext?.primaryInvalidReason,
         fallbackInvalidReason: failureContext?.fallbackInvalidReason,
+        llmAttemptMetrics: failureContext?.llmAttemptMetrics,
       });
-      items.push(buildLocalFallback(item, mode, reason, diagnostic, failureContext));
+      items.push(
+        buildLocalFallback(item, mode, options, reason, diagnostic, failureContext)
+      );
     }
   }
 
   return {
     items,
-    notice: buildCompressionNotice(items, mode),
+    notice: buildCompressionNotice(items, mode, options),
   };
 }

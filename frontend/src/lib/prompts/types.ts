@@ -46,6 +46,7 @@ export interface ExportCompressionPromptPayload {
   conversationPlatform?: string;
   conversationOriginAt?: number;
   messages: Message[];
+  transcriptOverride?: string;
   locale?: "zh" | "en";
   profile?: ExportPromptProfile;
 }

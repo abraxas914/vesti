@@ -33,6 +33,17 @@ The current shipped profiles are also a bridge-state compromise:
 - compatibility re-export stubs still exist at `frontend/src/lib/prompts/exportCompact.ts` and `frontend/src/lib/prompts/exportSummary.ts` to avoid breaking existing imports while ownership is being cleaned up
 - dormant `E1` planner prompts now exist as review artifacts, but current runtime still starts at `E3`
 - the handoff distillation prototype now exists offline, but it does not alter shipping runtime ownership
+- `compactComposer.ts` now also carries an `experimental` conditional-handoff variant that is available from the Compact export panel for explicit side-by-side download; default runtime still stays on the `current` exact-heading contract
+- the plugin-visible experimental compact line now adds:
+  - completeness guards against dangling cue lines / half-open code blocks
+  - type-driven routing that moves `.md` / architecture-document paths toward `Descriptive Anchors`
+  - weak-density diagnostics (`absolute floor + soft warning`) to catch obviously over-thin handoffs without forcing a fixed compression ratio
+  - dedicated transcript packing (`first 4 turns + Middle Signals + last 12 turns`) so the LLM sees opening context, latest state, and middle causal evidence instead of a blind hard cut of the full transcript
+  - distilled-execution-state framing instead of brevity-oriented compression language
+  - six runtime conversation types, adding `generation` for framework / concept / draft creation threads
+  - export-scoped `maxTokens` overrides for experimental compact only, without changing global settings
+  - a diagnostic-only deterministic fallback; expert-ready review samples should come from the experimental LLM line, not from deterministic fallback output
+- `summary` is intentionally frozen on the shipping note-schema path for this round; it is not part of the conditional-handoff experiment
 
 ## Target phase 1 inventory after decomposition
 

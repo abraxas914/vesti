@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   ExportCompressionPromptPayload,
   PromptVersion,
 } from "../types";
@@ -6,6 +6,24 @@ import {
   formatExportDateTime,
   toExportTranscript,
 } from "./shared";
+
+export const CONDITIONAL_HANDOFF_TYPES = [
+  "decision",
+  "debugging",
+  "architecture_tradeoff",
+  "explanation_teaching",
+  "process_agreement",
+  "generation",
+] as const;
+
+export const CONDITIONAL_HANDOFF_SECTION_WHITELIST = [
+  "## Decisions And Reasoning",
+  "## Failed Or Rejected Paths",
+  "## User Context And Corrections",
+  "## Descriptive Anchors",
+  "## Key Understanding",
+  "## Open Risks And Next Actions",
+] as const;
 
 const EXPORT_COMPACT_SYSTEM = `You are Vesti's export compaction assistant.
 
@@ -39,8 +57,64 @@ const COMPACT_ARTIFACT_EXEMPLAR = `## Reusable Artifacts
 - API/Function: handleSelectFromMenu(...)
 - Command: pnpm -C frontend build`;
 
+const CONDITIONAL_HANDOFF_SYSTEM = `You are Vesti's experimental distilled handoff assistant.
+
+Your only goal is to distill the essential execution state from this conversation into a handoff document that gives the next AI or engineer complete situational awareness before they continue.
+
+Before writing any section, classify the conversation into one or two dominant types. Choose only from:
+- decision
+- debugging
+- architecture_tradeoff
+- explanation_teaching
+- process_agreement
+- generation
+
+Output contract:
+1) Line 1 must be: StartedAt: <grounded timestamp or unknown>
+2) Line 2 must be: Conversation Type: <one type or type_a + type_b>
+3) After that, emit only grounded sections from this whitelist, in this order, skipping any section that has no grounded evidence:
+- ## Decisions And Reasoning
+- ## Failed Or Rejected Paths
+- ## User Context And Corrections
+- ## Descriptive Anchors
+- ## Key Understanding
+- ## Open Risks And Next Actions
+
+Type-driven priorities:
+- decision: keep chosen paths, full reasoning, rejected alternatives, and continuation risks first.
+- debugging: keep the full causal chain, especially failed paths and why they failed.
+- architecture_tradeoff: keep constraints, compared options, and rejected paths.
+- explanation_teaching: keep the final understanding model and only include anchors that truly help the next agent orient.
+- process_agreement: keep user preferences, collaboration boundaries, and explicit do-not-do rules.
+- generation: keep parallel candidate frames, generated directions, and the criteria that should guide later selection or expansion.
+
+Hard rules:
+1) Use only grounded evidence from the transcript.
+2) Do not invent categories or force a section to appear just because it exists in the whitelist.
+3) Do not output headings outside the whitelist.
+4) If the transcript is formula-heavy or explanation-heavy, do not treat symbolic expressions as file paths, commands, or APIs unless they are explicit technical artifacts.
+5) If Conversation Type includes architecture_tradeoff or decision, treat markdown/doc paths and architecture notes as descriptive anchors, not reusable technical artifacts. Reserve artifact-like evidence for grounded code, CLI commands, APIs, and function signatures.
+6) If Conversation Type includes debugging, concrete file paths may be kept when they are paired with grounded commands, APIs, or function names that help continuation.
+7) Do not shorten content to achieve brevity. Shorten only to remove noise.
+8) A good handoff may be longer than expected when the thread contains dense reasoning or multiple competing paths.
+9) Preserve the full reasoning trail for every significant decision: what was chosen, why, what was rejected, and what remains risky.
+10) Preserve concrete artifacts only when they are truly reusable for continuation.
+11) Every section you open must be closed with at least one substantive line.
+12) If you cannot complete a section with grounded evidence, skip it or use a single conservative line. Never leave a heading, label, colon, table row, or code block half-open.
+13) Prefer bullets over tables. Use fenced code blocks only when the code itself is grounded evidence the next agent may directly reuse.
+14) Respect the requested locale.
+15) Output markdown only. Do not wrap the whole answer in code fences.`;
+
+const CONDITIONAL_HEADER_EXEMPLAR = `StartedAt: Mar 18, 2026, 03:10 PM
+Conversation Type: debugging + decision`;
+
+const CONDITIONAL_SECTION_EXEMPLAR = `## Failed Or Rejected Paths
+- Tried local recursive repair.
+  Why it was rejected: It would hide whether the real failure came from prompt quality or from broken stage boundaries.`;
+
 function buildCompactPrompt(payload: ExportCompressionPromptPayload): string {
   const isStepProfile = payload.profile === "step_flash_concise";
+  const transcript = payload.transcriptOverride ?? toExportTranscript(payload.messages);
   const brevityRule = isStepProfile
     ? "Keep bullets concise and prioritize grounded artifacts over narrative polish."
     : "Preserve the full implementation trail when it is grounded, even if the output becomes longer.";
@@ -59,7 +133,7 @@ Metadata:
 - MessageCount: ${payload.messages.length}
 
 Transcript:
-${toExportTranscript(payload.messages)}
+${transcript}
 
 Output requirements:
 1) Use the exact headings listed in the system prompt.
@@ -85,6 +159,7 @@ ${COMPACT_ARTIFACT_EXEMPLAR}`;
 function buildCompactFallbackPrompt(
   payload: ExportCompressionPromptPayload
 ): string {
+  const transcript = payload.transcriptOverride ?? toExportTranscript(payload.messages);
   const fallbackNote =
     payload.profile === "step_flash_concise"
       ? "Prefer fewer bullets, but keep the contract safer: preserve grounded files, commands, APIs, and unresolved work."
@@ -122,7 +197,114 @@ Safe anchors:
 - Command: <grounded command if present>
 
 Transcript:
-${toExportTranscript(payload.messages)}`;
+${transcript}`;
+}
+
+function buildConditionalHandoffPrompt(
+  payload: ExportCompressionPromptPayload
+): string {
+  const transcript = payload.transcriptOverride ?? toExportTranscript(payload.messages);
+  const profileNote =
+    payload.profile === "step_flash_concise"
+      ? "Keep the handoff lean, but do not drop the information the next agent would most regret missing."
+      : "Favor transfer fidelity over smooth prose: preserve the real epistemic structure of the thread, not a pretty summary.";
+
+  return `Create an experimental distilled execution-state handoff for this conversation.
+
+Metadata:
+- Title: ${payload.conversationTitle || "(untitled)"}
+- Platform: ${payload.conversationPlatform || "unknown"}
+- StartedAt: ${
+    payload.conversationOriginAt
+      ? formatExportDateTime(payload.conversationOriginAt)
+      : "unknown"
+  }
+- Locale: ${payload.locale || "zh"}
+- MessageCount: ${payload.messages.length}
+
+Transcript:
+${transcript}
+
+Workflow:
+1) Before writing, classify the dominant conversation type using exactly one or two labels from the system prompt.
+2) Ask yourself: what would the next agent most regret not knowing?
+3) Use that answer to decide which whitelist sections should appear.
+4) Skip any section that has no grounded evidence instead of forcing structure onto the transcript.
+5) The transcript may contain a Middle Signals block distilled from omitted turns. Treat those signals as grounded evidence summary from the omitted turns and use them to recover decision causality, generated directions, and continuation state without inventing missing details.
+
+Additional rules:
+1) Use the first line exactly as StartedAt: <value>.
+2) Use the second line exactly as Conversation Type: <type or type_a + type_b>.
+3) Then use only whitelist headings, in whitelist order.
+4) Distill execution state, do not compress for compactness. Remove noise, not situational awareness.
+5) For debugging threads, preserve the full causal chain when it exists: tried X, failed because Y, resolved with Z, residual issue W.
+6) For architecture_tradeoff or decision threads, preserve each significant decision with what was chosen, why, what was rejected, and what remains risky.
+7) For explanation_teaching threads, prioritize the final understanding or clarified mental model over artifact lists.
+8) For process_agreement threads, prioritize user preferences, do-not-do rules, and collaboration boundaries.
+9) For generation threads, preserve parallel candidate frames, generated directions, and any criteria that should guide later selection or expansion. Do not force false convergence.
+10) For architecture_tradeoff or decision threads, route \`.md\` / README / architecture document paths into ## Descriptive Anchors instead of treating them as primary reusable evidence.
+11) For formula-heavy or explanation-heavy threads, only preserve artifacts when they are explicit file paths, CLI commands, or API/function signatures.
+12) Never end ## Descriptive Anchors or ## Key Understanding with an unfinished cue line such as "something:" with no grounded content after it.
+13) Do not open a table or fenced code block unless you can finish it.
+14) A good handoff may be longer than expected when the thread contains dense reasoning. Do not shorten content to achieve brevity.
+15) ${profileNote}
+16) Write the final output in ${payload.locale === "en" ? "natural English" : "natural Chinese"}.
+17) Output markdown only.
+
+Contract anchors:
+${CONDITIONAL_HEADER_EXEMPLAR}
+
+Example grounded section shape:
+${CONDITIONAL_SECTION_EXEMPLAR}`;
+}
+
+function buildConditionalHandoffFallbackPrompt(
+  payload: ExportCompressionPromptPayload
+): string {
+  const transcript = payload.transcriptOverride ?? toExportTranscript(payload.messages);
+  return `Write a conservative experimental distilled handoff using this contract.
+
+Required first two lines:
+StartedAt: ${
+    payload.conversationOriginAt
+      ? formatExportDateTime(payload.conversationOriginAt)
+      : "unknown"
+  }
+Conversation Type: <one type or type_a + type_b from the allowed set>
+
+Allowed headings only, in this order, and only when grounded:
+${CONDITIONAL_HANDOFF_SECTION_WHITELIST.join("\n")}
+
+Fallback priorities:
+- Keep at least one grounded section.
+- If the thread is explanation-heavy, prefer ## Key Understanding.
+- If the thread is process-heavy, prefer ## User Context And Corrections.
+- If the thread is debugging-heavy, prefer ## Failed Or Rejected Paths and ## Open Risks And Next Actions.
+- If the thread is generation-heavy, preserve parallel candidate frames and selection criteria instead of forcing a single final answer.
+- If the thread is architecture_tradeoff or decision-heavy, put \`.md\` / README / architecture doc paths in ## Descriptive Anchors instead of treating them as primary reusable evidence.
+- If the thread is formula-heavy, do not turn symbolic expressions into artifacts.
+- Distill complete situational awareness. Do not shorten content just to make it brief.
+- Every section you open must contain at least one substantive line.
+- If you cannot finish a section, skip it or write one conservative line; never leave a heading, colon, table row, or code block half-open.
+- Prefer bullets over tables.
+- Use ${payload.locale === "en" ? "English" : "Chinese"}.
+- Output markdown only.
+
+Safe section anchors:
+## Descriptive Anchors
+- Path: <grounded doc path, file path, stack label, or domain anchor that helps the next agent orient itself>
+
+## User Context And Corrections
+- <grounded user preference, correction, or explicit do-not-do rule>
+
+## Key Understanding
+- <grounded concept, clarified model, or distilled explanation>
+
+## Open Risks And Next Actions
+- <grounded unresolved risk, follow-up, or continuation need>
+
+Transcript:
+${transcript}`;
 }
 
 export const CURRENT_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
@@ -137,11 +319,12 @@ export const CURRENT_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromp
 };
 
 export const EXPERIMENTAL_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v1.2.2-export-compact-fallback-anchored-exp",
-  createdAt: "2026-03-18",
-  description: "Experimental compact export handoff variant aligned with the current fallback-anchored prompt.",
-  system: EXPORT_COMPACT_SYSTEM,
-  fallbackSystem: "You are a cautious technical export assistant. Output markdown only.",
-  userTemplate: buildCompactPrompt,
-  fallbackTemplate: buildCompactFallbackPrompt,
+  version: "v0.1.1-export-compact-conditional-handoff-integrity",
+  createdAt: "2026-03-19",
+  description:
+    "Experimental compact handoff variant with conditional sections, completeness guards, and plugin-visible runtime export support.",
+  system: CONDITIONAL_HANDOFF_SYSTEM,
+  fallbackSystem: "You are a conservative conditional handoff assistant. Output markdown only.",
+  userTemplate: buildConditionalHandoffPrompt,
+  fallbackTemplate: buildConditionalHandoffFallbackPrompt,
 };

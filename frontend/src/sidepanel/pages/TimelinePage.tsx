@@ -28,6 +28,7 @@ import {
   exportConversations,
 } from "../utils/exportConversations";
 import type {
+  ConversationExportCompactVariant,
   ConversationExportContentMode,
   ConversationExportFormat,
 } from "../types/export";
@@ -111,6 +112,8 @@ export function TimelinePage({
   const [visibleConversations, setVisibleConversations] = useState<Conversation[]>([]);
   const [exportMode, setExportMode] =
     useState<ConversationExportContentMode>("full");
+  const [compactVariant, setCompactVariant] =
+    useState<ConversationExportCompactVariant>("current");
   const [selectedExportFormat, setSelectedExportFormat] =
     useState<ConversationExportFormat>("md");
   const [batchActionKey, setBatchActionKey] = useState<string | null>(null);
@@ -242,6 +245,7 @@ export function TimelinePage({
       closePanel();
       return;
     }
+    setCompactVariant("current");
     setSelectedExportFormat("md");
     openExportPanel();
   }, [batchMode, clearCopySuccess, closePanel, openExportPanel]);
@@ -272,7 +276,7 @@ export function TimelinePage({
       const actionHint =
         action === "download"
           ? `Saved as ${result.filename}.`
-          : "Copied current export to clipboard.";
+          : "Copied export to clipboard.";
 
       if (
         result.notice?.title ||
@@ -296,11 +300,11 @@ export function TimelinePage({
         message:
           action === "download"
             ? result.notice
-              ? `${result.notice.message} Saved as ${result.filename}.`
+            ? `${result.notice.message} Saved as ${result.filename}.`
               : `Exported ${result.filename}`
             : result.notice
-              ? `${result.notice.message} Copied current export to clipboard.`
-              : `Copied current ${result.filename.split(".").pop()?.toUpperCase() || "export"} export to clipboard.`,
+              ? `${result.notice.message} Copied export to clipboard.`
+              : `Copied ${result.filename.split(".").pop()?.toUpperCase() || "export"} export to clipboard.`,
         tone: result.notice?.tone ?? "default",
       };
     },
@@ -317,6 +321,7 @@ export function TimelinePage({
       try {
         const result = await exportConversations(selectedConversations, {
           contentMode: exportMode,
+          compactVariant,
           format,
         });
         if (action === "download") {
@@ -367,6 +372,7 @@ export function TimelinePage({
       buildExportFeedback,
       clearCopySuccess,
       closePanel,
+      compactVariant,
       exportMode,
       markCopySuccess,
       selectedConversations,
@@ -386,6 +392,14 @@ export function TimelinePage({
     (mode: ConversationExportContentMode) => {
       clearCopySuccess();
       setExportMode(mode);
+    },
+    [clearCopySuccess]
+  );
+
+  const handleCompactVariantChange = useCallback(
+    (variant: ConversationExportCompactVariant) => {
+      clearCopySuccess();
+      setCompactVariant(variant);
     },
     [clearCopySuccess]
   );
@@ -650,6 +664,7 @@ export function TimelinePage({
           <BatchActionBar
             mode={activeBatchMode}
             exportMode={exportMode}
+            compactVariant={compactVariant}
             selectedExportFormat={selectedExportFormat}
             selectedCount={selectedCount}
             totalCount={totalCount}
@@ -660,6 +675,7 @@ export function TimelinePage({
             feedback={batchFeedback}
             onDeleteConfirmValueChange={setDeleteConfirmValue}
             onExportModeChange={handleExportModeChange}
+            onCompactVariantChange={handleCompactVariantChange}
             onExportFormatChange={handleExportFormatChange}
             onSelectAll={isAllSelected ? handleClearSelection : selectAll}
             onClearSelection={handleClearSelection}

@@ -16,6 +16,9 @@ export const CONDITIONAL_HANDOFF_TYPES = [
   "generation",
 ] as const;
 
+export const CONDITIONAL_HANDOFF_OVERVIEW_HEADING =
+  "## State Overview" as const;
+
 export const CONDITIONAL_HANDOFF_SECTION_WHITELIST = [
   "## Decisions And Reasoning",
   "## Failed Or Rejected Paths",
@@ -72,7 +75,8 @@ Before writing any section, classify the conversation into one or two dominant t
 Output contract:
 1) Line 1 must be: StartedAt: <grounded timestamp or unknown>
 2) Line 2 must be: Conversation Type: <one type or type_a + type_b>
-3) After that, emit only grounded sections from this whitelist, in this order, skipping any section that has no grounded evidence:
+3) The first markdown section must be exactly: ## State Overview
+4) After ## State Overview, emit only grounded sections from this whitelist, in this order, skipping any section that has no grounded evidence:
 - ## Decisions And Reasoning
 - ## Failed Or Rejected Paths
 - ## User Context And Corrections
@@ -91,7 +95,7 @@ Type-driven priorities:
 Hard rules:
 1) Use only grounded evidence from the transcript.
 2) Do not invent categories or force a section to appear just because it exists in the whitelist.
-3) Do not output headings outside the whitelist.
+3) Do not output headings outside ${CONDITIONAL_HANDOFF_OVERVIEW_HEADING} plus the whitelist.
 4) If the transcript is formula-heavy or explanation-heavy, do not treat symbolic expressions as file paths, commands, or APIs unless they are explicit technical artifacts.
 5) If Conversation Type includes architecture_tradeoff or decision, treat markdown/doc paths and architecture notes as descriptive anchors, not reusable technical artifacts. Reserve artifact-like evidence for grounded code, CLI commands, APIs, and function signatures.
 6) If Conversation Type includes debugging, concrete file paths may be kept when they are paired with grounded commands, APIs, or function names that help continuation.
@@ -102,11 +106,15 @@ Hard rules:
 11) Every section you open must be closed with at least one substantive line.
 12) If you cannot complete a section with grounded evidence, skip it or use a single conservative line. Never leave a heading, label, colon, table row, or code block half-open.
 13) Prefer bullets over tables. Use fenced code blocks only when the code itself is grounded evidence the next agent may directly reuse.
-14) Respect the requested locale.
-15) Output markdown only. Do not wrap the whole answer in code fences.`;
+14) ## State Overview must be continuous public prose, not hidden reasoning and not a bullet list. It must explain what this thread is about, what core problem it is resolving, what constraints or decisions now define the state, and what the next agent is inheriting.
+15) Respect the requested locale.
+16) Output markdown only. Do not wrap the whole answer in code fences.`;
 
 const CONDITIONAL_HEADER_EXEMPLAR = `StartedAt: Mar 18, 2026, 03:10 PM
 Conversation Type: debugging + decision`;
+
+const CONDITIONAL_OVERVIEW_EXEMPLAR = `## State Overview
+This thread is converging on a bounded export workflow for AI handoff. The core problem is how to preserve enough execution state for the next agent without reopening upstream stages or hiding whether failures come from prompt quality or from broken workflow boundaries. The current state is that repair is being locked to a one-shot exception path, rejected loop-like alternatives are now part of the handoff record, and the next agent inherits a workflow that must stay explicit, bounded, and debuggable.`;
 
 const CONDITIONAL_SECTION_EXEMPLAR = `## Failed Or Rejected Paths
 - Tried local recursive repair.
@@ -228,31 +236,39 @@ ${transcript}
 Workflow:
 1) Before writing, classify the dominant conversation type using exactly one or two labels from the system prompt.
 2) Ask yourself: what would the next agent most regret not knowing?
-3) Use that answer to decide which whitelist sections should appear.
-4) Skip any section that has no grounded evidence instead of forcing structure onto the transcript.
-5) The transcript may contain a Middle Signals block distilled from omitted turns. Treat those signals as grounded evidence summary from the omitted turns and use them to recover decision causality, generated directions, and continuation state without inventing missing details.
+3) First answer that question in ## State Overview using continuous prose, not bullets.
+4) Use that answer to decide which whitelist sections should appear.
+5) Skip any section that has no grounded evidence instead of forcing structure onto the transcript.
+6) The transcript may contain Middle Evidence Windows distilled from omitted turns. Treat those windows as grounded evidence excerpts from the omitted turns and use them to recover decision causality, generated directions, and continuation state without inventing missing details.
 
 Additional rules:
 1) Use the first line exactly as StartedAt: <value>.
 2) Use the second line exactly as Conversation Type: <type or type_a + type_b>.
-3) Then use only whitelist headings, in whitelist order.
-4) Distill execution state, do not compress for compactness. Remove noise, not situational awareness.
-5) For debugging threads, preserve the full causal chain when it exists: tried X, failed because Y, resolved with Z, residual issue W.
-6) For architecture_tradeoff or decision threads, preserve each significant decision with what was chosen, why, what was rejected, and what remains risky.
-7) For explanation_teaching threads, prioritize the final understanding or clarified mental model over artifact lists.
-8) For process_agreement threads, prioritize user preferences, do-not-do rules, and collaboration boundaries.
-9) For generation threads, preserve parallel candidate frames, generated directions, and any criteria that should guide later selection or expansion. Do not force false convergence.
-10) For architecture_tradeoff or decision threads, route \`.md\` / README / architecture document paths into ## Descriptive Anchors instead of treating them as primary reusable evidence.
-11) For formula-heavy or explanation-heavy threads, only preserve artifacts when they are explicit file paths, CLI commands, or API/function signatures.
-12) Never end ## Descriptive Anchors or ## Key Understanding with an unfinished cue line such as "something:" with no grounded content after it.
-13) Do not open a table or fenced code block unless you can finish it.
-14) A good handoff may be longer than expected when the thread contains dense reasoning. Do not shorten content to achieve brevity.
-15) ${profileNote}
-16) Write the final output in ${payload.locale === "en" ? "natural English" : "natural Chinese"}.
-17) Output markdown only.
+3) The first markdown heading must be ${CONDITIONAL_HANDOFF_OVERVIEW_HEADING}.
+4) ## State Overview must be public handoff prose, not hidden chain-of-thought, and it must reconnect the thread into one coherent story.
+5) After ## State Overview, use only whitelist headings, in whitelist order.
+6) Distill execution state, do not compress for compactness. Remove noise, not situational awareness.
+7) For debugging threads, preserve the full causal chain when it exists: tried X, failed because Y, resolved with Z, residual issue W.
+8) For architecture_tradeoff or decision threads, preserve each significant decision with what was chosen, why, what was rejected, and what remains risky.
+9) For explanation_teaching threads, prioritize the final understanding or clarified mental model over artifact lists.
+10) For process_agreement threads, prioritize user preferences, do-not-do rules, and collaboration boundaries.
+11) For generation threads, preserve parallel candidate frames, generated directions, and any criteria that should guide later selection or expansion. Do not force false convergence.
+12) For architecture_tradeoff or decision threads, route \`.md\` / README / architecture document paths into ## Descriptive Anchors instead of treating them as primary reusable evidence.
+13) For formula-heavy or explanation-heavy threads, only preserve artifacts when they are explicit file paths, CLI commands, or API/function signatures.
+14) Never end ## Descriptive Anchors or ## Key Understanding with an unfinished cue line such as "something:" with no grounded content after it.
+15) Do not open a table or fenced code block unless you can finish it.
+16) A good handoff is not a short summary. A good handoff may be longer than expected when the thread contains dense reasoning.
+17) Do not shorten content to achieve brevity. Shorten only to remove noise.
+18) For dense architecture threads, use ## State Overview to explain why the discussion exists, what tradeoff space was explored, and what current design state now holds.
+19) ${profileNote}
+20) Write the final output in ${payload.locale === "en" ? "natural English" : "natural Chinese"}.
+21) Output markdown only.
 
 Contract anchors:
 ${CONDITIONAL_HEADER_EXEMPLAR}
+
+Required prose overview shape:
+${CONDITIONAL_OVERVIEW_EXEMPLAR}
 
 Example grounded section shape:
 ${CONDITIONAL_SECTION_EXEMPLAR}`;
@@ -272,10 +288,16 @@ StartedAt: ${
   }
 Conversation Type: <one type or type_a + type_b from the allowed set>
 
+Required first markdown section:
+${CONDITIONAL_HANDOFF_OVERVIEW_HEADING}
+<continuous prose explaining what this thread is about, what problem it is resolving, what constraints or decisions now define the state, and what the next agent inherits>
+
 Allowed headings only, in this order, and only when grounded:
 ${CONDITIONAL_HANDOFF_SECTION_WHITELIST.join("\n")}
 
 Fallback priorities:
+- Always write ${CONDITIONAL_HANDOFF_OVERVIEW_HEADING} before any conditional section.
+- The overview must be prose, not bullets.
 - Keep at least one grounded section.
 - If the thread is explanation-heavy, prefer ## Key Understanding.
 - If the thread is process-heavy, prefer ## User Context And Corrections.
@@ -291,6 +313,9 @@ Fallback priorities:
 - Output markdown only.
 
 Safe section anchors:
+${CONDITIONAL_HANDOFF_OVERVIEW_HEADING}
+This thread is about <grounded thread goal>. The core problem is <grounded problem>. The current state is <grounded state> and the next agent inherits <grounded continuation state>.
+
 ## Descriptive Anchors
 - Path: <grounded doc path, file path, stack label, or domain anchor that helps the next agent orient itself>
 
@@ -319,10 +344,10 @@ export const CURRENT_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromp
 };
 
 export const EXPERIMENTAL_EXPORT_COMPACT_PROMPT: PromptVersion<ExportCompressionPromptPayload> = {
-  version: "v0.1.1-export-compact-conditional-handoff-integrity",
+  version: "v0.1.2-export-compact-distilled-state-overview",
   createdAt: "2026-03-19",
   description:
-    "Experimental compact handoff variant with conditional sections, completeness guards, and plugin-visible runtime export support.",
+    "Experimental compact handoff variant with a mandatory prose state overview, richer distillation framing, and plugin-visible runtime export support.",
   system: CONDITIONAL_HANDOFF_SYSTEM,
   fallbackSystem: "You are a conservative conditional handoff assistant. Output markdown only.",
   userTemplate: buildConditionalHandoffPrompt,

@@ -107,8 +107,10 @@ The long-term export contract now distinguishes between:
 - note: the experimental line now carries explicit completeness guards, type-driven routing for doc paths versus reusable technical evidence, and runtime weak-density diagnostics (`absolute floor + soft warning`) so downloaded handoffs can be reviewed as artifacts instead of as prompt modules
 - note: the experimental line is now framed as distilled execution state, not brevity-oriented compression
 - note: the experimental taxonomy now accepts six labels: `decision`, `debugging`, `architecture_tradeoff`, `explanation_teaching`, `process_agreement`, `generation`
-- note: experimental runtime now uses dedicated transcript packing (`first 4 turns + Middle Signals + last 12 turns`) instead of blind full-transcript truncation
+- note: experimental runtime now uses dedicated transcript packing (`first 4 turns + Middle Evidence Windows + last 12 turns`) instead of blind full-transcript truncation
 - note: experimental runtime also applies export-scoped `maxTokens` overrides so long-thread handoffs are not limited by the global default token ceiling
+- note: experimental runtime now requires a prose `## State Overview` section immediately after `StartedAt` and `Conversation Type`; this section must explain what the thread is about, what problem it is resolving, what state now holds, and what the next agent inherits
+- note: experimental transcript packing now upgrades the middle block from short signal lines to grounded evidence windows so dense rationale survives omission
 - note: deterministic experimental fallback is diagnostic-only; expert-facing sample readiness currently requires the experimental LLM line, not the deterministic fallback body
 
 ### `export_e3_summary_composer`
@@ -177,6 +179,7 @@ Phase 1 activation is intentionally narrower:
 - the current shipping runtime still begins at `E3`; dormant and prototype artifacts must be labeled clearly until they are actually wired into runtime
 - `summary` remains frozen on the shipping note-schema path for this round; conditional-structure work is limited to `compact/handoff`
 - downloaded experimental handoffs must preserve section completeness: no dangling cue lines, no half-open code blocks, and no empty conditional sections after a heading is opened
+- downloaded experimental handoffs must include a prose-like `## State Overview`; bullet-only overviews or empty shell paragraphs are invalid
 - experimental diagnostics must distinguish failed LLM attempt lengths from the final delivered artifact length so notice text does not conflate invalid LLM output with the locally delivered fallback body
 
 ## Offline distillation prototype

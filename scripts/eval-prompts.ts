@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { getPrompt } from "../frontend/src/lib/prompts";
 import {
+  CONDITIONAL_HANDOFF_OVERVIEW_HEADING,
   CONDITIONAL_HANDOFF_SECTION_WHITELIST,
   CONDITIONAL_HANDOFF_TYPES,
 } from "../frontend/src/lib/prompts/export/compactComposer";
@@ -24,6 +25,7 @@ type ParsedExportMarkdown = {
   contract: ExportContractMode;
   startedAt?: string;
   conversationTypes?: string[];
+  stateOverview?: string;
 };
 
 type Cli = { mode: Mode; variant: Variant; updateBaseline: boolean; strict: boolean; debugRaw: boolean; throttleMs: number; caseFilter: string; limit: number; caseDelayMs: number };
@@ -624,6 +626,36 @@ function countCodeFenceMarkers(value: string): number {
   return (value.match(/```/g) || []).length;
 }
 
+function isBulletLikeLine(value: string): boolean {
+  const trimmed = value.trim();
+  return /^[-*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed);
+}
+
+function isProseLikeOverview(value: string): boolean {
+  const lines = value
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("```"));
+
+  if (lines.length === 0) {
+    return false;
+  }
+
+  const proseLines = lines.filter((line) => !isBulletLikeLine(line));
+  if (proseLines.length === 0) {
+    return false;
+  }
+
+  const proseText = proseLines.join(" ");
+  const sentenceCount = proseText
+    .split(/(?<=[。！？!?])\s*|(?<=[.!?])\s+/)
+    .map((line) => line.trim())
+    .filter((line) => isCompleteSentence(line)).length;
+
+  return sentenceCount >= 2 || (proseLines.length >= 2 && proseText.length >= 140);
+}
+
 function findDanglingCueLines(value: string): string[] {
   const lines = value.replace(/\r\n/g, "\n").split("\n");
   const dangling: string[] = [];
@@ -729,7 +761,10 @@ function parseConditionalHandoffMarkdown(
 
     if (trimmed.startsWith("## ")) {
       seenFirstHeading = true;
-      if (!CONDITIONAL_HANDOFF_SECTIONS.includes(trimmed)) {
+      if (
+        trimmed !== CONDITIONAL_HANDOFF_OVERVIEW_HEADING &&
+        !CONDITIONAL_HANDOFF_SECTIONS.includes(trimmed)
+      ) {
         errors.push(`unknown conditional heading: ${trimmed}`);
         currentHeading = null;
         continue;
@@ -738,6 +773,18 @@ function parseConditionalHandoffMarkdown(
         errors.push(`duplicate heading: ${trimmed}`);
         currentHeading = trimmed;
         continue;
+      }
+      if (
+        sectionOrder.length === 0 &&
+        trimmed !== CONDITIONAL_HANDOFF_OVERVIEW_HEADING
+      ) {
+        errors.push("missing required State Overview heading");
+      }
+      if (
+        sectionOrder.length > 0 &&
+        trimmed === CONDITIONAL_HANDOFF_OVERVIEW_HEADING
+      ) {
+        errors.push("State Overview must be the first section");
       }
       rawSections[trimmed] = "";
       sectionOrder.push(trimmed);
@@ -757,12 +804,31 @@ function parseConditionalHandoffMarkdown(
       : rawLine;
   }
 
-  if (sectionOrder.length === 0) {
+  if (
+    sectionOrder.length === 0 ||
+    sectionOrder[0] !== CONDITIONAL_HANDOFF_OVERVIEW_HEADING
+  ) {
     errors.push("missing conditional sections");
   }
 
+  const stateOverview = (
+    rawSections[CONDITIONAL_HANDOFF_OVERVIEW_HEADING] || ""
+  ).trim();
+  if (!stateOverview) {
+    errors.push("missing State Overview body");
+  } else if (!hasExportMeaningfulText(stateOverview) || !isProseLikeOverview(stateOverview)) {
+    errors.push("State Overview is not prose-like");
+  }
+
+  const conditionalSectionOrder = sectionOrder.filter(
+    (heading) => heading !== CONDITIONAL_HANDOFF_OVERVIEW_HEADING
+  );
+  if (conditionalSectionOrder.length === 0) {
+    errors.push("missing whitelist conditional sections");
+  }
+
   const sections: Record<string, string> = {};
-  for (const heading of sectionOrder) {
+  for (const heading of conditionalSectionOrder) {
     sections[heading] = (rawSections[heading] || "").trim();
     if (!sections[heading] || !hasExportMeaningfulText(sections[heading])) {
       errors.push(`empty conditional section: ${heading}`);
@@ -778,7 +844,7 @@ function parseConditionalHandoffMarkdown(
     errors.push(`dangling cue line: ${danglingCueLines.join(" | ")}`);
   }
 
-  const observedOrder = sectionOrder.map((heading) =>
+  const observedOrder = conditionalSectionOrder.map((heading) =>
     CONDITIONAL_HANDOFF_SECTIONS.indexOf(heading)
   );
   const sortedOrder = [...observedOrder].sort((a, b) => a - b);
@@ -801,6 +867,7 @@ function parseConditionalHandoffMarkdown(
       contract: "conditional_handoff",
       startedAt,
       conversationTypes: conversationTypes || undefined,
+      stateOverview,
     },
     errors: [],
   };

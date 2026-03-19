@@ -1,6 +1,7 @@
 ﻿import { getPrompt } from "~lib/prompts";
 import type { ExportCompressionPromptPayload } from "~lib/prompts";
 import {
+  CONDITIONAL_HANDOFF_OVERVIEW_HEADING,
   CONDITIONAL_HANDOFF_SECTION_WHITELIST,
   CONDITIONAL_HANDOFF_TYPES,
 } from "~lib/prompts/export/compactComposer";
@@ -200,6 +201,10 @@ const PROCESS_AGREEMENT_CUE =
   /(?:\b(?:scope|branch|workflow|working agreement|style|communication|reporting|do not reopen|maintenance-only|keep the work scoped|do not mix)\b|范围|分支|协作|工作方式|约定|不要重开|维护模式|只做|不要混入|明确失败模式)/i;
 const GENERATION_CUE =
   /(?:\b(?:brainstorm|brainstorming|idea|ideas|draft|drafts|variant|variants|creative|concept|concepts|frame|frames|explore options|multiple options|candidate directions|generate|generated)\b|创作|生成|草案|框架构建|框架|变体|点子|脑暴|候选方向|并列方案)/i;
+const RATIONALE_CUE =
+  /(?:\b(?:because|why|reason|rationale|constraint|trade[- ]?off|so that|therefore|wins because)\b|因为|原因|理由|约束|权衡|所以|因此)/i;
+const REJECTED_PATH_CUE =
+  /(?:\b(?:reject|rejected|avoid|not use|do not use|don't use|instead of|would hide|would blur|not reopen|not mix)\b|拒绝|排除|不要|不做|不采用|会掩盖|不要重开|不要混入)/i;
 const MATH_HEAVY_CUE =
   /(?:\\(?:boxed|lambda|frac|sum|int|alpha|beta|gamma|theta|cdot|times|left|right|begin|end)|\$\$|\\\(|\\\)|\\\[|\\\]|[_^][{(A-Za-z0-9])/i;
 const SYMBOL_DENSE_LINE = /^[^A-Za-z0-9\u3400-\u9FFF]*[=+\-*/_^{}()[\]\\|<>.,:;]{3,}[^A-Za-z0-9\u3400-\u9FFF]*$/;
@@ -239,17 +244,19 @@ const EXPECTED_HEADINGS: Record<ExportCompressionMode, string[]> = {
   ],
 };
 const CONDITIONAL_HANDOFF_TYPE_SET = new Set<string>(CONDITIONAL_HANDOFF_TYPES);
+const CONDITIONAL_HANDOFF_ALLOWED_HEADINGS: string[] = [
+  CONDITIONAL_HANDOFF_OVERVIEW_HEADING,
+  ...CONDITIONAL_HANDOFF_SECTION_WHITELIST,
+];
 const CONDITIONAL_HANDOFF_SECTION_ORDER: string[] = [
   ...CONDITIONAL_HANDOFF_SECTION_WHITELIST,
 ];
-const EXPERIMENTAL_MIDDLE_SIGNAL_SECTIONS = [
-  "Decision Candidates",
-  "Rejected Paths",
-  "User Context",
-  "Candidate Frames",
-  "Selection Criteria",
-  "Open Risks",
-  "Key Understanding",
+const EXPERIMENTAL_EVIDENCE_WINDOW_LABELS = [
+  "Architecture / Decision Rationale",
+  "Rejected Path",
+  "User Constraint / Working Agreement",
+  "Unresolved Risk / Next Step",
+  "Explanation / Generation",
 ] as const;
 
 const ROUTE_STATUS: Record<
@@ -269,6 +276,7 @@ const ROUTE_STATUS: Record<
 type ConditionalHandoffParseResult = {
   startedAt: string;
   conversationTypes: string[];
+  stateOverview: string;
   sections: Record<string, string>;
 };
 
@@ -457,52 +465,138 @@ function sanitizeMessagesForExperimentalProcessing(messages: Message[]): Message
     .filter((message) => normalizeWhitespace(message.content_text).length > 0);
 }
 
-function buildMiddleSignalBlock(messages: Message[]): string | undefined {
+type ExperimentalEvidenceWindow = {
+  label: (typeof EXPERIMENTAL_EVIDENCE_WINDOW_LABELS)[number];
+  startIndex: number;
+  endIndex: number;
+  turns: Message[];
+};
+
+function scoreWindowCandidate(
+  message: Message,
+  label: (typeof EXPERIMENTAL_EVIDENCE_WINDOW_LABELS)[number]
+): number {
+  const text = message.content_text;
+  const lengthBonus = Math.min(4, Math.floor(normalizeWhitespace(text).length / 100));
+
+  switch (label) {
+    case "Architecture / Decision Rationale":
+      return (
+        (ARCHITECTURE_TRADEOFF_CUE.test(text) ? 6 : 0) +
+        (DECISION_CUE.test(text) ? 5 : 0) +
+        (RATIONALE_CUE.test(text) ? 4 : 0) +
+        (message.role === "ai" ? 1 : 0) +
+        lengthBonus
+      );
+    case "Rejected Path":
+      return (
+        (REJECTED_PATH_CUE.test(text) ? 7 : 0) +
+        (DEBUGGING_CUE.test(text) ? 2 : 0) +
+        (UNRESOLVED_CUE.test(text) ? 1 : 0) +
+        lengthBonus
+      );
+    case "User Constraint / Working Agreement":
+      return (
+        (message.role === "user" ? 3 : 0) +
+        (CONSTRAINT_CUE.test(text) ? 5 : 0) +
+        (PROCESS_AGREEMENT_CUE.test(text) ? 4 : 0) +
+        lengthBonus
+      );
+    case "Unresolved Risk / Next Step":
+      return (
+        (UNRESOLVED_CUE.test(text) ? 6 : 0) +
+        (DECISION_CUE.test(text) ? 1 : 0) +
+        lengthBonus
+      );
+    case "Explanation / Generation":
+      return (
+        (EXPLANATION_TEACHING_CUE.test(text) ? 4 : 0) +
+        (GENERATION_CUE.test(text) ? 5 : 0) +
+        (RATIONALE_CUE.test(text) ? 1 : 0) +
+        lengthBonus
+      );
+    default:
+      return 0;
+  }
+}
+
+function selectEvidenceWindow(
+  messages: Message[],
+  startOffset: number,
+  usedIndices: Set<number>,
+  label: (typeof EXPERIMENTAL_EVIDENCE_WINDOW_LABELS)[number]
+): ExperimentalEvidenceWindow | null {
+  let bestIndex = -1;
+  let bestScore = 0;
+
+  for (let index = 0; index < messages.length; index += 1) {
+    if (usedIndices.has(index)) {
+      continue;
+    }
+    const score = scoreWindowCandidate(messages[index], label);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  }
+
+  if (bestIndex < 0 || bestScore <= 0) {
+    return null;
+  }
+
+  let endIndex = bestIndex;
+  if (
+    bestIndex + 1 < messages.length &&
+    !usedIndices.has(bestIndex + 1) &&
+    messages[bestIndex + 1].role !== messages[bestIndex].role
+  ) {
+    endIndex = bestIndex + 1;
+  }
+
+  for (let index = bestIndex; index <= endIndex; index += 1) {
+    usedIndices.add(index);
+  }
+
+  return {
+    label,
+    startIndex: startOffset + bestIndex,
+    endIndex: startOffset + endIndex,
+    turns: messages.slice(bestIndex, endIndex + 1),
+  };
+}
+
+function buildMiddleEvidenceWindowBlock(
+  messages: Message[],
+  startOffset: number
+): string | undefined {
   if (messages.length === 0) {
     return undefined;
   }
 
-  const buckets: Array<{ label: (typeof EXPERIMENTAL_MIDDLE_SIGNAL_SECTIONS)[number]; values: string[] }> = [
-    {
-      label: "Decision Candidates",
-      values: collectDecisionLines(messages, 4),
-    },
-    {
-      label: "Rejected Paths",
-      values: collectRejectedPathLines(messages, 3),
-    },
-    {
-      label: "User Context",
-      values: collectUserContextLines(messages, 3),
-    },
-    {
-      label: "Candidate Frames",
-      values: collectGenerationDirectionLines(messages, 3),
-    },
-    {
-      label: "Selection Criteria",
-      values: collectSelectionCriteriaLines(messages, 3),
-    },
-    {
-      label: "Open Risks",
-      values: collectUnresolvedLines(messages, 3),
-    },
-    {
-      label: "Key Understanding",
-      values: collectKeyUnderstandingLines(messages, 3),
-    },
-  ].filter((bucket) => bucket.values.length > 0);
+  const usedIndices = new Set<number>();
+  const windows = EXPERIMENTAL_EVIDENCE_WINDOW_LABELS.map((label) =>
+    selectEvidenceWindow(messages, startOffset, usedIndices, label)
+  ).filter((window): window is ExperimentalEvidenceWindow => Boolean(window));
 
-  if (buckets.length === 0) {
+  if (windows.length === 0) {
     return undefined;
   }
 
-  const lines: string[] = [];
-  for (const bucket of buckets) {
-    lines.push(`${bucket.label}:`);
-    lines.push(...bucket.values.map((value) => `- ${value}`));
-  }
-  return lines.join("\n");
+  return windows
+    .slice(0, 5)
+    .map((window, index) => {
+      const turnRange =
+        window.startIndex === window.endIndex
+          ? `${window.startIndex + 1}`
+          : `${window.startIndex + 1}-${window.endIndex + 1}`;
+      return [
+        `### Window ${index + 1}: ${window.label} (turns ${turnRange})`,
+        ...window.turns.map((turn, turnOffset) =>
+          formatPackedTranscriptLine(turn, window.startIndex + turnOffset, 420)
+        ),
+      ].join("\n");
+    })
+    .join("\n\n");
 }
 
 function buildExperimentalPackedTranscript(messages: Message[]): string {
@@ -528,18 +622,21 @@ function buildExperimentalPackedTranscript(messages: Message[]): string {
   );
   const middle = ordered.slice(EXPERIMENTAL_PACKING.keepFirstMessages, tailStart);
   const tail = ordered.slice(tailStart);
-  const middleSignals = buildMiddleSignalBlock(middle);
+  const middleEvidenceWindows = buildMiddleEvidenceWindowBlock(
+    middle,
+    head.length
+  );
 
   const sections = [
     "[Opening Context]",
     ...head.map((message, index) => formatPackedTranscriptLine(message, index, 950)),
   ];
 
-  if (middleSignals) {
+  if (middleEvidenceWindows) {
     sections.push(
       "",
-      `[Middle Signals | grounded evidence summary from omitted ${middle.length} turns]`,
-      middleSignals
+      `[Middle Evidence Windows | grounded evidence excerpts from omitted ${middle.length} turns]`,
+      middleEvidenceWindows
     );
   }
 
@@ -603,6 +700,25 @@ function countAsciiWords(value: string): number {
   ).length;
 }
 
+function isBulletLikeLine(value: string): boolean {
+  const trimmed = value.trim();
+  return /^[-*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed);
+}
+
+function isSentenceLike(value: string): boolean {
+  const text = normalizeWhitespace(stripBulletPrefix(value));
+  if (!text) {
+    return false;
+  }
+  if (/[。！？.!?]$/.test(text)) {
+    return true;
+  }
+  if (countCjkChars(text) >= 10) {
+    return true;
+  }
+  return countAsciiWords(text) >= 5;
+}
+
 function hasMeaningfulText(value: string): boolean {
   const compact = normalizeWhitespace(
     value.replace(/[`#>*_]/g, " ").replace(/&middot;/g, " ")
@@ -629,6 +745,31 @@ function splitIntoSentences(text: string): string[] {
     .flatMap((line) => line.split(/(?<=[。！？!?])\s*|(?<=[.!?])\s+/))
     .map((line) => stripBulletPrefix(line.trim()))
     .filter((line) => line && !line.startsWith("```"));
+}
+
+function isProseLikeOverview(value: string): boolean {
+  const lines = value
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("```"));
+
+  if (lines.length === 0) {
+    return false;
+  }
+
+  const proseLines = lines.filter((line) => !isBulletLikeLine(line));
+  if (proseLines.length === 0) {
+    return false;
+  }
+
+  const proseText = proseLines.join(" ");
+  const sentenceCount = splitIntoSentences(proseText).filter(isSentenceLike).length;
+  if (sentenceCount >= 2) {
+    return true;
+  }
+
+  return proseLines.length >= 2 && proseText.length >= 140;
 }
 
 function scoreCandidate(value: string): number {
@@ -1244,6 +1385,78 @@ function buildConditionalSections(
   ).filter((section): section is { heading: string; lines: string[] } => Boolean(section));
 }
 
+function buildExperimentalStateOverview(
+  item: ConversationExportDatasetItem,
+  conversationTypes: string[]
+): string {
+  const messages = item.messages;
+  const threadLabel = shorten(
+    item.conversation.title ||
+      collectQuestionCandidates(messages, 1)[0] ||
+      item.conversation.snippet ||
+      "this thread",
+    120
+  ).replace(/[.。]$/, "");
+  const primaryQuestion = stripBulletPrefix(
+    collectQuestionCandidates(messages, 1)[0] || ""
+  ).replace(/[?？]$/, "");
+  const leadingDecision = stripBulletPrefix(
+    collectDecisionLines(messages, 1)[0] || ""
+  ).replace(/[.。]$/, "");
+  const leadingRejected = stripBulletPrefix(
+    collectRejectedPathLines(messages, 1)[0] || ""
+  ).replace(/[.。]$/, "");
+  const leadingConstraint = stripBulletPrefix(
+    collectUserContextLines(messages, 1)[0] || ""
+  ).replace(/[.。]$/, "");
+  const leadingUnderstanding = stripBulletPrefix(
+    collectKeyUnderstandingLines(messages, 1)[0] || ""
+  ).replace(/[.。]$/, "");
+  const leadingGeneration = stripBulletPrefix(
+    collectGenerationDirectionLines(messages, 1)[0] || ""
+  ).replace(/[.。]$/, "");
+  const nextState = stripBulletPrefix(
+    collectUnresolvedLines(messages, 1)[0] ||
+      collectSelectionCriteriaLines(messages, 1)[0] ||
+      ""
+  ).replace(/[.。]$/, "");
+
+  const typeSummary = conversationTypes.join(" + ");
+  const problemClause = conversationTypes.includes("architecture_tradeoff")
+    ? primaryQuestion ||
+      "evaluate a constrained design space and carry forward the chosen workflow shape"
+    : conversationTypes.includes("debugging")
+      ? primaryQuestion ||
+        "preserve the causal chain behind the failure and the chosen repair direction"
+      : conversationTypes.includes("process_agreement")
+        ? leadingConstraint ||
+          "lock the working agreement that should constrain the next iteration"
+        : conversationTypes.includes("generation")
+          ? leadingGeneration ||
+            "keep multiple candidate frames available instead of forcing false convergence"
+          : conversationTypes.includes("explanation_teaching")
+            ? leadingUnderstanding ||
+              "clarify the core model or explanation the next agent should inherit"
+            : primaryQuestion || "carry forward the essential execution state";
+  const stateClause =
+    leadingDecision ||
+    leadingUnderstanding ||
+    leadingConstraint ||
+    leadingGeneration ||
+    leadingRejected ||
+    "the thread already converged on several grounded constraints that the next agent should not rediscover";
+  const continuationClause =
+    nextState ||
+    leadingRejected ||
+    "the next agent should continue from this state without re-opening already settled paths";
+
+  return [
+    `This ${typeSummary} thread is about ${threadLabel} and exists to ${problemClause}.`,
+    `The current state is that ${stateClause}.`,
+    `The next agent inherits ${continuationClause}.`,
+  ].join(" ");
+}
+
 function buildExperimentalCompactFallback(
   item: ConversationExportDatasetItem,
   reason: string
@@ -1257,10 +1470,17 @@ function buildExperimentalCompactFallback(
     : "unknown";
   const conversationTypes = classifyConditionalConversation(filteredItem);
   const sections = buildConditionalSections(filteredItem);
+  const stateOverview = buildExperimentalStateOverview(
+    filteredItem,
+    conversationTypes
+  );
 
   const lines = [
     `StartedAt: ${startedAt || "unknown"}`,
     `Conversation Type: ${conversationTypes.join(" + ")}`,
+    "",
+    CONDITIONAL_HANDOFF_OVERVIEW_HEADING,
+    stateOverview,
   ];
 
   if (sections.length === 0) {
@@ -1683,10 +1903,22 @@ function extractConditionalHandoff(
     }
 
     if (trimmed.startsWith("## ")) {
-      if (!CONDITIONAL_HANDOFF_SECTION_ORDER.includes(trimmed)) {
+      if (!CONDITIONAL_HANDOFF_ALLOWED_HEADINGS.includes(trimmed)) {
         return null;
       }
       if (rawSections[trimmed] !== undefined) {
+        return null;
+      }
+      if (
+        sectionOrder.length === 0 &&
+        trimmed !== CONDITIONAL_HANDOFF_OVERVIEW_HEADING
+      ) {
+        return null;
+      }
+      if (
+        sectionOrder.length > 0 &&
+        trimmed === CONDITIONAL_HANDOFF_OVERVIEW_HEADING
+      ) {
         return null;
       }
       rawSections[trimmed] = "";
@@ -1704,11 +1936,32 @@ function extractConditionalHandoff(
       : rawLine;
   }
 
-  if (sectionOrder.length === 0) {
+  if (
+    sectionOrder.length === 0 ||
+    sectionOrder[0] !== CONDITIONAL_HANDOFF_OVERVIEW_HEADING
+  ) {
     return null;
   }
 
-  const observedOrder = sectionOrder.map((heading) =>
+  const stateOverview = (
+    rawSections[CONDITIONAL_HANDOFF_OVERVIEW_HEADING] || ""
+  ).trim();
+  if (
+    !stateOverview ||
+    !hasMeaningfulText(stateOverview) ||
+    !isProseLikeOverview(stateOverview)
+  ) {
+    return null;
+  }
+
+  const conditionalHeadings = sectionOrder.filter(
+    (heading) => heading !== CONDITIONAL_HANDOFF_OVERVIEW_HEADING
+  );
+  if (conditionalHeadings.length === 0) {
+    return null;
+  }
+
+  const observedOrder = conditionalHeadings.map((heading) =>
     CONDITIONAL_HANDOFF_SECTION_ORDER.indexOf(heading)
   );
   const sortedOrder = [...observedOrder].sort((a, b) => a - b);
@@ -1717,7 +1970,7 @@ function extractConditionalHandoff(
   }
 
   const sections: Record<string, string> = {};
-  for (const heading of sectionOrder) {
+  for (const heading of conditionalHeadings) {
     const sectionBody = (rawSections[heading] || "").trim();
     if (!sectionBody || !hasMeaningfulText(sectionBody)) {
       return null;
@@ -1728,6 +1981,7 @@ function extractConditionalHandoff(
   return {
     startedAt,
     conversationTypes,
+    stateOverview,
     sections,
   };
 }
@@ -1798,6 +2052,9 @@ function buildSoftCompressionWarning(
 
   return [
     label ? `${label}.` : null,
+    label === "Potential over-compressed risk"
+      ? "The handoff lacks enough situational density for confident continuation."
+      : null,
     `Output is below the soft density floor (${metrics.normalizedOutputChars}/${metrics.softMinChars} chars; transcript ${metrics.transcriptChars} chars).`,
   ]
     .filter(Boolean)

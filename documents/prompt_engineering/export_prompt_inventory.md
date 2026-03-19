@@ -38,10 +38,12 @@ The current shipped profiles are also a bridge-state compromise:
   - completeness guards against dangling cue lines / half-open code blocks
   - type-driven routing that moves `.md` / architecture-document paths toward `Descriptive Anchors`
   - weak-density diagnostics (`absolute floor + soft warning`) to catch obviously over-thin handoffs without forcing a fixed compression ratio
-  - dedicated transcript packing (`first 4 turns + Middle Signals + last 12 turns`) so the LLM sees opening context, latest state, and middle causal evidence instead of a blind hard cut of the full transcript
+  - dedicated transcript packing (`first 4 turns + Middle Evidence Windows + last 12 turns`) so the LLM sees opening context, latest state, and middle causal evidence instead of a blind hard cut of the full transcript
   - distilled-execution-state framing instead of brevity-oriented compression language
   - six runtime conversation types, adding `generation` for framework / concept / draft creation threads
   - export-scoped `maxTokens` overrides for experimental compact only, without changing global settings
+  - a required prose `## State Overview` section that gives the next agent situational awareness before any conditional headings appear
+  - middle evidence windows instead of one-line middle signals, so omitted turns still contribute fuller rationale evidence
   - a diagnostic-only deterministic fallback; expert-ready review samples should come from the experimental LLM line, not from deterministic fallback output
 - `summary` is intentionally frozen on the shipping note-schema path for this round; it is not part of the conditional-handoff experiment
 

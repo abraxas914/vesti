@@ -15,6 +15,7 @@ It exists to keep the next expert pass focused on downloaded handoff artifacts r
 - experimental handoff completeness and anti-truncation behavior
 - experimental transcript packing quality on long threads
 - experimental density after switching from compression framing to distilled execution-state framing
+- prose `## State Overview` quality and whether it gives the next agent enough situational awareness
 - stronger recall framing for `summary`
 - section-level exemplar effectiveness
 - reusable pattern / insight anchoring
@@ -47,8 +48,10 @@ The current shipped export prompts to review are:
 For `compact`, that file now contains two different lines that can both be exported from the plugin:
 - shipping `current`: exact 5-heading contract used as the default Compact path
 - plugin-visible `experimental`: `conditional_handoff_v0`, which keeps `StartedAt` + `Conversation Type` hard-coded and allows only a fixed whitelist of conditional sections
-- the experimental line now packs long transcripts as `first 4 turns + Middle Signals + last 12 turns` to prioritize LLM-delivered handoffs over deterministic fallback
+- the experimental line now packs long transcripts as `first 4 turns + Middle Evidence Windows + last 12 turns` to prioritize LLM-delivered handoffs over deterministic fallback
 - the experimental line now frames the task as distilled execution state and expands the runtime taxonomy to six types by adding `generation`
+- the experimental line now requires a prose `## State Overview` section before any conditional sections
+- the experimental line now upgrades middle packing from short signal lines to grounded evidence windows
 - current expert-review focus is on downloaded plugin artifacts from the same thread, not on prompt text alone
 
 `summary` remains shipping-only for this round. It is not part of the conditional-handoff experiment.
@@ -99,8 +102,8 @@ Keep the prompt-review ask narrow:
 
 1. Does `summaryComposer` now make future human recall the first priority strongly enough, or is the framing still too close to timeline reconstruction?
 2. Do the updated `Reusable Snippets` anchors finally point toward reusable pattern / insight artifacts, rather than defaulting to file references?
-3. Does the compact `experimental` line look like a reasonable conditional-handoff contract, or is the classification/section whitelist still missing an important conversation shape?
-4. Does the experimental line now preserve completeness and situational awareness well enough to be judged as a handoff artifact, or are there still signs of truncation, half-open sections, missing anchor content, or packing-induced omissions?
+3. Does the compact `experimental` line look like a reasonable conditional-handoff contract, now that it includes a required prose `## State Overview`, or is the classification/section whitelist still missing an important conversation shape?
+4. Does the experimental line now preserve completeness and situational awareness well enough to be judged as a handoff artifact, or are there still signs of truncation, half-open sections, weak overview prose, missing anchor content, or packing-induced omissions?
 5. Are the fallback prompts now conservative-in-compliance, or do they still read as merely shorter versions of the main composer?
 6. Do the dormant `E1` planner drafts look like the right first step for moving extraction pressure forward out of `E3`?
 
@@ -113,4 +116,4 @@ Keep the prompt-review ask narrow:
 
 ## Working conclusion
 
-The next expert prompt-review round should compare downloaded `Current compact` against downloaded `Experimental handoff` from the same thread, judge classification plausibility, completeness, rejected-path preservation, false artifact control, packing quality on long threads, and actual handoff usefulness, verify that `summary` still reads like a real knowledge artifact on its frozen shipping path, check whether fallback is now conservative-in-compliance instead of merely shorter, and confirm whether the dormant `E1` drafts are the right first extraction move.
+The next expert prompt-review round should compare downloaded `Current compact` against downloaded `Experimental handoff` from the same thread, judge overview quality, classification plausibility, completeness, rejected-path preservation, false artifact control, packing quality on long threads, and actual handoff usefulness, verify that `summary` still reads like a real knowledge artifact on its frozen shipping path, check whether fallback is now conservative-in-compliance instead of merely shorter, and confirm whether the dormant `E1` drafts are the right first extraction move.

@@ -35,10 +35,11 @@ Documentation explains contracts, architecture, inventory, and evaluation. Runti
 For external expert review or fast onboarding on the export direction, start with this package in order:
 
 1. `export_ai_handoff_architecture.md`
-2. `export_knowledge_export_architecture.md`
-3. `cross_platform_conversation_normalization_architecture.md`
-4. `export_stage_artifact_schemas.md`
-5. `export_workflow_runner_spec.md`
+2. `export_distilled_handoff_mermaid_architecture.md`
+3. `export_knowledge_export_architecture.md`
+4. `cross_platform_conversation_normalization_architecture.md`
+5. `export_stage_artifact_schemas.md`
+6. `export_workflow_runner_spec.md`
 
 This package is designed to answer:
 - what is currently shipped
@@ -52,6 +53,9 @@ This package is designed to answer:
   - **first-read**
   - **expert-facing bridge doc**
   - single-file entrypoint for current shipped AI Handoff (compact) + future multi-agent direction
+- `export_distilled_handoff_mermaid_architecture.md`
+  - **diagram-first companion**
+  - Mermaid overview for shipping export runtime, distilled handoff bridge state, and target decomposition
 - `export_knowledge_export_architecture.md`
   - **first-read**
   - **expert-facing bridge doc**
@@ -62,6 +66,10 @@ This package is designed to answer:
   - canonical schema note for `P1/E0/E1/E2/E3/repair` artifacts
 - `export_workflow_runner_spec.md`
   - canonical note for the bounded export pipeline runner
+- `export_skill_registry.md`
+  - canonical skill implementation inventory
+  - defines skill activation conditions, SOP, and output schemas
+  - governance rules for skill changes
 - `model_settings.md`
 - `embedding_proxy_contract_v2_0.md`
 - `export_multi_agent_architecture.md`

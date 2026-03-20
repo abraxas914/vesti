@@ -138,6 +138,10 @@ export interface PlanningNotesBase {
   inclusionRules: string[];
   exclusionRules: string[];
   riskFlags: string[];
+  /** E1 判断需要激活的 skill ID 列表 (e.g., "skill:artifact_extraction") */
+  requiredSkills?: string[];
+  /** 被 P1 annotation 强制触发的 skill（由 E0 自动填充，不依赖 E1 判断） */
+  baselineTriggered?: string[];
 }
 
 export interface HandoffPlanningNotes extends PlanningNotesBase {

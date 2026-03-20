@@ -15,6 +15,15 @@ import type {
 } from "../types";
 
 const DENSITIES = new Set(["low", "medium", "high"]);
+const PHASE1_PLANNING_SKILL_IDS = [
+  "skill:artifact_extraction",
+  "skill:decision_extraction",
+  "skill:user_constraints",
+  "skill:theoretical_context",
+  "skill:data_reference",
+  "skill:unresolved_next_steps",
+] as const;
+const PHASE1_PLANNING_SKILL_ID_SET = new Set<string>(PHASE1_PLANNING_SKILL_IDS);
 
 export const COMPACT_HEADINGS = [
   "## Background",
@@ -215,6 +224,66 @@ function maybeAnnotateMessage(
     });
   }
 
+  // Phase 1 新增: theory_definition_cue - 概念定义、学科术语、理论框架
+  if (
+    /\b(define|definition|is called|means|theorem|axiom|postulate|principle|law of|concept of|refers to)\b/i.test(text) ||
+    /(定义|定理|公理|原则|法则|概念|指的是|称为|所谓)/.test(text)
+  ) {
+    annotations.push({
+      id: `${conversationId}:message:${messageId}:theory_definition_cue`,
+      targetType: "message",
+      targetId: messageId,
+      label: "theory_definition_cue",
+      confidence: detectConfidence(
+        text,
+        [/\b(definition|theorem|axiom|principle|law of)\b/i, /(定义|定理|公理|原则|法则)/],
+        [/\b(means|called|concept|refers)\b/i, /(概念|指的是|称为|所谓)/]
+      ),
+      source: "heuristic",
+    });
+  }
+
+  // Phase 1 新增: user_constraint_cue - 用户偏好、限制、否定性要求
+  if (
+    /\b(don't|do not|never|avoid|must not|shouldn't|should not|prefer not|rather not|instead of)\b/i.test(text) ||
+    /\b(prefer|always|require|constraint|limitation|restriction)\b/i.test(text) ||
+    /(不要|不能|禁止|避免|必须不|宁可不|而不是|偏好|总是|要求|约束|限制)/.test(text)
+  ) {
+    annotations.push({
+      id: `${conversationId}:message:${messageId}:user_constraint_cue`,
+      targetType: "message",
+      targetId: messageId,
+      label: "user_constraint_cue",
+      confidence: detectConfidence(
+        text,
+        [/\b(don't|do not|never|must not|avoid)\b/i, /(不要|不能|禁止|避免|必须不)/],
+        [/\b(prefer|always|require|constraint)\b/i, /(偏好|总是|要求|约束|限制)/]
+      ),
+      source: "heuristic",
+    });
+  }
+
+  // Phase 1 新增: quantitative_data_cue - 数字、实验结果、外部引用
+  if (
+    /\b\d+(\.\d+)?%?\s*(ms|s|seconds?|minutes?|hours?|days?|bytes?|KB|MB|GB|tokens?|calls?|requests?|users?|times?)\b/i.test(text) ||
+    /\b(according to|based on|cited|reference|study|research|paper|experiment|benchmark|metric|measured|result)\b/i.test(text) ||
+    /(根据|引用|研究|论文|实验|基准|指标|测量|结果|数据显示)/.test(text) ||
+    /\b\d{2,}(\.\d+)?\b/.test(text)  // 两位以上数字
+  ) {
+    annotations.push({
+      id: `${conversationId}:message:${messageId}:quantitative_data_cue`,
+      targetType: "message",
+      targetId: messageId,
+      label: "quantitative_data_cue",
+      confidence: detectConfidence(
+        text,
+        [/\b(according to|based on|study|research|experiment|benchmark)\b/i, /(根据|研究|实验|基准)/],
+        [/\b\d+(\.\d+)?%?\s*(ms|s|tokens?|calls?)\b/i, /\b\d{3,}\b/]
+      ),
+      source: "heuristic",
+    });
+  }
+
   return annotations;
 }
 
@@ -263,6 +332,10 @@ function aggregateConversationAnnotations(
   push("unresolved_cue", 1, "unresolved or follow-up cues detected");
   push("core_question_cue", 1, "question framing cues detected");
   push("topic_shift", 2, "topic-shift cues detected");
+  // Phase 1 新增的 labels
+  push("theory_definition_cue", 1, "theory or conceptual definition cues detected");
+  push("user_constraint_cue", 1, "user constraints or working agreements detected");
+  push("quantitative_data_cue", 2, "quantitative evidence or metrics detected");
 
   return annotations;
 }
@@ -345,6 +418,15 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isKnownSkillIdArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) => typeof item === "string" && PHASE1_PLANNING_SKILL_ID_SET.has(item)
+    )
+  );
+}
+
 function validateBasePlanningObject(
   data: Record<string, unknown>,
   mode: ExportDistillMode
@@ -361,6 +443,20 @@ function validateBasePlanningObject(
   if (!isStringArray(data.inclusionRules)) errors.push("inclusionRules must be a string array");
   if (!isStringArray(data.exclusionRules)) errors.push("exclusionRules must be a string array");
   if (!isStringArray(data.riskFlags)) errors.push("riskFlags must be a string array");
+  if (
+    data.requiredSkills !== undefined &&
+    !isKnownSkillIdArray(data.requiredSkills)
+  ) {
+    errors.push("requiredSkills must be an array of known Phase 1 skill IDs when present");
+  }
+  if (
+    data.baselineTriggered !== undefined &&
+    !isKnownSkillIdArray(data.baselineTriggered)
+  ) {
+    errors.push(
+      "baselineTriggered must be an array of known Phase 1 skill IDs when present"
+    );
+  }
   return errors;
 }
 
@@ -566,6 +662,40 @@ function densityFromCount(count: number): "low" | "medium" | "high" {
   return "low";
 }
 
+function collectPlanningSkillSignals(
+  dataset: ExportDataset
+): Pick<HandoffPlanningNotes, "requiredSkills" | "baselineTriggered"> {
+  const countByLabel = (label: string): number =>
+    dataset.annotations.messageAnnotations.filter(
+      (annotation) => annotation.label === label
+    ).length;
+
+  const artifactCount = countByLabel("artifact_marker");
+  const decisionCount = countByLabel("confirmed_decision");
+  const unresolvedCount = countByLabel("unresolved_cue");
+  const userConstraintCount = countByLabel("user_constraint_cue");
+  const theoryCount = countByLabel("theory_definition_cue");
+  const quantitativeCount = countByLabel("quantitative_data_cue");
+
+  const baselineTriggered = uniqueStrings([
+    artifactCount >= 2 ? "skill:artifact_extraction" : undefined,
+    decisionCount >= 2 ? "skill:decision_extraction" : undefined,
+    userConstraintCount > 0 ? "skill:user_constraints" : undefined,
+  ]);
+
+  const requiredSkills = uniqueStrings([
+    ...baselineTriggered,
+    unresolvedCount > 0 ? "skill:unresolved_next_steps" : undefined,
+    theoryCount > 0 ? "skill:theoretical_context" : undefined,
+    quantitativeCount > 0 ? "skill:data_reference" : undefined,
+  ]);
+
+  return {
+    requiredSkills,
+    baselineTriggered,
+  };
+}
+
 export function mockHandoffPlanning(dataset: ExportDataset): HandoffPlanningNotes {
   const questionCount = dataset.annotations.messageAnnotations.filter(
     (annotation) => annotation.label === "core_question_cue"
@@ -579,9 +709,19 @@ export function mockHandoffPlanning(dataset: ExportDataset): HandoffPlanningNote
   const unresolvedCount = dataset.annotations.messageAnnotations.filter(
     (annotation) => annotation.label === "unresolved_cue"
   ).length;
+  const userConstraintCount = dataset.annotations.messageAnnotations.filter(
+    (annotation) => annotation.label === "user_constraint_cue"
+  ).length;
+  const theoryCount = dataset.annotations.messageAnnotations.filter(
+    (annotation) => annotation.label === "theory_definition_cue"
+  ).length;
+  const quantitativeCount = dataset.annotations.messageAnnotations.filter(
+    (annotation) => annotation.label === "quantitative_data_cue"
+  ).length;
   const lowConfidenceCount = dataset.annotations.messageAnnotations.filter(
     (annotation) => annotation.confidence === "low"
   ).length;
+  const skillSignals = collectPlanningSkillSignals(dataset);
 
   const firstUser = dataset.messages.find((message) => message.role === "user");
   const taskFrame = clipText(
@@ -601,6 +741,9 @@ export function mockHandoffPlanning(dataset: ExportDataset): HandoffPlanningNote
       "Keep decisions with their chosen path and rationale when the transcript supports them.",
       "Keep concrete files, commands, functions, APIs, and references that affect continuation.",
       unresolvedCount > 0 ? "Keep unresolved work and next-step cues explicit." : undefined,
+      userConstraintCount > 0
+        ? "Keep explicit user constraints and working agreements visible to the next agent."
+        : undefined,
     ]),
     exclusionRules: uniqueStrings([
       "Drop small acknowledgements or repeated confirmations unless they change a later decision.",
@@ -613,7 +756,15 @@ export function mockHandoffPlanning(dataset: ExportDataset): HandoffPlanningNote
       unresolvedCount === 0
         ? "No strong unresolved cue detected; verify whether follow-up remains open."
         : undefined,
+      theoryCount > 0
+        ? "The thread includes theory or definition cues; keep conceptual context grounded instead of turning it into generic summary prose."
+        : undefined,
+      quantitativeCount > 0
+        ? "Quantitative evidence appears in the transcript; preserve figures conservatively and avoid paraphrasing away key numbers."
+        : undefined,
     ]),
+    requiredSkills: skillSignals.requiredSkills,
+    baselineTriggered: skillSignals.baselineTriggered,
     taskFrame,
     artifactDensity: densityFromCount(artifactCount),
     decisionDensity: densityFromCount(decisionCount),

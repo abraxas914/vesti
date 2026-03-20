@@ -47,14 +47,18 @@ interface MessageAnnotation {
 ```
 
 推荐 label 集合至少覆盖：
-- `correction_turn`
-- `tentative_decision`
 - `confirmed_decision`
 - `unresolved_cue`
 - `artifact_marker`
-- `reusable_snippet_cue`
 - `topic_shift`
 - `core_question_cue`
+- `theory_definition_cue`
+- `user_constraint_cue`
+- `quantitative_data_cue`
+
+Phase 1 note:
+- `correction_turn`, `tentative_decision`, and `reusable_snippet_cue` remain reserved for future implementation
+- the current heuristic prototype only emits the implemented labels listed above
 
 ### Conversation-level annotation
 
@@ -128,8 +132,15 @@ interface PlanningNotesBase {
   inclusionRules: string[];
   exclusionRules: string[];
   riskFlags: string[];
+  requiredSkills?: string[];
+  baselineTriggered?: string[];
 }
 ```
+
+Phase 1 note:
+- `requiredSkills` and `baselineTriggered` are planning-visibility fields only
+- they do not activate E2 runtime logic in Phase 1
+- when emitted, every skill ID must come from the planning-visible registry set in `export_skill_registry.md`
 
 ### Handoff planning notes
 

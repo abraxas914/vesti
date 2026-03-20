@@ -11,6 +11,7 @@
     "package": "node -e \"console.error('Local packaging is disabled. Use CI workflow extension-package or run pnpm -C frontend package:safe.'); process.exit(1)\"",
     "package:ci": "pnpm run build && plasmo package",
     "package:safe": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/safe-package.ps1 -Overwrite",
+    "distill:handoff": "pnpm exec tsc --project ../scripts/tsconfig.distill.json && node ../.tmp/distill/scripts/export-distill-prototype.js",
     "eval:prompts": "pnpm exec tsc --project ../scripts/tsconfig.eval.json && node ../.tmp/eval/scripts/eval-prompts.js"
   },
   "dependencies": {

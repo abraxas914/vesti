@@ -93,6 +93,8 @@ Prototype guardrails:
 - handoff only; `Knowledge Export` is not yet part of the runtime prototype
 - low-confidence signals are preserved as hints, not treated as hard facts
 - `repair` may run once and never reopens upstream stages
+- Phase 1 planning notes may now expose optional `requiredSkills` and `baselineTriggered` arrays for prototype visibility only
+- valid Phase 1 planning skill IDs are governed by `documents/prompt_engineering/export_skill_registry.md`
 
 ## Adjacent systems kept outside export canonical ownership
 

@@ -15,6 +15,9 @@ Audience: Prompt engineers, runtime engineers, domain experts, release owners
 
 如果只看一份文档来理解 Vesti 现在如何做 AI handoff，以及后续应该如何把它从 shipped bridge state 推进到 bounded chain，优先看这一份。
 
+如果需要图解优先、Mermaid-first 的版本，请配合阅读：
+- [export_distilled_handoff_mermaid_architecture.md](./export_distilled_handoff_mermaid_architecture.md)
+
 ## Why AI Handoff
 
 长程 agent 遇到的问题，通常不是模型突然不够强，而是上下文逐步失真。

@@ -530,14 +530,61 @@ async function requestModelScope(
   const url = `${baseUrl}/chat/completions`;
   const payload = buildPayload(config, messages, responseFormat, streamDecision);
 
-  return fetch(url, {
+  const apiKey = config.apiKey?.trim() || "";
+  
+  // Check if this is a ModelScope Access Token (ms-xxx format)
+  const isModelScopeToken = apiKey.toLowerCase().startsWith("ms-");
+  
+  logger.info("llm", "ModelScope request prepared", {
+    url,
+    hasMsPrefix: isModelScopeToken,
+    keyLength: apiKey.length,
+    keyPrefix: apiKey.slice(0, 10) + "...",
+  });
+
+  // First attempt: Use token as-is
+  let response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(payload),
   });
+
+  // If 401 and token has ms- prefix, try without prefix
+  if (response.status === 401 && isModelScopeToken) {
+    const tokenWithoutPrefix = apiKey.slice(3);
+    
+    logger.warn("llm", "ModelScope auth failed with ms- prefix, retrying without prefix", {
+      originalPrefix: apiKey.slice(0, 10),
+      retryPrefix: tokenWithoutPrefix.slice(0, 10),
+    });
+
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${tokenWithoutPrefix}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    // If retry succeeded, log the successful format
+    if (response.ok) {
+      logger.info("llm", "ModelScope auth succeeded WITHOUT ms- prefix", {
+        modelId: getEffectiveModelId(config),
+      });
+    } else if (response.status === 401) {
+      // Both formats failed
+      logger.error("llm", "ModelScope auth failed with both token formats", {
+        triedWithPrefix: true,
+        triedWithoutPrefix: true,
+      });
+    }
+  }
+
+  return response;
 }
 
 async function requestProxyService(

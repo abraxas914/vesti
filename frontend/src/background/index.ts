@@ -638,13 +638,64 @@ if (chrome?.alarms?.create) {
 }
 
 function openSidepanelForTab(tabId: number): void {
-  if (!chrome?.sidePanel?.open) {
-    logger.warn("background", "sidePanel API not available");
+  const openLibraryTab = () => {
+    const url = chrome.runtime.getURL("options.html?tab=library");
+    chrome.tabs.create({ url }, () => {
+      void chrome.runtime.lastError;
+    });
+  };
+
+  if (chrome?.sidePanel?.open) {
+    chrome.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true }, () => {
+      chrome.sidePanel.open({ tabId }, () => {
+        void chrome.runtime.lastError;
+      });
+    });
     return;
   }
-  chrome.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true }, () => {
-    chrome.sidePanel.open({ tabId }, () => {
-      void chrome.runtime.lastError;
+
+  const browserSidebarAction = (
+    globalThis as typeof globalThis & {
+      browser?: {
+        sidebarAction?: {
+          open?: () => Promise<void>;
+        };
+      };
+    }
+  ).browser?.sidebarAction;
+
+  if (typeof browserSidebarAction?.open === "function") {
+    void browserSidebarAction.open().catch((error) => {
+      logger.warn("background", "sidebarAction.open failed; falling back to options tab", {
+        error: (error as Error)?.message ?? String(error),
+      });
+      openLibraryTab();
+    });
+    return;
+  }
+
+  logger.warn("background", "No side panel API available; falling back to options tab");
+  openLibraryTab();
+}
+
+if (chrome?.action?.onClicked) {
+  chrome.action.onClicked.addListener((tab) => {
+    const tabId = tab.id;
+    if (typeof tabId === "number") {
+      openSidepanelForTab(tabId);
+      return;
+    }
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const activeId = tabs[0]?.id;
+      if (typeof activeId === "number") {
+        openSidepanelForTab(activeId);
+      } else {
+        const url = chrome.runtime.getURL("options.html?tab=library");
+        chrome.tabs.create({ url }, () => {
+          void chrome.runtime.lastError;
+        });
+      }
     });
   });
 }

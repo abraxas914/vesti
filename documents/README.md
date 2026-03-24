@@ -55,6 +55,14 @@ Canonical examples:
 - `refactor_tasks/timestamp_semantics_rollout_tasks.md`
 - `refactor_tasks/dynamic_rendering_refactor_tasks.md`
 
+### `repo_hygiene/`
+
+负责仓库级文档治理、编码护栏、自动化编辑安全规则与事故预防文档。
+
+Canonical examples:
+- `repo_hygiene/README.md`
+- `repo_hygiene/windows_utf8_editing_guardrails.md`
+
 ### `web_dashboard/`
 
 负责 web dashboard / library / explore / network 等 web surface-specific 文档。
@@ -112,12 +120,13 @@ Canonical examples:
 2. reader / export / compression / insight / timeline / schema consumer -> `reader_pipeline/`
 3. dynamic rendering / phase gating / loading-to-ready transition discipline / entity-scoped UI state reset -> `ui_runtime/`
 4. cross-subsystem rollout backlog / implementation task ledger -> `refactor_tasks/`
-5. web dashboard / library / explore / network surface-specific contract -> `web_dashboard/`
-6. global UI / IA / component system -> `ui_refactor/`
-7. prompt / proxy / model routing -> `prompt_engineering/`
-8. dated handoff -> `engineering_handoffs/`
-9. superseded draft / retired phase material -> `archive/`
-10. repo-wide policy / deployment utility -> `documents/` root
+5. repository-local automation safety / encoding guardrails / doc-governance rules -> `repo_hygiene/`
+6. web dashboard / library / explore / network surface-specific contract -> `web_dashboard/`
+7. global UI / IA / component system -> `ui_refactor/`
+8. prompt / proxy / model routing -> `prompt_engineering/`
+9. dated handoff -> `engineering_handoffs/`
+10. superseded draft / retired phase material -> `archive/`
+11. repo-wide policy / deployment utility -> `documents/` root
 
 ## Recommended Reading Order
 

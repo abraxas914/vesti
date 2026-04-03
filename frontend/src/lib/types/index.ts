@@ -65,10 +65,28 @@ export interface SearchConversationMatchesQuery {
   conversationIds?: number[];
 }
 
+export type SearchMatchSurface =
+  | "body"
+  | "source"
+  | "attachment"
+  | "artifact"
+  | "annotation";
+
+export type SearchReadiness = "empty" | "title_snippet_only" | "fulltext";
+
+export interface MessageSearchEntry {
+  surface: SearchMatchSurface;
+  messageId: number;
+  targetKey: string;
+  text: string;
+}
+
 export interface ConversationMatchSummary {
   conversationId: number;
   firstMatchedMessageId: number;
   bestExcerpt: string;
+  firstMatchedSurface: SearchMatchSurface;
+  matchedSurfaces: SearchMatchSurface[];
 }
 
 export interface VectorRecord {
@@ -253,6 +271,15 @@ export interface MessageArtifact {
   normalizedHtmlSnapshot?: string;
 }
 
+export type MessageAttachmentOccurrenceRole = "user_upload";
+
+export interface MessageAttachment {
+  indexAlt: string;
+  label?: string;
+  mime?: string | null;
+  occurrenceRole: MessageAttachmentOccurrenceRole;
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
@@ -262,6 +289,7 @@ export interface Message {
   content_ast_version?: AstVersion | null;
   degraded_nodes_count?: number;
   citations?: MessageCitation[];
+  attachments?: MessageAttachment[];
   artifacts?: MessageArtifact[];
   normalized_html_snapshot?: string | null;
   created_at: number;

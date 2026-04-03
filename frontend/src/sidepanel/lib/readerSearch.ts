@@ -1,4 +1,8 @@
-import type { Message, Platform } from "~lib/types";
+import {
+  formatArtifactDescriptor,
+  getArtifactExcerptText,
+} from "@vesti/content-package";
+import type { Message, Platform, SearchMatchSurface } from "~lib/types";
 import type { AstNode, AstRoot } from "~lib/types/ast";
 import {
   astNodeToPlainText,
@@ -6,9 +10,13 @@ import {
   inspectAstStructure,
   type AstStructureStats,
 } from "~lib/utils/astText";
+import {
+  buildMessageFallbackDisplayText,
+  resolveCanonicalBodyText,
+} from "~lib/utils/messageContentPackage";
+import { normalizeSearchQuery, shouldRunFullTextSearch } from "~lib/utils/searchReadiness";
 import type { ReaderOccurrence } from "../types/threadsSearch";
 
-const MIN_QUERY_LENGTH = 1;
 const MIN_AST_COVERAGE_RATIO = 0.55;
 const MIN_MATH_AST_COVERAGE_RATIO = 0.2;
 const MIN_TEXT_LENGTH_FOR_AST_CHECK = 120;
@@ -33,6 +41,7 @@ export interface MessageRenderPlan {
 export interface ReaderSearchArtifacts {
   occurrences: ReaderOccurrence[];
   renderPlanByMessageId: Record<number, MessageRenderPlan>;
+  sidecarTargetMap: Record<string, ReaderSidecarTarget>;
 }
 
 export interface ReaderOccurrenceIndex {
@@ -41,6 +50,12 @@ export interface ReaderOccurrenceIndex {
 }
 
 export type OccurrenceIndexMap = Record<string, ReaderOccurrenceIndex[]>;
+
+export interface ReaderSidecarTarget {
+  section: "sources" | "attachments" | "artifacts";
+  surface: Exclude<SearchMatchSurface, "body" | "annotation">;
+  itemKey: string;
+}
 
 export interface HighlightSegment {
   text: string;
@@ -64,10 +79,6 @@ interface OccurrenceIndexRef {
   current: number;
 }
 
-export function normalizeSearchQuery(query: string): string {
-  return query.trim().toLowerCase();
-}
-
 export function buildReaderSearchArtifacts(params: {
   messages: Message[];
   platform: Platform;
@@ -77,12 +88,14 @@ export function buildReaderSearchArtifacts(params: {
   const normalizedQuery = normalizeSearchQuery(query);
   const renderPlanByMessageId: Record<number, MessageRenderPlan> = {};
   const occurrences: ReaderOccurrence[] = [];
+  const sidecarTargetMap: Record<string, ReaderSidecarTarget> = {};
   const occurrenceIndexRef: OccurrenceIndexRef = { current: 0 };
+  const shouldIndexQuery = shouldRunFullTextSearch(normalizedQuery);
 
   for (const message of messages) {
     const renderPlan = resolveMessageRenderPlan(message, platform);
     renderPlanByMessageId[message.id] = renderPlan;
-    if (normalizedQuery.length < MIN_QUERY_LENGTH) {
+    if (!shouldIndexQuery) {
       continue;
     }
 
@@ -94,19 +107,26 @@ export function buildReaderSearchArtifacts(params: {
         renderPlan.renderAst,
         normalizedQuery
       );
-      continue;
+    } else {
+      appendFallbackOccurrences(
+        occurrences,
+        occurrenceIndexRef,
+        message.id,
+        buildMessageFallbackDisplayText(message),
+        normalizedQuery
+      );
     }
 
-    appendFallbackOccurrences(
+    appendSidecarOccurrences(
       occurrences,
+      sidecarTargetMap,
       occurrenceIndexRef,
-      message.id,
-      message.content_text,
+      message,
       normalizedQuery
     );
   }
 
-  return { occurrences, renderPlanByMessageId };
+  return { occurrences, renderPlanByMessageId, sidecarTargetMap };
 }
 
 export function buildOccurrenceIndexMap(
@@ -209,7 +229,7 @@ export function resolveMessageRenderPlan(
   }
 
   const renderAst = sanitizeAstForRender(rawAst, message.role, platform);
-  const sourceTextLen = normalizeForCoverage(message.content_text).length;
+  const sourceTextLen = normalizeForCoverage(resolveCanonicalBodyText(message)).length;
   const astTextLen = normalizeForCoverage(extractAstPlainText(renderAst)).length;
   const astStats = inspectAstStructure(renderAst);
   const astCoverageRatio = sourceTextLen > 0 ? astTextLen / sourceTextLen : 1;
@@ -268,6 +288,7 @@ function appendAstOccurrences(
         occurrences,
         occurrenceIndexRef,
         messageId,
+        "body",
         buildAstNodeKey(messageId, path),
         node.text,
         normalizedQuery
@@ -280,6 +301,7 @@ function appendAstOccurrences(
         occurrences,
         occurrenceIndexRef,
         messageId,
+        "body",
         buildAstNodeKey(messageId, path),
         node.text,
         normalizedQuery
@@ -337,6 +359,7 @@ function appendFallbackOccurrences(
       occurrences,
       occurrenceIndexRef,
       messageId,
+      "body",
       segment.nodeKey,
       segment.text,
       normalizedQuery
@@ -344,10 +367,157 @@ function appendFallbackOccurrences(
   }
 }
 
+function appendSidecarOccurrences(
+  occurrences: ReaderOccurrence[],
+  sidecarTargetMap: Record<string, ReaderSidecarTarget>,
+  occurrenceIndexRef: OccurrenceIndexRef,
+  message: Message,
+  normalizedQuery: string
+): void {
+  (message.citations ?? []).forEach((citation, index) => {
+    const itemKey = `msg-${message.id}:source[${index}]`;
+    appendSidecarFieldOccurrences(
+      occurrences,
+      sidecarTargetMap,
+      occurrenceIndexRef,
+      message.id,
+      "source",
+      "sources",
+      itemKey,
+      `${itemKey}:label`,
+      citation.label,
+      normalizedQuery
+    );
+    appendSidecarFieldOccurrences(
+      occurrences,
+      sidecarTargetMap,
+      occurrenceIndexRef,
+      message.id,
+      "source",
+      "sources",
+      itemKey,
+      `${itemKey}:host`,
+      citation.host,
+      normalizedQuery
+    );
+  });
+
+  (message.attachments ?? []).forEach((attachment, index) => {
+    const itemKey = `msg-${message.id}:attachment[${index}]`;
+    appendSidecarFieldOccurrences(
+      occurrences,
+      sidecarTargetMap,
+      occurrenceIndexRef,
+      message.id,
+      "attachment",
+      "attachments",
+      itemKey,
+      `${itemKey}:indexAlt`,
+      attachment.indexAlt,
+      normalizedQuery
+    );
+    appendSidecarFieldOccurrences(
+      occurrences,
+      sidecarTargetMap,
+      occurrenceIndexRef,
+      message.id,
+      "attachment",
+      "attachments",
+      itemKey,
+      `${itemKey}:label`,
+      attachment.label ?? "",
+      normalizedQuery
+    );
+    appendSidecarFieldOccurrences(
+      occurrences,
+      sidecarTargetMap,
+      occurrenceIndexRef,
+      message.id,
+      "attachment",
+      "attachments",
+      itemKey,
+      `${itemKey}:mime`,
+      attachment.mime ?? "",
+      normalizedQuery
+    );
+  });
+
+  (message.artifacts ?? []).forEach((artifact, index) => {
+    const itemKey = `msg-${message.id}:artifact[${index}]`;
+    appendSidecarFieldOccurrences(
+      occurrences,
+      sidecarTargetMap,
+      occurrenceIndexRef,
+      message.id,
+      "artifact",
+      "artifacts",
+      itemKey,
+      `${itemKey}:title`,
+      artifact.label || artifact.kind,
+      normalizedQuery
+    );
+    const descriptor = describeArtifact(artifact);
+    appendSidecarFieldOccurrences(
+      occurrences,
+      sidecarTargetMap,
+      occurrenceIndexRef,
+      message.id,
+      "artifact",
+      "artifacts",
+      itemKey,
+      `${itemKey}:descriptor`,
+      descriptor,
+      normalizedQuery
+    );
+    const excerpt = buildArtifactExcerpt(artifact);
+    appendSidecarFieldOccurrences(
+      occurrences,
+      sidecarTargetMap,
+      occurrenceIndexRef,
+      message.id,
+      "artifact",
+      "artifacts",
+      itemKey,
+      `${itemKey}:excerpt`,
+      excerpt,
+      normalizedQuery
+    );
+  });
+}
+
+function appendSidecarFieldOccurrences(
+  occurrences: ReaderOccurrence[],
+  sidecarTargetMap: Record<string, ReaderSidecarTarget>,
+  occurrenceIndexRef: OccurrenceIndexRef,
+  messageId: number,
+  surface: Exclude<SearchMatchSurface, "body" | "annotation">,
+  section: ReaderSidecarTarget["section"],
+  itemKey: string,
+  nodeKey: string,
+  text: string,
+  normalizedQuery: string
+): void {
+  if (!text) {
+    return;
+  }
+
+  sidecarTargetMap[nodeKey] = { section, surface, itemKey };
+  appendOccurrencesFromText(
+    occurrences,
+    occurrenceIndexRef,
+    messageId,
+    surface,
+    nodeKey,
+    text,
+    normalizedQuery
+  );
+}
+
 function appendOccurrencesFromText(
   occurrences: ReaderOccurrence[],
   occurrenceIndexRef: OccurrenceIndexRef,
   messageId: number,
+  surface: SearchMatchSurface,
   nodeKey: string,
   text: string,
   normalizedQuery: string
@@ -357,6 +527,7 @@ function appendOccurrencesFromText(
     occurrences.push({
       occurrenceKey: `occ-${occurrenceIndexRef.current}`,
       messageId,
+      surface,
       nodeKey,
       charOffset: match.charOffset,
       length: match.length,
@@ -369,7 +540,7 @@ function findTextOccurrences(
   text: string,
   normalizedQuery: string
 ): TextOccurrence[] {
-  if (!normalizedQuery || normalizedQuery.length < MIN_QUERY_LENGTH) {
+  if (!shouldRunFullTextSearch(normalizedQuery)) {
     return [];
   }
   const lower = text.toLowerCase();
@@ -384,6 +555,18 @@ function findTextOccurrences(
     index = matchIndex + normalizedQuery.length;
   }
   return occurrences;
+}
+
+function describeArtifact(artifact: NonNullable<Message["artifacts"]>[number]): string {
+  return formatArtifactDescriptor(artifact);
+}
+
+function buildArtifactExcerpt(artifact: NonNullable<Message["artifacts"]>[number]): string {
+  return getArtifactExcerptText(artifact, {
+    maxLines: 2,
+    maxCharsPerLine: 120,
+    separator: " | ",
+  });
 }
 
 function normalizeForCoverage(value: string): string {

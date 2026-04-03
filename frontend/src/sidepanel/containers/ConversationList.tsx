@@ -20,6 +20,12 @@ import {
   searchConversationMatchesByText,
   updateConversationTitle,
 } from "~lib/services/storageService";
+import { buildMessageFallbackDisplayText } from "~lib/utils/messageContentPackage";
+import {
+  getSearchReadiness,
+  normalizeSearchQuery,
+  shouldRunFullTextSearch,
+} from "~lib/utils/searchReadiness";
 import { trackCardActionClick } from "~lib/services/telemetry";
 import type { DatePreset } from "../types/timelineFilters";
 import { ConversationCard } from "../components/ConversationCard";
@@ -98,7 +104,7 @@ function buildConversationCopyText(
   for (const message of messages) {
     const role = message.role === "user" ? "User" : "AI";
     lines.push(`${role}: [${toLocalDateTime(message.created_at)}]`);
-    lines.push(message.content_text);
+    lines.push(buildMessageFallbackDisplayText(message));
     lines.push("");
   }
 
@@ -190,7 +196,9 @@ export function ConversationList({
   const searchDebounceRef = useRef<number | null>(null);
   const listContainerRef = useRef<HTMLDivElement | null>(null);
   const lastAnchorRef = useRef<number | null>(null);
-  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const normalizedSearchQuery = normalizeSearchQuery(searchQuery);
+  const searchReadiness = getSearchReadiness(normalizedSearchQuery);
+  const shouldRunMessageSearch = shouldRunFullTextSearch(normalizedSearchQuery);
   const filterKey = useMemo(() => {
     const platforms = Array.from(selectedPlatforms).sort().join(",");
     return `${datePreset}|${platforms}`;
@@ -244,7 +252,7 @@ export function ConversationList({
       searchDebounceRef.current = null;
     }
 
-    if (normalizedSearchQuery.length < 2) {
+    if (!shouldRunMessageSearch) {
       setIsMessageSearchPending(false);
       onResultSummaryMapChange({});
       return;
@@ -310,19 +318,16 @@ export function ConversationList({
     filterKey,
     normalizedSearchQuery,
     onResultSummaryMapChange,
+    shouldRunMessageSearch,
   ]);
 
   const filteredConversations = useMemo(() => {
     const convs = conversations ?? [];
     return convs.reduce<FilteredConversationItem[]>((acc, conversation) => {
       const baseMatch = matchesSearch(conversation, normalizedSearchQuery);
-      const summary =
-        normalizedSearchQuery.length >= 2
-          ? resultSummaryMap[conversation.id]
-          : undefined;
+      const summary = shouldRunMessageSearch ? resultSummaryMap[conversation.id] : undefined;
       const textMatch = Boolean(summary);
-      const matchesQuery =
-        normalizedSearchQuery.length === 0 ? true : baseMatch || textMatch;
+      const matchesQuery = searchReadiness === "empty" ? true : baseMatch || textMatch;
       if (!matchesQuery) return acc;
       if (!matchesDatePreset(getConversationOriginAt(conversation), datePreset)) {
         return acc;
@@ -340,9 +345,11 @@ export function ConversationList({
   }, [
     conversations,
     datePreset,
+    searchReadiness,
     normalizedSearchQuery,
     resultSummaryMap,
     selectedPlatforms,
+    shouldRunMessageSearch,
   ]);
 
   useEffect(() => {
@@ -519,13 +526,12 @@ export function ConversationList({
 
         return next.filter((item) => {
           const baseMatch = matchesSearch(item, normalizedSearchQuery);
-          const textMatch =
-            normalizedSearchQuery.length >= 2 && resultSummaryMap[item.id];
+          const textMatch = shouldRunMessageSearch && resultSummaryMap[item.id];
           return baseMatch || Boolean(textMatch);
         });
       });
     },
-    [normalizedSearchQuery, resultSummaryMap]
+    [normalizedSearchQuery, resultSummaryMap, shouldRunMessageSearch]
   );
 
   if (loading) {
@@ -585,6 +591,9 @@ export function ConversationList({
                 searchQuery={searchQuery}
                 messageExcerpt={
                   item.matchedInMessagesOnly ? item.summary?.bestExcerpt ?? null : null
+                }
+                messageMatchSurface={
+                  item.matchedInMessagesOnly ? item.summary?.firstMatchedSurface ?? null : null
                 }
                 onClick={() => onSelect(item.conversation)}
                 onCopyFullText={handleCopyFullText}

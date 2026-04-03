@@ -1,17 +1,23 @@
 import { formatArtifactDescriptor, getArtifactExcerptText } from "@vesti/ui";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Copy, Check, ChevronDown, Link2 } from "lucide-react";
+import { Copy, Check, ChevronDown, Link2, Paperclip, Sparkles } from "lucide-react";
 import type { Message, Platform } from "~lib/types";
 import type { AstRoot } from "~lib/types/ast";
 import { AstMessageRenderer } from "./AstMessageRenderer";
-import { DisclosureSection } from "./DisclosureSection";
 import { PLATFORM_TONE } from "./platformTone";
+import { ReaderSidecarDisclosure } from "./ReaderSidecarDisclosure";
+import {
+  buildMessageFallbackDisplayText,
+  buildMessagePreviewText,
+  resolveCanonicalBodyText,
+} from "~lib/utils/messageContentPackage";
 import {
   buildFallbackSegments,
   buildHighlightSegments,
   resolveMessageRenderPlan,
   type MessageRenderPlan,
   type OccurrenceIndexMap,
+  type ReaderSidecarTarget,
 } from "../lib/readerSearch";
 
 const COLLAPSE_THRESHOLD_PX = 110;
@@ -33,6 +39,7 @@ interface MessageBubbleProps {
   platform: Platform;
   renderPlan?: MessageRenderPlan | null;
   occurrenceIndexMap?: OccurrenceIndexMap | null;
+  sidecarTargetMap?: Record<string, ReaderSidecarTarget> | null;
   currentIndex?: number | null;
 }
 
@@ -41,17 +48,28 @@ export function MessageBubble({
   platform,
   renderPlan,
   occurrenceIndexMap,
+  sidecarTargetMap,
   currentIndex,
 }: MessageBubbleProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [canCollapse, setCanCollapse] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const sidecarsRef = useRef<HTMLDivElement | null>(null);
   const copyTimerRef = useRef<number | null>(null);
   const plan = renderPlan ?? resolveMessageRenderPlan(message, platform);
   const shouldUseAst = plan.mode === "ast" && plan.renderAst;
   const indexMap = occurrenceIndexMap ?? {};
   const activeIndex = typeof currentIndex === "number" ? currentIndex : null;
+  const activeSidecarTarget = resolveActiveSidecarTarget(
+    indexMap,
+    sidecarTargetMap ?? {},
+    activeIndex
+  );
+  const canonicalBodyText = resolveCanonicalBodyText(message);
+  const renderedFallbackText =
+    canonicalBodyText || buildMessagePreviewText(message);
+  const copyText = buildMessageFallbackDisplayText(message);
 
   const renderHighlightSegments = (text: string, nodeKey: string) => {
     const segments = buildHighlightSegments(text, indexMap[nodeKey]);
@@ -80,6 +98,10 @@ export function MessageBubble({
 
   const isAi = message.role === "ai";
   const shouldCollapse = canCollapse && !isExpanded;
+  const citationCount = message.citations?.length ?? 0;
+  const attachmentCount = message.attachments?.length ?? 0;
+  const artifactCount = message.artifacts?.length ?? 0;
+  const hasSidecars = citationCount > 0 || attachmentCount > 0 || artifactCount > 0;
 
   useLayoutEffect(() => {
     const bodyEl = bodyRef.current;
@@ -115,7 +137,7 @@ export function MessageBubble({
       }
       observer?.disconnect();
     };
-  }, [message.id, message.content_text, plan.mode, plan.renderAst]);
+  }, [message.id, renderedFallbackText, plan.mode, plan.renderAst]);
 
   useEffect(() => {
     if (!canCollapse) {
@@ -131,8 +153,28 @@ export function MessageBubble({
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeSidecarTarget || activeSidecarTarget.itemKey.indexOf(`msg-${message.id}:`) !== 0) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const selector = `[data-sidecar-item-key="${escapeAttributeValue(
+        activeSidecarTarget.itemKey
+      )}"]`;
+      const target = sidecarsRef.current?.querySelector(selector);
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [activeSidecarTarget, message.id]);
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content_text).catch(() => {});
+    navigator.clipboard.writeText(copyText).catch(() => {});
     setCopied(true);
     if (copyTimerRef.current !== null) {
       window.clearTimeout(copyTimerRef.current);
@@ -187,7 +229,7 @@ export function MessageBubble({
             />
           ) : (
             <div className="reader-fallback-content whitespace-pre-wrap">
-              {renderFallbackContent(message.content_text, message.id, renderHighlightSegments)}
+              {renderFallbackContent(renderedFallbackText, message.id, renderHighlightSegments)}
             </div>
           )}
         </div>
@@ -198,72 +240,6 @@ export function MessageBubble({
           />
         ) : null}
       </div>
-
-      {(message.citations ?? []).length > 0 ? (
-        <div className="mt-3">
-          <DisclosureSection
-            title="Sources"
-            description={`${message.citations?.length ?? 0} linked source${(message.citations?.length ?? 0) === 1 ? "" : "s"}`}
-            icon={<Link2 className="h-3.5 w-3.5" strokeWidth={1.75} />}
-          >
-            <div className="space-y-2">
-              {(message.citations ?? []).map((citation) => (
-                <a
-                  key={citation.href}
-                  href={citation.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block rounded-lg border border-border-subtle bg-bg-primary/80 px-3 py-2 transition-colors hover:bg-bg-secondary/70"
-                >
-                  <div className="text-[12px] font-medium text-text-primary">
-                    {citation.label}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-text-tertiary">
-                    {citation.host}
-                  </div>
-                </a>
-              ))}
-            </div>
-          </DisclosureSection>
-        </div>
-      ) : null}
-
-      {(message.artifacts ?? []).length > 0 ? (
-        <div className="mt-3">
-          <DisclosureSection
-            title="Artifacts"
-            description={`${message.artifacts?.length ?? 0} captured artifact${(message.artifacts?.length ?? 0) === 1 ? "" : "s"}`}
-          >
-            <div className="space-y-2">
-              {(message.artifacts ?? []).map((artifact, index) => {
-                const excerpt = getArtifactExcerptText(artifact, {
-                  maxLines: 2,
-                  maxCharsPerLine: 100,
-                });
-
-                return (
-                  <div
-                    key={`${artifact.kind}-${artifact.label ?? index}`}
-                    className="rounded-lg border border-border-subtle bg-bg-primary/80 px-3 py-2"
-                  >
-                    <div className="text-[12px] font-medium text-text-primary">
-                      {artifact.label || artifact.kind}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-text-tertiary">
-                      {formatArtifactDescriptor(artifact)}
-                    </div>
-                    {excerpt ? (
-                      <div className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-text-secondary">
-                        {excerpt}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </DisclosureSection>
-        </div>
-      ) : null}
 
       <div className={`reader-expand-row ${canCollapse ? "has-btn" : ""}`}>
         {canCollapse ? (
@@ -277,8 +253,172 @@ export function MessageBubble({
           </button>
         ) : null}
       </div>
+
+      {hasSidecars ? (
+        <div ref={sidecarsRef} className="reader-turn-sidecars">
+          {citationCount > 0 ? (
+            <div className="reader-sidecar-block">
+              <ReaderSidecarDisclosure
+                title={citationCount === 1 ? "Source" : "Sources"}
+                count={citationCount}
+                icon={<Link2 className="h-3.5 w-3.5" />}
+                forceOpen={activeSidecarTarget?.section === "sources"}
+              >
+                <div className="reader-sidecar-list">
+                  {(message.citations ?? []).map((citation, index) => {
+                    const itemKey = `msg-${message.id}:source[${index}]`;
+                    const isActive = activeSidecarTarget?.itemKey === itemKey;
+
+                    return (
+                      <a
+                        key={`${citation.href}-${index}`}
+                        href={citation.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        data-sidecar-item-key={itemKey}
+                        className={`reader-sidecar-row reader-sidecar-row-link ${
+                          isActive ? "reader-sidecar-row-active" : ""
+                        }`}
+                      >
+                        <div className="reader-sidecar-row-title">
+                          {renderHighlightSegments(citation.label, `${itemKey}:label`)}
+                        </div>
+                        <div className="reader-sidecar-row-meta">
+                          {renderHighlightSegments(citation.host, `${itemKey}:host`)}
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              </ReaderSidecarDisclosure>
+            </div>
+          ) : null}
+
+          {attachmentCount > 0 ? (
+            <div className="reader-sidecar-block">
+              <ReaderSidecarDisclosure
+                title={attachmentCount === 1 ? "Attachment" : "Attachments"}
+                count={attachmentCount}
+                icon={<Paperclip className="h-3.5 w-3.5" />}
+                trayVariant="compact"
+                forceOpen={activeSidecarTarget?.section === "attachments"}
+              >
+                <div className="reader-sidecar-list">
+                  {(message.attachments ?? []).map((attachment, index) => {
+                    const itemKey = `msg-${message.id}:attachment[${index}]`;
+                    const isActive = activeSidecarTarget?.itemKey === itemKey;
+                    const secondaryLabel =
+                      attachment.label && attachment.label !== attachment.indexAlt
+                        ? attachment.label
+                        : null;
+
+                    return (
+                      <div
+                        key={`${attachment.indexAlt}-${attachment.label ?? index}`}
+                        data-sidecar-item-key={itemKey}
+                        className={`reader-sidecar-row reader-sidecar-row-attachment ${
+                          isActive ? "reader-sidecar-row-active" : ""
+                        }`}
+                      >
+                        <div className="reader-sidecar-row-title">
+                          {renderHighlightSegments(attachment.indexAlt, `${itemKey}:indexAlt`)}
+                        </div>
+                        {secondaryLabel ? (
+                          <div className="reader-sidecar-row-meta">
+                            {renderHighlightSegments(secondaryLabel, `${itemKey}:label`)}
+                          </div>
+                        ) : null}
+                        {attachment.mime ? (
+                          <div className="reader-sidecar-row-meta">
+                            {renderHighlightSegments(attachment.mime, `${itemKey}:mime`)}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </ReaderSidecarDisclosure>
+            </div>
+          ) : null}
+
+          {artifactCount > 0 ? (
+            <div className="reader-sidecar-block">
+              <ReaderSidecarDisclosure
+                title={artifactCount === 1 ? "Artifact" : "Artifacts"}
+                count={artifactCount}
+                icon={<Sparkles className="h-3.5 w-3.5" />}
+                forceOpen={activeSidecarTarget?.section === "artifacts"}
+              >
+                <div className="reader-sidecar-list">
+                  {(message.artifacts ?? []).map((artifact, index) => {
+                    const itemKey = `msg-${message.id}:artifact[${index}]`;
+                    const isActive = activeSidecarTarget?.itemKey === itemKey;
+                    const excerpt = getArtifactExcerptText(artifact, {
+                      maxLines: 2,
+                      maxCharsPerLine: 100,
+                    });
+
+                    return (
+                      <div
+                        key={`${artifact.kind}-${artifact.label ?? index}`}
+                        data-sidecar-item-key={itemKey}
+                        className={`reader-sidecar-row ${
+                          isActive ? "reader-sidecar-row-active" : ""
+                        }`}
+                      >
+                        <div className="reader-sidecar-row-title">
+                          {renderHighlightSegments(
+                            artifact.label || artifact.kind,
+                            `${itemKey}:title`
+                          )}
+                        </div>
+                        <div className="reader-sidecar-row-meta">
+                          {renderHighlightSegments(
+                            formatArtifactDescriptor(artifact),
+                            `${itemKey}:descriptor`
+                          )}
+                        </div>
+                        {excerpt ? (
+                          <div className="reader-sidecar-row-excerpt">
+                            {renderHighlightSegments(excerpt, `${itemKey}:excerpt`)}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </ReaderSidecarDisclosure>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function resolveActiveSidecarTarget(
+  occurrenceIndexMap: OccurrenceIndexMap,
+  sidecarTargetMap: Record<string, ReaderSidecarTarget>,
+  activeIndex: number | null
+): ReaderSidecarTarget | null {
+  if (activeIndex === null) {
+    return null;
+  }
+
+  for (const [nodeKey, indexes] of Object.entries(occurrenceIndexMap)) {
+    if (!sidecarTargetMap[nodeKey]) {
+      continue;
+    }
+    if (indexes.some((entry) => entry.index === activeIndex)) {
+      return sidecarTargetMap[nodeKey];
+    }
+  }
+
+  return null;
+}
+
+function escapeAttributeValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function renderFallbackContent(

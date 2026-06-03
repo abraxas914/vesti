@@ -17,11 +17,21 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 - Unified citation stripping with structured source retention across capture, reader, and export.
 - Hardened Qwen and Yuanbao parser alignment against current live DOM structures.
 - Added a reproducible Playwright auth, storage-state, and DOM sampling bootstrap workflow.
+- Reclassified parser observability heuristics (e.g. "captured only one role",
+  "kept zero messages", perf-mode switches) from `console.warn` to a new
+  `logger.debug` level so they no longer surface in the `chrome://extensions`
+  Errors panel as if the extension were failing.
 
 ### Fixed
 - Fixed ChatGPT thinking UI so it no longer splits a single assistant reply into multiple logical messages.
 - Fixed reader rendering so citation and search noise no longer appears as abrupt tail text after the main reply body.
 - Fixed Qwen and Yuanbao capture drift against current production DOM structures while keeping tables, math, and code paths intact.
+- Fixed Yuanbao "cannot capture": added the initial capture trigger the content
+  script was missing (parity with ChatGPT) so already-rendered conversations
+  are picked up on load, and scoped the `isGenerating()` streaming selectors to
+  AI bubbles so persistent page chrome can no longer wedge capture permanently.
+  Added a one-time capture-path diagnostic and a `no_messages` skip log to make
+  future "cannot capture" reports self-diagnosing.
 
 ### Docs
 - Added DOM sampling bootstrap and platform handoff notes for thinking-boundary repair, citation governance, and five-platform parser sampling.

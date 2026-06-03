@@ -330,7 +330,7 @@ export class DoubaoParser implements IParser {
     };
 
     if (modeUpdate.switched) {
-      logger.warn("parser", "Doubao AST perf mode switched", {
+      logger.debug("parser", "Doubao AST perf mode switched", {
         platform: "Doubao",
         from: modeUpdate.previousMode,
         to: modeUpdate.mode,
@@ -1032,7 +1032,7 @@ export class DoubaoParser implements IParser {
     logger.info("parser", "Doubao parse stats", stats);
 
     if (messages.length === 0) {
-      logger.warn("parser", "Doubao parser kept zero messages", {
+      logger.debug("parser", "Doubao parser kept zero messages", {
         source: stats.source,
         totalCandidates: stats.totalCandidates,
         droppedNoise: stats.droppedNoise,
@@ -1043,7 +1043,7 @@ export class DoubaoParser implements IParser {
 
     const hasSingleRole = stats.roleDistribution.user === 0 || stats.roleDistribution.ai === 0;
     if (hasSingleRole) {
-      logger.warn("parser", "Doubao parser captured only one role", {
+      logger.debug("parser", "Doubao parser captured only one role", {
         source: stats.source,
         roleDistribution: stats.roleDistribution,
         samples: messages

@@ -87,6 +87,7 @@ type LibraryTabProps = {
   onConversationOpened?: () => void;
   returnToSourceLabel?: string | null;
   onReturnToSource?: () => void;
+  labels?: Record<string, any>;
 };
 
 type LibrarySplitContextValue = {
@@ -266,8 +267,8 @@ function SplitNavigationToggle() {
       type="button"
       onClick={toggleSplitNavigation}
       className="absolute left-3 top-3 z-40 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-primary/92 text-text-tertiary shadow-[0_8px_24px_rgba(15,23,42,0.12)] backdrop-blur transition-colors hover:text-text-primary"
-      aria-label="Toggle library navigation"
-      title="Library navigation"
+      aria-label={labels.libraryNavigation ?? "Toggle library navigation"}
+      title={labels.libraryNavigation ?? "Library navigation"}
     >
       <List strokeWidth={1.7} className="h-4 w-4" />
     </button>
@@ -364,11 +365,11 @@ function SplitNoteEditorPanel({
 
   const saveStatusLabel = selectedNote
     ? noteSaveStatus === "saving"
-      ? "Saving..."
+      ? (labels.saving ?? "Saving...")
       : noteSaveStatus === "unsaved"
-        ? "Unsaved changes"
-        : `Updated ${formatTimeAgo(selectedNote.updated_at)}`
-    : "No note yet";
+        ? (labels.unsavedChanges ?? "Unsaved changes")
+        : (labels.updatedAtTime ?? "Updated {time}").replace("{time}", formatTimeAgo(selectedNote.updated_at))
+    : (labels.noNoteYet ?? "No note yet");
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg-primary">
@@ -377,7 +378,7 @@ function SplitNoteEditorPanel({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] font-sans uppercase tracking-[0.18em] text-text-tertiary">
-                Conversation Note
+                {labels.conversationNote ?? "Conversation Note"}
               </div>
               <div className="mt-1 text-[13px] font-sans text-text-secondary">
                 {saveStatusLabel}
@@ -393,7 +394,7 @@ function SplitNoteEditorPanel({
               >
                 <Shrink strokeWidth={1.7} className="h-4 w-4 shrink-0" />
                 <span className="ml-0 max-w-0 overflow-hidden whitespace-nowrap text-[11px] uppercase tracking-[0.18em] opacity-0 transition-[max-width,opacity,margin] duration-200 group-hover:ml-2 group-hover:max-w-[108px] group-hover:opacity-100 group-focus-visible:ml-2 group-focus-visible:max-w-[108px] group-focus-visible:opacity-100">
-                  Exit Split
+                  {labels.exitSplit ?? "Exit Split"}
                 </span>
               </button>
             </div>
@@ -416,7 +417,7 @@ function SplitNoteEditorPanel({
                   value={noteContent}
                   onChange={onContentChange}
                   onSaveRequest={onSaveRequest}
-                  placeholderText="Extracted excerpts and your notes will appear here..."
+                  placeholderText={labels.extractedExcerptsPlaceholder ?? "Extracted excerpts and your notes will appear here..."}
                   minHeight={SPLIT_NOTE_EDITOR_MIN_HEIGHT}
                 />
                 <div className="mt-3 flex justify-end">
@@ -434,7 +435,7 @@ function SplitNoteEditorPanel({
 
               <div className="mt-8">
                 <h3 className="mb-3 text-[11px] font-sans font-medium uppercase tracking-wider text-text-tertiary">
-                  Linked Conversations
+                  {labels.linkedConversations ?? "Linked Conversations"}
                 </h3>
                 {linkedConversations.length > 0 ? (
                   <div className="space-y-2">
@@ -456,7 +457,7 @@ function SplitNoteEditorPanel({
                   </div>
                 ) : (
                   <div className="rounded-lg bg-bg-surface-card p-3 text-[13px] font-sans text-text-tertiary">
-                    No linked conversations
+                    {labels.noLinkedConversations ?? "No linked conversations"}
                   </div>
                 )}
               </div>
@@ -467,10 +468,10 @@ function SplitNoteEditorPanel({
                 Focus Note
               </div>
               <h2 className="mt-3 text-2xl font-serif font-normal text-text-primary">
-                No note linked yet
+                {labels.noNoteLinkedYet ?? "No note linked yet"}
               </h2>
               <p className="mt-3 max-w-md text-[13px] font-sans leading-relaxed text-text-secondary">
-                Start extracting from the reader or create a conversation note
+                {labels.startExtractingHint ?? "Start extracting from the reader or create a conversation note"}
                 for
                 {` ${selectedConversation.title}`} to keep your reading and
                 writing side by side.
@@ -481,7 +482,7 @@ function SplitNoteEditorPanel({
                 className="mt-6 inline-flex items-center gap-1.5 rounded-md bg-bg-primary px-4 py-2 text-[13px] font-sans text-text-primary transition-colors hover:bg-bg-secondary"
               >
                 <BookOpen strokeWidth={1.6} className="h-4 w-4" />
-                Create Conversation Note
+                {labels.createConversationNote ?? "Create Conversation Note"}
               </button>
             </div>
           )}
@@ -498,7 +499,9 @@ export function LibraryTab({
   onConversationOpened,
   returnToSourceLabel = null,
   onReturnToSource,
+  labels: providedLabels,
 }: LibraryTabProps) {
+  const labels = providedLabels ?? ({} as Record<string, any>);
   const { topics, conversations, refresh } = useLibraryData();
   const getRelatedConversations = storage.getRelatedConversations;
   const getMessages = storage.getMessages;
@@ -854,8 +857,8 @@ export function LibraryTab({
                 ? "Directory selection was cancelled."
                 : error instanceof Error &&
                     error.message === "NOTE_SAVE_REQUIRED_BEFORE_EXPORT"
-                  ? "Save the current note before exporting it."
-                  : "Could not export this note to Obsidian.",
+                  ? (labels.saveBeforeExport ?? "Save the current note before exporting it.")
+                  : (labels.exportFailed ?? "Could not export this note to Obsidian."),
         });
       } finally {
         setObsidianActionBusy(null);
@@ -875,22 +878,22 @@ export function LibraryTab({
     return [
       {
         stage: "initiating_pipeline",
-        label: "Initiating pipeline...",
+        label: labels.initiatingPipeline ?? "Initiating pipeline...",
         status: "pending",
       },
       {
         stage: "distilling_core_logic",
-        label: "Extracting core question...",
+        label: labels.extractingCore ?? "Extracting core question...",
         status: "pending",
       },
       {
         stage: "curating_summary",
-        label: "Generating insights...",
+        label: labels.generatingInsights ?? "Generating insights...",
         status: "pending",
       },
       {
         stage: "persisting_result",
-        label: "Saving summary...",
+        label: labels.savingSummary ?? "Saving summary...",
         status: "pending",
       },
     ];
@@ -1373,7 +1376,7 @@ export function LibraryTab({
     ? findTopicById(topics, selectedConversation.topic_id)?.name
     : undefined;
   const hasAnalysis = Boolean(activeTags.length > 0 || activeTopicName);
-  const overviewSectionLabel = activeTopicName ?? activeTags[0] ?? "General";
+  const overviewSectionLabel = activeTopicName ?? activeTags[0] ?? labels.general ?? "General";
   const relatedNotesForConversation = useMemo(
     () =>
       selectedConversation
@@ -1383,10 +1386,10 @@ export function LibraryTab({
   );
   const originalConversationPreview = useMemo(() => {
     if (messagesLoading) {
-      return "Loading messages...";
+      return labels.loadingMessages ?? "Loading messages...";
     }
     if (messages.length === 0) {
-      return "No messages captured yet.";
+      return labels.noMessages ?? "No messages captured yet.";
     }
     const preview = buildMessagePreviewText(messages[0], {
       maxChars: 160,
@@ -1530,7 +1533,7 @@ export function LibraryTab({
       (item) => item.id === conversationId,
     );
     const createdNote = await storage.saveNote({
-      title: conversation?.title ?? "Untitled",
+      title: conversation?.title ?? (labels.untitled ?? "Untitled"),
       content: "",
       linked_conversation_ids: [conversationId],
       source_type: "native",
@@ -1639,7 +1642,7 @@ export function LibraryTab({
     let note = resolveConversationSplitNote(selectedConversationId);
     if (!note) {
       if (!storage.saveNote) return;
-      const title = selectedConversation?.title ?? "Untitled";
+      const title = selectedConversation?.title ?? (labels.untitled ?? "Untitled");
       const content = summaryData
         ? [
             `## ${summaryData.core_question}`,
@@ -1665,7 +1668,7 @@ export function LibraryTab({
             "### Next Steps",
             ...summaryData.actionable_next_steps.map((item) => `- ${item}`),
           ].join("\n")
-        : `Notes for: ${title}`;
+        : (labels.notesForPrefix ?? "Notes for: {title}").replace("{title}", title);
       note = await storage.saveNote({
         title,
         content,
@@ -1775,7 +1778,7 @@ export function LibraryTab({
       messageId: message.id,
       messageIndex,
       sourceLabel:
-        message.role === "user" ? "You" : selectedConversation.platform,
+        message.role === "user" ? (labels.you ?? "You") : selectedConversation.platform,
       content,
       top: Math.max(12, rect.bottom + 10),
       left: Math.max(12, Math.min(rect.left + rect.width / 2 - 60, maxLeft)),
@@ -1840,7 +1843,7 @@ export function LibraryTab({
   }, []);
 
   const handleCreateFolder = () => {
-    const name = window.prompt("New folder name");
+    const name = window.prompt(labels.newFolderPrompt ?? "New folder name");
     if (!name) return;
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -1861,7 +1864,7 @@ export function LibraryTab({
   };
 
   const handleRenameFolder = async (item: FolderItem) => {
-    const name = window.prompt("Rename folder", item.name);
+    const name = window.prompt(labels.renameFolderPrompt ?? "Rename folder", item.name);
     if (!name) return;
     const trimmed = name.trim();
     if (!trimmed || trimmed === item.name) return;
@@ -2380,7 +2383,7 @@ export function LibraryTab({
                 ) : null}
                 {note.import_meta?.conflict ? (
                   <span className="rounded-full bg-[#FEF3F2] px-2 py-0.5 text-[11px] font-sans text-[#B42318]">
-                    Conflict
+                    {labels.conflict ?? "Conflict"}
                   </span>
                 ) : null}
                 {note.obsidian_export ? (
@@ -2767,16 +2770,16 @@ export function LibraryTab({
 
   function formatTimeAgo(timestamp: number): string {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return "just now";
+    if (seconds < 60) return labels.justNow ?? "just now";
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
+    if (minutes < 60) return (labels.minutesAgo ?? "{count}m ago").replace("{count}", String(minutes));
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 24) return (labels.hoursAgo ?? "{count}h ago").replace("{count}", String(hours));
     const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d ago`;
+    if (days < 30) return (labels.daysAgo ?? "{count}d ago").replace("{count}", String(days));
     const months = Math.floor(days / 30);
-    if (months < 12) return `${months}mo ago`;
-    return `${Math.floor(months / 12)}y ago`;
+    if (months < 12) return (labels.monthsAgo ?? "{count}mo ago").replace("{count}", String(months));
+    return (labels.yearsAgo ?? "{count}y ago").replace("{count}", String(Math.floor(months / 12)));
   }
 
   function handleAnnotationComposerBlur(
@@ -2911,14 +2914,14 @@ export function LibraryTab({
                         disabled={Boolean(isDeleteBusy)}
                         className="rounded-md px-2 py-1 font-medium text-[#922018] hover:bg-[#FEF2F2] disabled:opacity-50"
                       >
-                        {isDeleteBusy ? "Deleting..." : "Delete"}
+                        {isDeleteBusy ? (labels.deleting ?? "Deleting...") : (labels.delete ?? "Delete")}
                       </button>
                       <button
                         type="button"
                         onClick={() => setAnnotationPendingDeleteId(null)}
                         className="rounded-md px-2 py-1 text-text-secondary hover:bg-bg-surface-card hover:text-text-primary"
                       >
-                        Cancel
+                        {labels.cancel ?? "Cancel"}
                       </button>
                     </div>
                   ) : (
@@ -2938,7 +2941,7 @@ export function LibraryTab({
                         className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary disabled:opacity-50"
                       >
                         <BookOpen strokeWidth={1.6} className="h-3.5 w-3.5" />
-                        {isNoteBusy ? "Exporting..." : "My Notes"}
+                        {isNoteBusy ? (labels.exporting ?? "Exporting...") : (labels.myNotes ?? "My Notes")}
                       </button>
                       <button
                         type="button"
@@ -2951,12 +2954,12 @@ export function LibraryTab({
                         className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary disabled:opacity-50"
                         title={
                           hasNotionExportConfig
-                            ? "Export to Notion"
-                            : "Connect to Notion and choose a database in Settings to enable export"
+                            ? (labels.notion ?? "Notion")
+                            : (labels.notionSettingsMissing ?? "Connect to Notion and choose a database in Settings to enable export")
                         }
                       >
                         <ArrowRight strokeWidth={1.6} className="h-3.5 w-3.5" />
-                        {isNotionBusy ? "Exporting..." : "Notion"}
+                        {isNotionBusy ? (labels.exporting ?? "Exporting...") : (labels.notion ?? "Notion")}
                       </button>
                       <button
                         type="button"
@@ -2994,7 +2997,7 @@ export function LibraryTab({
             onBlur={handleAnnotationComposerBlur}
             onKeyDown={handleAnnotationComposerKeyDown}
             rows={1}
-            placeholder="Comment..."
+            placeholder={labels.commentPlaceholder ?? "Comment..."}
             className="min-h-[38px] w-full resize-none border-0 bg-transparent px-0 py-0 text-[13px] font-sans leading-relaxed text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-0"
           />
         </div>
@@ -3114,7 +3117,7 @@ export function LibraryTab({
                       isAllActive ? "text-accent-primary" : "text-text-primary"
                     }`}
                   >
-                    All Conversations
+                    {labels.allConversations ?? "All Conversations"}
                   </span>
                   <span className="text-xs font-sans text-text-tertiary">
                     {conversations.length}
@@ -3146,7 +3149,7 @@ export function LibraryTab({
                         : "text-text-primary"
                     }`}
                   >
-                    Starred
+                    {labels.starred ?? "Starred"}
                   </span>
                   <span className="text-xs font-sans text-text-tertiary">
                     {starredCount}
@@ -3178,7 +3181,7 @@ export function LibraryTab({
                         : "text-text-primary"
                     }`}
                   >
-                    Recent
+                    {labels.recent ?? "Recent"}
                   </span>
                   <span className="text-xs font-sans text-text-tertiary">
                     {recentConversations.length}
@@ -3189,13 +3192,13 @@ export function LibraryTab({
               <div className="flex-1 overflow-y-auto px-2">
                 <div className="flex items-center justify-between px-2 py-2">
                   <span className="text-[10px] font-sans font-semibold text-text-tertiary uppercase tracking-wider">
-                    Folders
+                    {labels.folders ?? "FOLDERS"}
                   </span>
                   <button
                     onClick={handleCreateFolder}
                     className="w-5 h-5 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-bg-surface-card transition-colors"
-                    aria-label="Create new folder"
-                    title="New folder"
+                    aria-label={labels.createNewFolder ?? "Create new folder"}
+                    title={labels.newFolder ?? "New folder"}
                   >
                     +
                   </button>
@@ -3247,7 +3250,7 @@ export function LibraryTab({
                                 );
                               }}
                               className="w-5 h-5 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-bg-surface-card"
-                              title="Folder actions"
+                              title={labels.folderActions ?? "Folder actions"}
                               aria-label={`Folder actions for ${folder.name}`}
                             >
                               <MoreHorizontal
@@ -3270,7 +3273,7 @@ export function LibraryTab({
                                 className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-sans text-text-primary hover:bg-bg-surface-card transition-colors"
                               >
                                 <Pencil strokeWidth={1.5} className="w-4 h-4" />
-                                <span>Rename</span>
+                                <span>{labels.rename ?? "Rename"}</span>
                               </button>
                               <div className="my-1 h-px bg-border-subtle" />
                               <button
@@ -3282,7 +3285,7 @@ export function LibraryTab({
                                 className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-sans text-[#B42318] hover:bg-bg-surface-card transition-colors"
                               >
                                 <Trash2 strokeWidth={1.5} className="w-4 h-4" />
-                                <span>Delete</span>
+                                <span>{labels.delete ?? "Delete"}</span>
                               </button>
                             </div>
                           )}
@@ -3307,7 +3310,7 @@ export function LibraryTab({
                     className="w-4 h-4 text-text-secondary"
                   />
                   <span className="flex-1 text-sm font-sans text-text-primary">
-                    My Notes
+                    {labels.myNotes ?? "My Notes"}
                   </span>
                   <span className="text-xs font-sans text-text-tertiary">
                     {notes.length}
@@ -3337,13 +3340,13 @@ export function LibraryTab({
                           {selectedTag
                             ? selectedTag
                             : listFilter === "starred"
-                              ? "Starred"
+                              ? (labels.starred ?? "Starred")
                               : listFilter === "recent"
-                                ? "Recent"
-                                : "All Conversations"}
+                                ? (labels.recent ?? "Recent")
+                                : (labels.allConversations ?? "All Conversations")}
                         </h2>
                         <span className="text-xs font-sans text-text-tertiary">
-                          · {filteredConversations.length} conversations
+                          · {filteredConversations.length} {labels.conversationCount ?? "conversations"}
                         </span>
                       </div>
                     </div>
@@ -3388,7 +3391,7 @@ export function LibraryTab({
                               );
                             }}
                             className="absolute right-2 top-2 w-7 h-7 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-bg-surface-card transition-colors opacity-0 group-hover:opacity-100"
-                            aria-label="Conversation actions"
+                            aria-label={labels.conversationActions ?? "Conversation actions"}
                           >
                             <MoreHorizontal
                               strokeWidth={1.5}
@@ -3410,7 +3413,7 @@ export function LibraryTab({
                               >
                                 <Star strokeWidth={1.5} className="w-4 h-4" />
                                 <span>
-                                  {conv.is_starred ? "Unstar" : "Star"}
+                                  {conv.is_starred ? (labels.unstar ?? "Unstar") : (labels.star ?? "Star")}
                                 </span>
                               </button>
                               <button
@@ -3422,7 +3425,7 @@ export function LibraryTab({
                                 className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-sans text-text-primary hover:bg-bg-surface-card transition-colors"
                               >
                                 <Pencil strokeWidth={1.5} className="w-4 h-4" />
-                                <span>Rename</span>
+                                <span>{labels.rename ?? "Rename"}</span>
                               </button>
                               <button
                                 type="button"
@@ -3436,7 +3439,7 @@ export function LibraryTab({
                                   strokeWidth={1.5}
                                   className="w-4 h-4"
                                 />
-                                <span>Change folder</span>
+                                <span>{labels.changeFolder ?? "Change folder"}</span>
                               </button>
                               <button
                                 type="button"
@@ -3452,7 +3455,7 @@ export function LibraryTab({
                                 }`}
                               >
                                 <X strokeWidth={1.5} className="w-4 h-4" />
-                                <span>Remove from folder</span>
+                                <span>{labels.removeFromFolder ?? "Remove from folder"}</span>
                               </button>
                               <div className="my-1 h-px bg-border-subtle" />
                               <button
@@ -3464,7 +3467,7 @@ export function LibraryTab({
                                 className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-sans text-[#B42318] hover:bg-bg-surface-card transition-colors"
                               >
                                 <Trash2 strokeWidth={1.5} className="w-4 h-4" />
-                                <span>Delete</span>
+                                <span>{labels.delete ?? "Delete"}</span>
                               </button>
                             </div>
                           )}
@@ -3566,13 +3569,12 @@ export function LibraryTab({
                   <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
                     {notesLoading && notes.length === 0 ? (
                       <div className="text-[13px] font-sans text-text-tertiary">
-                        Loading notes...
+                        {labels.loadingNotes ?? "Loading notes..."}
                       </div>
                     ) : notes.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-border-subtle bg-bg-surface-card px-4 py-6 text-[13px] font-sans text-text-tertiary">
                         <div>
-                          Create a local note, then export it to an Obsidian
-                          folder whenever you are ready.
+                          {labels.createLocalNoteHint ?? "Create a local note, then export it to an Obsidian folder whenever you are ready."}
                         </div>
                         <div className="mt-3 flex flex-wrap items-center gap-3 text-[12px]">
                           {storage.saveNote ? (
@@ -3583,7 +3585,7 @@ export function LibraryTab({
                               }}
                               className="font-medium text-text-primary transition-colors hover:text-accent-primary"
                             >
-                              Create a note
+                              {labels.createNote ?? "Create a note"}
                             </button>
                           ) : null}
                         </div>
@@ -3593,7 +3595,7 @@ export function LibraryTab({
                         <div className="px-1 pt-1">
                           <div className="mb-2 flex items-center justify-between px-2">
                             <span className="text-[11px] font-sans uppercase tracking-[0.16em] text-text-tertiary">
-                              Local Notes
+                              {labels.localNotes ?? "Local Notes"}
                             </span>
                             <div className="flex items-center gap-3">
                               {storage.saveNote ? (
@@ -3604,7 +3606,7 @@ export function LibraryTab({
                                   }}
                                   className="text-[11px] font-sans uppercase tracking-[0.16em] text-text-tertiary transition-colors hover:text-text-primary"
                                 >
-                                  New Note
+                                  {labels.newNote ?? "New Note"}
                                 </button>
                               ) : null}
                               <span className="text-[11px] font-sans text-text-tertiary">
@@ -3626,7 +3628,7 @@ export function LibraryTab({
                                     }}
                                     className="mt-2 text-[12px] font-medium text-text-primary transition-colors hover:text-accent-primary"
                                   >
-                                    Create a note
+                                    {labels.createNote ?? "Create a note"}
                                   </button>
                                 ) : null}
                               </div>
@@ -3637,7 +3639,7 @@ export function LibraryTab({
                         {importedVaults.length > 0 ? (
                           <div className="px-1 pt-4">
                             <div className="mb-2 px-2 text-[11px] font-sans uppercase tracking-[0.16em] text-text-tertiary">
-                              Imported Vaults
+                              {labels.importedVaults ?? "Imported Vaults"}
                             </div>
                             <div className="space-y-2">
                               {importedVaults.map((vault) => {
@@ -3745,13 +3747,13 @@ export function LibraryTab({
                                   )
                                 }
                                 className="inline-flex items-center gap-1 text-accent-primary transition-colors hover:text-accent-primary/80"
-                                title="Open original conversation"
+                                title={labels.openOriginal ?? "Open original conversation"}
                               >
                                 <ExternalLink
                                   className="h-3.5 w-3.5"
                                   strokeWidth={1.5}
                                 />
-                                <span>Open</span>
+                                <span>{labels.open ?? "Open"}</span>
                               </button>
                             </>
                           )}
@@ -3763,8 +3765,8 @@ export function LibraryTab({
                           onClick={() =>
                             void handleSplitViewForCurrentConversation()
                           }
-                          aria-label="Open split view"
-                          title="Split view"
+                          aria-label={labels.openSplitView ?? "Open split view"}
+                          title={labels.splitView ?? "Split view"}
                           className="group inline-flex h-9 shrink-0 items-center bg-transparent px-1 text-[12px] font-sans text-text-tertiary transition-colors duration-200 hover:text-text-primary"
                         >
                           <Expand
@@ -3796,7 +3798,7 @@ export function LibraryTab({
                               strokeWidth={1.5}
                               className="w-4 h-4 text-accent-primary"
                             />
-                            <span className="text-text-primary">Analyzed</span>
+                            <span className="text-text-primary">{labels.analyzed ?? "Analyzed"}</span>
                             {activeTopicName && (
                               <>
                                 <span className="text-text-tertiary">·</span>
@@ -3816,7 +3818,7 @@ export function LibraryTab({
                           </>
                         ) : (
                           <span className="text-text-tertiary">
-                            Not analyzed yet
+                            {labels.notAnalyzedYet ?? "Not analyzed yet"}
                           </span>
                         )}
                       </div>
@@ -3828,7 +3830,7 @@ export function LibraryTab({
                     <div className="p-4">
                       {summaryLoading ? (
                         <p className="text-[13px] font-sans text-text-tertiary">
-                          Loading summary...
+                          {labels.loadingMessages ?? "Loading summary..."}
                         </p>
                       ) : summaryData ? (
                         <div>
@@ -3840,7 +3842,7 @@ export function LibraryTab({
                    transition-colors duration-150"
                           >
                             <span className="font-medium">
-                              {summaryData.meta?.title || "Summary"}
+                              {summaryData.meta?.title || (labels.summary ?? "Summary")}
                             </span>
                             <ChevronDown
                               className={`w-4 h-4 transition-transform duration-200 ${
@@ -3867,8 +3869,7 @@ export function LibraryTab({
                       ) : (
                         <div className="flex flex-col gap-3">
                           <p className="text-[13px] font-sans text-text-tertiary leading-relaxed">
-                            No summary yet. Generate one to see structured
-                            insights.
+                            {labels.noSummaryYet ?? "No summary yet. Generate one to see structured insights."}
                           </p>
                           {storage.generateSummary && (
                             <>
@@ -4045,7 +4046,7 @@ export function LibraryTab({
                              transition-colors duration-150 disabled:opacity-50
                              disabled:cursor-not-allowed"
                               >
-                                Generate Summary
+                                {labels.generateSummary ?? "Generate Summary"}
                               </button>
                             </>
                           )}
@@ -4114,7 +4115,7 @@ export function LibraryTab({
                             className="w-3.5 h-3.5"
                             strokeWidth={1.75}
                           />
-                          Regenerate
+                          {labels.regenerate ?? "Regenerate"}
                         </button>
                       )}
                       <button
@@ -4125,7 +4126,7 @@ export function LibraryTab({
                       transition-colors duration-150"
                       >
                         <BookOpen strokeWidth={1.5} className="w-3.5 h-3.5" />
-                        Import to Notes
+                        {labels.importToNotes ?? "Import to Notes"}
                       </button>
                       <button
                         type="button"
@@ -4149,13 +4150,13 @@ export function LibraryTab({
                       }`}
                       >
                         <ArrowRight strokeWidth={1.5} className="w-3.5 h-3.5" />
-                        View Note
+                        {labels.viewNote ?? "View Note"}
                       </button>
                     </div>
                   </DetailSectionCard>
 
                   <DetailSectionEyebrow>
-                    Original Conversation
+                    {labels.originalConversation ?? "Original Conversation"}
                   </DetailSectionEyebrow>
                   <DetailSectionCard className="mb-8">
                     {/* 默认预览条 - 折叠时显示 */}
@@ -4168,7 +4169,7 @@ export function LibraryTab({
                               className="h-1 w-1 rounded-full bg-border-default/80"
                               aria-hidden="true"
                             />
-                            <span>{messageCount} messages</span>
+                            <span>{messageCount} {labels.messageCountLabel ?? "messages"}</span>
                           </div>
                           <p
                             className={`mt-3 max-w-[60ch] break-words font-sans text-[14px] leading-[1.75] ${
@@ -4190,7 +4191,7 @@ export function LibraryTab({
                                 }
                                 className="inline-flex items-center rounded-full bg-bg-primary px-3.5 py-1.5 text-[12px] font-sans text-text-secondary transition-colors hover:bg-white hover:text-text-primary"
                               >
-                                Show original messages ({messageCount})
+                                {labels.showOriginalMessages ?? "Show original messages"} ({messageCount})
                               </button>
                             </div>
                           )}
@@ -4234,7 +4235,7 @@ export function LibraryTab({
                               onClick={() => setIsConversationExpanded(false)}
                               className="inline-flex items-center rounded-full border border-border-subtle bg-bg-primary px-3.5 py-1.5 text-[12px] font-sans text-text-secondary transition-colors whitespace-nowrap hover:bg-bg-secondary hover:text-text-primary"
                             >
-                              Hide original messages
+                              {labels.hideOriginalMessages ?? "Hide original messages"}
                             </button>
                           </div>
                         )}
@@ -4242,12 +4243,12 @@ export function LibraryTab({
                           <div className="prose prose-slate max-w-none min-w-0">
                             {messagesLoading && (
                               <div className="text-[13px] font-sans text-text-tertiary">
-                                Loading messages...
+                                {labels.loadingMessages ?? "Loading messages..."}
                               </div>
                             )}
                             {!messagesLoading && messagesError && (
                               <div className="text-[13px] font-sans text-text-tertiary">
-                                Unable to load messages.
+                                {labels.loadMessagesFailed ?? "Unable to load messages."}
                               </div>
                             )}
                             {messages.map((message, messageIndex) => {
@@ -4272,7 +4273,7 @@ export function LibraryTab({
                                     <div className="flex items-start justify-between gap-3">
                                       {isUser ? (
                                         <div className="text-[11px] font-sans text-text-tertiary uppercase tracking-wide">
-                                          You
+                                          {labels.you ?? "You"}
                                         </div>
                                       ) : (
                                         <span
@@ -4489,7 +4490,7 @@ export function LibraryTab({
                     relatedNotesForConversation.length > 0 && (
                       <>
                         <DetailSectionEyebrow>
-                          Related Notes
+                          {labels.relatedNotes ?? "Related Notes"}
                         </DetailSectionEyebrow>
                         <DetailSectionCard className="mb-8">
                           <div className="space-y-2 p-2">
@@ -4513,20 +4514,20 @@ export function LibraryTab({
                     )}
 
                   <DetailSectionEyebrow>
-                    Related Conversations
+                    {labels.relatedConversations ?? "Related Conversations"}
                   </DetailSectionEyebrow>
                   <DetailSectionCard>
                     <div className="space-y-2 p-2">
                       {relatedLoading && (
                         <div className="px-3 py-2 text-[13px] font-sans text-text-tertiary">
-                          Finding related conversations...
+                          {labels.findingRelated ?? "Finding related conversations..."}
                         </div>
                       )}
                       {!relatedLoading && relatedConversations.length === 0 && (
                         <div className="px-3 py-2 text-[13px] font-sans text-text-tertiary">
                           {relatedError
-                            ? "Unable to load related conversations."
-                            : "No related conversations yet."}
+                            ? (labels.unableToLoadRelated ?? "Unable to load related conversations.")
+                            : (labels.noRelatedConversations ?? "No related conversations yet.")}
                         </div>
                       )}
                       {!relatedLoading &&
@@ -4652,10 +4653,10 @@ export function LibraryTab({
                     ) : null}
                     <span className="ml-auto">
                       {noteSaveStatus === "saving"
-                        ? "Saving..."
+                        ? (labels.saving ?? "Saving...")
                         : noteSaveStatus === "unsaved"
-                          ? "Unsaved changes"
-                        : `Updated ${formatTimeAgo(selectedNote.updated_at)}`}
+                          ? (labels.unsavedChanges ?? "Unsaved changes")
+                        : (labels.updatedAtTime ?? "Updated {time}").replace("{time}", formatTimeAgo(selectedNote.updated_at))}
                     </span>
                   </div>
 
@@ -4671,7 +4672,7 @@ export function LibraryTab({
                       value={noteContent}
                       onChange={setNoteContent}
                       onSaveRequest={flushPendingNoteSave}
-                      placeholderText="Start writing..."
+                      placeholderText={labels.startWritingPlaceholder ?? "Start writing..."}
                       minHeight={STANDARD_NOTE_EDITOR_MIN_HEIGHT}
                       className="w-full overflow-hidden rounded-2xl border border-border-subtle bg-bg-primary"
                     />
@@ -4681,13 +4682,13 @@ export function LibraryTab({
                   selectedNote.import_meta ? (
                     <div className="mb-8 space-y-4">
                       <h3 className="text-[11px] font-sans font-medium uppercase tracking-wider text-text-tertiary">
-                        Import Metadata
+                        {labels.importMetadata ?? "Import Metadata"}
                       </h3>
                       <div className="rounded-2xl border border-border-subtle bg-bg-surface-card p-4">
                         <div className="grid gap-3 md:grid-cols-2">
                           <div>
                             <div className="text-[11px] uppercase tracking-[0.16em] text-text-tertiary">
-                              Vault Path
+                              {labels.vaultPath ?? "Vault Path"}
                             </div>
                             <div className="mt-1 break-all text-[13px] font-sans text-text-primary">
                               {selectedNote.import_meta.relative_path ??
@@ -4697,7 +4698,7 @@ export function LibraryTab({
                           </div>
                           <div>
                             <div className="text-[11px] uppercase tracking-[0.16em] text-text-tertiary">
-                              Source Hash
+                              {labels.sourceHash ?? "Source Hash"}
                             </div>
                             <div className="mt-1 break-all text-[13px] font-sans text-text-primary">
                               {selectedNote.import_meta.source_file_hash ??
@@ -4720,7 +4721,7 @@ export function LibraryTab({
                             </MetaChip>
                           ))}
                           {selectedNote.import_meta.frontmatter ? (
-                            <MetaChip>Frontmatter</MetaChip>
+                            <MetaChip>{labels.frontmatter ?? "Frontmatter"}</MetaChip>
                           ) : null}
                         </div>
                       </div>
@@ -4754,7 +4755,7 @@ export function LibraryTab({
                                   }
                                   className="rounded-md bg-bg-primary px-3 py-1.5 text-[12px] font-sans text-text-primary transition-colors hover:bg-bg-secondary"
                                 >
-                                  Preview
+                                  {labels.preview ?? "Preview"}
                                 </button>
                                 <button
                                   type="button"
@@ -4776,7 +4777,7 @@ export function LibraryTab({
                               <div className="mb-3 flex items-center justify-between gap-3">
                                 <div>
                                   <div className="text-[11px] uppercase tracking-[0.16em] text-text-tertiary">
-                                    Attachment Preview
+                                    {labels.attachmentPreview ?? "Attachment Preview"}
                                   </div>
                                   <div className="mt-1 text-[13px] font-sans text-text-primary">
                                     {previewedAssetPath}
@@ -4798,8 +4799,8 @@ export function LibraryTab({
                                 />
                               ) : (
                                 <div className="text-[13px] font-sans text-text-secondary">
-                                  Preview is available for imported images.
-                                  Use Open for other attachment types.
+                                  {labels.preview ?? "Preview"} is available for imported images.
+                                  {labels.useOpenForOtherAttachments ?? "Use Open for other attachment types."}
                                 </div>
                               )}
                             </div>
@@ -4824,8 +4825,8 @@ export function LibraryTab({
                         }`}
                       >
                         {obsidianActionBusy === selectedNote.id
-                          ? "Choosing Folder..."
-                          : "Export to Obsidian"}
+                          ? (labels.choosingFolder ?? "Choosing Folder...")
+                          : (labels.exportToObsidian ?? "Export to Obsidian")}
                       </button>
                       {obsidianNotice ? (
                         <div
@@ -4843,7 +4844,7 @@ export function LibraryTab({
 
                   <div className="mt-2">
                     <h3 className="mb-3 text-[11px] font-sans font-medium uppercase tracking-wider text-text-tertiary">
-                      Linked Conversations
+                      {labels.linkedConversations ?? "Linked Conversations"}
                     </h3>
                     {selectedNote.linked_conversation_ids.length > 0 ? (
                       <div className="space-y-2">
@@ -4865,7 +4866,7 @@ export function LibraryTab({
                                 </span>
                               </div>
                               <span className="text-xs font-sans font-medium text-accent-primary">
-                                Preview →
+                                {labels.preview ?? "Preview"} →
                               </span>
                             </button>
                           );
@@ -4873,7 +4874,7 @@ export function LibraryTab({
                       </div>
                     ) : (
                       <div className="rounded-lg bg-bg-surface-card p-3 text-[13px] font-sans text-text-tertiary">
-                        No linked conversations
+                        {labels.noLinkedConversations ?? "No linked conversations"}
                       </div>
                     )}
                   </div>
@@ -4885,14 +4886,13 @@ export function LibraryTab({
               <div className="flex flex-1 items-center justify-center bg-bg-primary px-8">
                 <div className="max-w-md text-center">
                   <div className="text-[11px] font-sans uppercase tracking-[0.18em] text-text-tertiary">
-                    Notes Workspace
+                    {labels.notesWorkspace ?? "Notes Workspace"}
                   </div>
                   <h2 className="mt-3 text-2xl font-serif font-normal text-text-primary">
-                    Select a note to start editing
+                    {labels.selectNoteToEdit ?? "Select a note to start editing"}
                   </h2>
                   <p className="mt-3 text-[13px] font-sans leading-relaxed text-text-secondary">
-                    Local notes and imported Obsidian files now share the same
-                    Markdown editor surface.
+                    {labels.localNotesAndObsidianShareEditor ?? "Local notes and imported Obsidian files now share the same Markdown editor surface."}
                   </p>
                 </div>
               </div>
@@ -4908,10 +4908,10 @@ export function LibraryTab({
               />
               <div className="relative w-full max-w-md rounded-xl border border-border-subtle bg-bg-primary shadow-[0_16px_48px_rgba(0,0,0,0.18)] p-4">
                 <h3 className="text-[16px] font-sans font-medium text-text-primary">
-                  Rename Note
+                  {labels.renameNote ?? "Rename Note"}
                 </h3>
                 <p className="mt-1 text-[13px] font-sans text-text-tertiary">
-                  Update the title for this note.
+                  {labels.updateNoteTitle ?? "Update the title for this note."}
                 </p>
                 <input
                   ref={renameNoteInputRef}

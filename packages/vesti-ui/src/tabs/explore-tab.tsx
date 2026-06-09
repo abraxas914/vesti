@@ -245,6 +245,7 @@ type ExploreTabProps = {
   storage: StorageApi;
   themeMode?: UiThemeMode;
   onOpenConversation?: (conversationId: number) => void;
+  labels?: Record<string, string>;
 };
 
 type DrawerTab = "plan" | "tool_calls" | "sources" | "context_draft";
@@ -366,12 +367,12 @@ function buildSearchScope(
   return { mode: "all" };
 }
 
-function getSearchScopeSummary(searchScope?: ExploreSearchScope): string {
+function getSearchScopeSummary(searchScope?: ExploreSearchScope, labels?: Record<string, string>): string {
   if (searchScope?.mode === "selected") {
     const count = searchScope.conversationIds?.length ?? 0;
-    return count > 0 ? `${count} selected` : "Selected";
+    return count > 0 ? `${count} ${labels?.selected ?? "selected"}` : (labels?.selected ?? "Selected");
   }
-  return "All conversations";
+  return labels?.allConversations ?? "All conversations";
 }
 
 function getIntentLabel(plan?: ExploreAgentPlan): string {
@@ -428,7 +429,9 @@ export function ExploreTab({
   storage,
   themeMode = "light",
   onOpenConversation,
+  labels: providedLabels,
 }: ExploreTabProps) {
+  const labels = providedLabels ?? ({} as Record<string, string>);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mode, setMode] = useState<ExploreMode>("agent");
   const [sessions, setSessions] = useState<ExploreSession[]>([]);
@@ -1100,7 +1103,7 @@ export function ExploreTab({
       const hasSources = message.sources && message.sources.length > 0;
       const toolCalls = message.agentMeta?.toolCalls ?? [];
       const hasToolCalls = message.agentMeta?.mode === "agent" && toolCalls.length > 0;
-      const scopeSummary = getSearchScopeSummary(message.agentMeta?.searchScope);
+      const scopeSummary = getSearchScopeSummary(message.agentMeta?.searchScope, labels);
       const plan = message.agentMeta?.plan;
       const timeScopeLabel = getResolvedTimeScopeLabel(plan);
 
@@ -1250,13 +1253,13 @@ export function ExploreTab({
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                 <div className="min-w-0 lg:pr-10">
                   <p className="text-[10px] font-sans uppercase tracking-[0.4em] text-text-tertiary">
-                    {starterDeck.eyebrow}
+                    {labels[`starterDeck${(starterDeckRevision % 3) + 1}Eyebrow`] ?? starterDeck.eyebrow}
                   </p>
                   <h1 className="mt-3 text-3xl font-[family-name:var(--font-lora)] font-normal leading-tight text-text-primary md:text-[40px]">
-                    {starterDeck.title}
+                    {labels[`starterDeck${(starterDeckRevision % 3) + 1}Title`] ?? starterDeck.title}
                   </h1>
                   <p className="mt-3 max-w-[920px] text-sm leading-6 text-text-secondary md:text-[15px]">
-                    {starterDeck.description}
+                    {labels[`starterDeck${(starterDeckRevision % 3) + 1}Description`] ?? starterDeck.description}
                   </p>
                 </div>
 
@@ -1266,7 +1269,7 @@ export function ExploreTab({
                   ) : (
                     <span className="h-2.5 w-2.5 rounded-full bg-accent-primary" />
                   )}
-                  <span>{loadingStarterDeck ? "Loading starter ideas" : "Starter deck ready"}</span>
+                  <span>{loadingStarterDeck ? (labels.loadingStarterIdeas ?? "Loading starter ideas") : (labels.starterDeckReady ?? "Starter deck ready")}</span>
                 </div>
               </div>
 
@@ -1278,7 +1281,7 @@ export function ExploreTab({
                       value={inputValue}
                       onChange={(event) => setInputValue(event.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Ask your knowledge base, summarize a week, or trace a decision trail..."
+                      placeholder={labels.askPlaceholder ?? "Ask your knowledge base, summarize a week, or trace a decision trail..."}
                       rows={5}
                       className="min-h-[168px] w-full resize-none bg-transparent px-5 py-5 pr-24 text-base font-sans text-text-primary placeholder:text-text-tertiary focus:outline-none"
                     />
@@ -1293,7 +1296,7 @@ export function ExploreTab({
                         ) : (
                           <Send className="h-3.5 w-3.5" />
                         )}
-                        Send
+                        {labels.send ?? "Send"}
                       </button>
                     </div>
                   </div>
@@ -1306,14 +1309,14 @@ export function ExploreTab({
             <div className="flex items-end justify-between gap-3 px-1">
               <div>
                 <p className="text-xs font-sans uppercase tracking-wider text-text-tertiary">
-                  Starter prompts
+                  {labels.starterPrompts ?? "Starter prompts"}
                 </p>
                 <p className="mt-1 text-sm font-sans text-text-secondary">
-                  Choose one to populate the composer, then edit it before sending.
+                  {labels.choosePromptHint ?? "Choose one to populate the composer, then edit it before sending."}
                 </p>
               </div>
               <p className="text-xs font-sans text-text-tertiary">
-                {loadingStarterDeck ? "Refreshing suggestions..." : "Cards update on every new chat."}
+                {loadingStarterDeck ? (labels.refreshingSuggestions ?? "Refreshing suggestions...") : (labels.cardsUpdateHint ?? "Cards update on every new chat.")}
               </p>
             </div>
 
@@ -1385,7 +1388,7 @@ export function ExploreTab({
                   }`}
                 >
                   <MessageSquarePlus className="h-4 w-4" strokeWidth={1.5} />
-                  <span className="text-sm font-sans font-medium">New Chat</span>
+                  <span className="text-sm font-sans font-medium">{labels.newChat ?? "New Chat"}</span>
                 </button>
               </div>
 
@@ -1396,14 +1399,14 @@ export function ExploreTab({
                   </div>
                 ) : sessions.length === 0 ? (
                   <div className="py-4 text-center text-xs font-sans text-text-tertiary">
-                    No conversations yet
+                    {labels.noConversationsYet ?? "No conversations yet"}
                   </div>
                 ) : (
                   <>
                     {groupedSessions.today.length > 0 && (
                       <div>
                         <p className="px-3 py-1 text-[10px] font-sans uppercase tracking-wider text-text-tertiary">
-                          Today
+                          {labels.today ?? "Today"}
                         </p>
                         <div className="space-y-0.5">{groupedSessions.today.map(renderSessionItem)}</div>
                       </div>
@@ -1411,7 +1414,7 @@ export function ExploreTab({
                     {groupedSessions.yesterday.length > 0 && (
                       <div>
                         <p className="px-3 py-1 text-[10px] font-sans uppercase tracking-wider text-text-tertiary">
-                          Yesterday
+                          {labels.yesterday ?? "Yesterday"}
                         </p>
                         <div className="space-y-0.5">
                           {groupedSessions.yesterday.map(renderSessionItem)}
@@ -1421,7 +1424,7 @@ export function ExploreTab({
                     {groupedSessions.earlier.length > 0 && (
                       <div>
                         <p className="px-3 py-1 text-[10px] font-sans uppercase tracking-wider text-text-tertiary">
-                          Earlier
+                          {labels.earlier ?? "Earlier"}
                         </p>
                         <div className="space-y-0.5">{groupedSessions.earlier.map(renderSessionItem)}</div>
                       </div>
@@ -1447,7 +1450,7 @@ export function ExploreTab({
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="rounded-lg p-2 text-text-tertiary transition-colors hover:bg-bg-surface-card hover:text-text-primary"
-              title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+              title={sidebarOpen ? (labels.closeSidebar ?? "Close sidebar") : (labels.openSidebar ?? "Open sidebar")}
             >
               {sidebarOpen ? (
                 <PanelLeftClose className="h-4 w-4" strokeWidth={1.5} />
@@ -1518,7 +1521,7 @@ export function ExploreTab({
               className="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle bg-bg-surface-card px-3 py-1.5 text-xs font-sans text-text-secondary transition-colors hover:bg-bg-surface-card-hover hover:text-text-primary"
             >
               <Filter className="h-3.5 w-3.5" strokeWidth={1.7} />
-              {getSearchScopeSummary(activeSearchScope)}
+              {getSearchScopeSummary(activeSearchScope, labels)}
             </button>
             {currentSessionId && (
               <button
@@ -1594,8 +1597,8 @@ export function ExploreTab({
                   onKeyDown={handleKeyDown}
                   placeholder={
                     mode === "agent"
-                      ? "Ask your knowledge base (Agent mode)..."
-                      : "Ask your knowledge base (Classic mode)..."
+                      ? (labels.askAgentPlaceholder ?? "Ask your knowledge base (Agent mode)...")
+                      : (labels.askClassicPlaceholder ?? "Ask your knowledge base (Classic mode)...")
                   }
                   rows={1}
                   className="max-h-32 flex-1 resize-none bg-transparent px-4 py-3 text-base font-sans text-text-primary placeholder:text-text-tertiary focus:outline-none"
@@ -1618,11 +1621,11 @@ export function ExploreTab({
               <div className="mt-2 text-center text-xs font-sans text-text-tertiary">
                 <p>
                   {mode === "agent"
-                    ? "Agent mode shows the planner route, tool calls, source controls, and editable context drafts."
-                    : "Classic mode searches your history and returns concise source-grounded answers."}
+                    ? (labels.agentModeDesc ?? "Agent mode shows the planner route, tool calls, source controls, and editable context drafts.")
+                    : (labels.classicModeDesc ?? "Classic mode searches your history and returns concise source-grounded answers.")}
                 </p>
                 <p className="mt-1">
-                  Current scope: {getSearchScopeSummary(activeSearchScope)}
+                  Current scope: {getSearchScopeSummary(activeSearchScope, labels)}
                 </p>
               </div>
             </div>
@@ -1788,7 +1791,7 @@ export function ExploreTab({
                     {getAssistantQuery(drawerMessage) || "Unavailable"}
                   </p>
                   <p className="mt-2 text-xs font-sans text-text-tertiary">
-                    Scope: {getSearchScopeSummary(drawerMessage.agentMeta?.searchScope)}
+                    Scope: {getSearchScopeSummary(drawerMessage.agentMeta?.searchScope, labels)}
                   </p>
                   {getResolvedTimeScopeLabel(drawerPlan) && (
                     <p className="mt-1 text-xs font-sans text-text-tertiary">
@@ -1962,7 +1965,7 @@ export function ExploreTab({
                     className="inline-flex items-center gap-1.5 rounded-md border border-border-default px-3 py-1.5 text-xs font-sans text-text-secondary hover:bg-bg-surface-card"
                   >
                     <FileText className="h-3.5 w-3.5" />
-                    New Chat (Prefill)
+                    {labels.newChatPrefill ?? "New Chat (Prefill)"}
                   </button>
                 </div>
               </div>
@@ -1978,10 +1981,10 @@ export function ExploreTab({
             <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
               <div>
                 <p className="text-sm font-sans font-medium text-text-primary">
-                  Choose Conversations
+                  {labels.chooseConversationsTitle ?? "Choose Conversations"}
                 </p>
                 <p className="mt-1 text-xs font-sans text-text-tertiary">
-                  Search, preview, and pick the conversations the agent is allowed to use.
+                  {labels.chooseConversationsDesc ?? "Search, preview, and pick the conversations the agent is allowed to use."}
                 </p>
               </div>
               <button
@@ -1999,7 +2002,7 @@ export function ExploreTab({
                   <input
                     value={scopeSearchQuery}
                     onChange={(event) => setScopeSearchQuery(event.target.value)}
-                    placeholder="Search by title or snippet..."
+                    placeholder={labels.searchByTitlePlaceholder ?? "Search by title or snippet..."}
                     className="w-full rounded-lg border border-border-default bg-bg-primary py-2 pl-9 pr-3 text-sm font-sans text-text-primary focus:border-accent-primary focus:outline-none"
                   />
                 </div>
@@ -2010,18 +2013,21 @@ export function ExploreTab({
                   }}
                   className="rounded-md bg-accent-primary px-3 py-2 text-xs font-sans text-white transition-colors hover:bg-accent-primary/90"
                 >
-                  Apply Selected
+                  {labels.applySelected ?? "Apply Selected"}
                 </button>
                 <button
                   onClick={resetSearchScope}
                   className="rounded-md border border-border-default px-3 py-2 text-xs font-sans text-text-secondary hover:bg-bg-surface-card"
                 >
-                  Use All
+                  {labels.useAll ?? "Use All"}
                 </button>
               </div>
               <p className="mt-2 text-xs font-sans text-text-tertiary">
-                {selectedScopeConversationIds.length} conversation
-                {selectedScopeConversationIds.length === 1 ? "" : "s"} selected
+                {selectedScopeConversationIds.length === 0
+                  ? (labels.noConversationsSelected ?? "0 conversations selected")
+                  : selectedScopeConversationIds.length === 1
+                    ? (labels.oneConversationSelected ?? "1 conversation selected")
+                    : (labels.multipleConversationsSelected ?? "{count} conversations selected").replace("{count}", String(selectedScopeConversationIds.length))}
               </p>
               {scopeError && <p className="mt-2 text-xs font-sans text-danger">{scopeError}</p>}
             </div>
@@ -2033,7 +2039,7 @@ export function ExploreTab({
                 </div>
               ) : scopeResults.length === 0 ? (
                 <div className="py-10 text-center text-sm font-sans text-text-tertiary">
-                  No conversations match this search.
+                  {labels.noSearchResults ?? "No conversations match this search."}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -2062,7 +2068,7 @@ export function ExploreTab({
                                 {conversation.platform} · {new Date(conversation.updated_at).toLocaleDateString()}
                               </p>
                               <p className="mt-2 line-clamp-2 text-xs font-sans text-text-secondary">
-                                {conversation.snippet || "No preview available"}
+                                {conversation.snippet || (labels.noPreviewAvailable ?? "No preview available")}
                               </p>
                             </div>
                           </button>
@@ -2070,7 +2076,7 @@ export function ExploreTab({
                             onClick={() => onOpenConversation?.(conversation.id)}
                             className="text-xs font-sans text-text-secondary hover:text-text-primary"
                           >
-                            Open
+                            {labels.open ?? "Open"}
                           </button>
                         </div>
                       </div>

@@ -18,38 +18,18 @@ export interface ReaderTimestampFooterModel {
   details: ReaderTimestampDetailItem[];
 }
 
-const summaryDateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-});
+export interface TimestampFooterLabels {
+  started: string;
+  lastUpdated: string;
+  captured: string;
+  sourceTime: string;
+  summaryStarted: string;
+  summaryUpdated: string;
+}
 
-const summaryDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-const summaryDateTimeWithYearFormatter = new Intl.DateTimeFormat("en-US", {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-const timeFormatter = new Intl.DateTimeFormat("en-US", {
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-const detailDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
+function makeDateFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat(locale, options);
+}
 
 function isFiniteTimestamp(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -73,22 +53,22 @@ function sharesDisplayedMinute(left: number, right: number): boolean {
   return Math.floor(left / 60000) === Math.floor(right / 60000);
 }
 
-function formatSummaryStarted(value: number): string {
-  return summaryDateFormatter.format(new Date(value));
+function formatSummaryStarted(value: number, locale: string): string {
+  return makeDateFormatter(locale, { month: "short", day: "numeric" }).format(new Date(value));
 }
 
-function formatSummaryUpdated(value: number, originAt: number): string {
+function formatSummaryUpdated(value: number, originAt: number, locale: string): string {
   if (isSameCalendarDay(value, originAt)) {
-    return timeFormatter.format(new Date(value));
+    return makeDateFormatter(locale, { hour: "numeric", minute: "2-digit" }).format(new Date(value));
   }
   if (isSameCalendarYear(value, originAt)) {
-    return summaryDateTimeFormatter.format(new Date(value));
+    return makeDateFormatter(locale, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
   }
-  return summaryDateTimeWithYearFormatter.format(new Date(value));
+  return makeDateFormatter(locale, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
-function formatDetailTimestamp(value: number): string {
-  return detailDateTimeFormatter.format(new Date(value));
+function formatDetailTimestamp(value: number, locale: string): string {
+  return makeDateFormatter(locale, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
 export function getConversationSourceCreatedAt(
@@ -137,7 +117,9 @@ export function getConversationRecordModifiedAt(
 }
 
 export function buildReaderTimestampFooterModel(
-  conversation: ConversationTimeLike
+  conversation: ConversationTimeLike,
+  labels: TimestampFooterLabels,
+  locale: string = "en"
 ): ReaderTimestampFooterModel {
   const originAt = getConversationOriginAt(conversation);
   const recordModifiedAt = getConversationRecordModifiedAt(conversation);
@@ -147,35 +129,35 @@ export function buildReaderTimestampFooterModel(
   const details: ReaderTimestampDetailItem[] = [
     {
       key: "started",
-      label: "Started",
-      value: formatDetailTimestamp(originAt),
+      label: labels.started,
+      value: formatDetailTimestamp(originAt, locale),
     },
     {
       key: "last_updated",
-      label: "Last updated",
-      value: formatDetailTimestamp(recordModifiedAt),
+      label: labels.lastUpdated,
+      value: formatDetailTimestamp(recordModifiedAt, locale),
     },
   ];
 
   if (!sharesDisplayedMinute(captureFreshnessAt, recordModifiedAt)) {
     details.push({
       key: "captured",
-      label: "Captured",
-      value: formatDetailTimestamp(captureFreshnessAt),
+      label: labels.captured,
+      value: formatDetailTimestamp(captureFreshnessAt, locale),
     });
   }
 
   if (sourceCreatedAt !== null && !sharesDisplayedMinute(sourceCreatedAt, originAt)) {
     details.push({
       key: "source_time",
-      label: "Source Time",
-      value: formatDetailTimestamp(sourceCreatedAt),
+      label: labels.sourceTime,
+      value: formatDetailTimestamp(sourceCreatedAt, locale),
     });
   }
 
   return {
-    summaryStarted: formatSummaryStarted(originAt),
-    summaryUpdated: formatSummaryUpdated(recordModifiedAt, originAt),
+    summaryStarted: `${labels.summaryStarted} ${formatSummaryStarted(originAt, locale)}`,
+    summaryUpdated: `${labels.summaryUpdated} ${formatSummaryUpdated(recordModifiedAt, originAt, locale)}`,
     details,
   };
 }

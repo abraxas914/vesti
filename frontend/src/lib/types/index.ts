@@ -558,6 +558,8 @@ export interface UiSettings {
   themeMode: UiThemeMode
 }
 
+export type SupportedLocale = "en" | "zh"
+
 export type NotionAuthMode = "disconnected" | "oauth_public" | "legacy_manual"
 
 export interface NotionSettings {

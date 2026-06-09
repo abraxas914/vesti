@@ -2,6 +2,7 @@ import React from "react";
 import { Database, FolderGit2, Home, Settings, Sparkles } from "lucide-react";
 import type { PageId } from "~lib/types";
 import { LOGO_BASE64 } from "~lib/ui/logo";
+import { useI18n } from "~lib/i18n";
 
 interface DockItem {
   id: PageId;
@@ -11,31 +12,35 @@ interface DockItem {
 
 const DataIcon = FolderGit2 ?? Database;
 
-const DOCK_ITEMS_TOP: DockItem[] = [
-  {
-    id: "timeline",
-    icon: <Home className="h-5 w-5" strokeWidth={1.75} />,
-    label: "Threads",
-  },
-  {
-    id: "insights",
-    icon: <Sparkles className="h-5 w-5" strokeWidth={1.75} />,
-    label: "Insights",
-  },
-];
+function getDockItemsTop(t: ReturnType<typeof useI18n>["t"]): DockItem[] {
+  return [
+    {
+      id: "timeline",
+      icon: <Home className="h-5 w-5" strokeWidth={1.75} />,
+      label: t.dock.threads,
+    },
+    {
+      id: "insights",
+      icon: <Sparkles className="h-5 w-5" strokeWidth={1.75} />,
+      label: t.dock.insights,
+    },
+  ];
+}
 
-const DOCK_ITEMS_BOTTOM: DockItem[] = [
-  {
-    id: "data",
-    icon: <DataIcon className="h-5 w-5" strokeWidth={1.75} />,
-    label: "Data Management",
-  },
-  {
-    id: "settings",
-    icon: <Settings className="h-5 w-5" strokeWidth={1.75} />,
-    label: "Settings",
-  },
-];
+function getDockItemsBottom(t: ReturnType<typeof useI18n>["t"]): DockItem[] {
+  return [
+    {
+      id: "data",
+      icon: <DataIcon className="h-5 w-5" strokeWidth={1.75} />,
+      label: t.dock.dataManagement,
+    },
+    {
+      id: "settings",
+      icon: <Settings className="h-5 w-5" strokeWidth={1.75} />,
+      label: t.dock.settings,
+    },
+  ];
+}
 
 interface DockProps {
   currentPage: PageId;
@@ -48,6 +53,7 @@ export function Dock({
   onNavigate,
   onNavigateToLibrary,
 }: DockProps) {
+  const { t } = useI18n();
   return (
     <nav
       aria-label="Vesti navigation"
@@ -56,14 +62,14 @@ export function Dock({
       <div className="flex flex-col items-center gap-2">
         <button
           type="button"
-          aria-label="Open Library Dashboard"
+          aria-label={t.dock.openLibrary}
           onClick={onNavigateToLibrary}
-          title="Open Library Dashboard"
+          title={t.dock.openLibrary}
           className="mb-1 flex h-10 w-10 items-center justify-center rounded-lg border border-border-subtle bg-bg-primary/70 transition-colors [transition-duration:140ms] hover:bg-accent-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
         >
           <img src={LOGO_BASE64} alt="Vesti" width={20} height={20} />
         </button>
-        {DOCK_ITEMS_TOP.map((item) => (
+        {getDockItemsTop(t).map((item) => (
           <DockButton
             key={item.id}
             item={item}
@@ -74,7 +80,7 @@ export function Dock({
       </div>
 
       <div className="flex flex-col items-center gap-2">
-        {DOCK_ITEMS_BOTTOM.map((item) => (
+        {getDockItemsBottom(t).map((item) => (
           <DockButton
             key={item.id}
             item={item}

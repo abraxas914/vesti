@@ -9,6 +9,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
+import { useI18n } from "~lib/i18n";
 import type {
   ConversationExportContentMode,
   ConversationExportFormat,
@@ -50,51 +51,53 @@ interface BatchActionBarProps {
   onExit: () => void;
 }
 
-const EXPORT_OPTIONS: Array<{
+function getExportOptions(t: ReturnType<typeof useI18n>["t"]): Array<{
   format: ConversationExportFormat;
   name: string;
   description: string;
-}> = [
-  {
-    format: "md",
-    name: "Markdown",
-    description: "Markdown export for notes, docs, and writing tools",
-  },
-  {
-    format: "txt",
-    name: "Text",
-    description: "Plain text export for quick reading and copy/paste",
-  },
-  {
-    format: "json",
-    name: "JSON",
-    description: "Structured export for backup, review, and reprocessing",
-  },
-];
+}> {
+  return [
+    {
+      format: "md",
+      name: t.timeline.batch.exportFormats.md.name,
+      description: t.timeline.batch.exportFormats.md.desc,
+    },
+    {
+      format: "txt",
+      name: t.timeline.batch.exportFormats.txt.name,
+      description: t.timeline.batch.exportFormats.txt.desc,
+    },
+    {
+      format: "json",
+      name: t.timeline.batch.exportFormats.json.name,
+      description: t.timeline.batch.exportFormats.json.desc,
+    },
+  ];
+}
 
-const EXPORT_MODE_OPTIONS: Array<{
+function getExportModeOptions(t: ReturnType<typeof useI18n>["t"]): Array<{
   mode: ConversationExportContentMode;
   label: string;
   description: string;
-}> = [
-  {
-    mode: "full",
-    label: "Full",
-    description: "Keep the complete thread transcript locally.",
-  },
-  {
-    mode: "compact",
-    label: "Compact",
-    description:
-      "Distilled handoff for the next agent. Tries current LLM settings first, then local fallback.",
-  },
-  {
-    mode: "summary",
-    label: "Summary",
-    description:
-      "Human note format. Tries current LLM settings first, then local fallback.",
-  },
-];
+}> {
+  return [
+    {
+      mode: "full",
+      label: t.timeline.batch.exportModes.full.label,
+      description: t.timeline.batch.exportModes.full.desc,
+    },
+    {
+      mode: "compact",
+      label: t.timeline.batch.exportModes.compact.label,
+      description: t.timeline.batch.exportModes.compact.desc,
+    },
+    {
+      mode: "summary",
+      label: t.timeline.batch.exportModes.summary.label,
+      description: t.timeline.batch.exportModes.summary.desc,
+    },
+  ];
+}
 
 export function BatchActionBar({
   mode,
@@ -120,17 +123,20 @@ export function BatchActionBar({
   onConfirmDelete,
   onExit,
 }: BatchActionBarProps) {
+  const { t } = useI18n();
+  const exportOptions = getExportOptions(t);
+  const exportModeOptions = getExportModeOptions(t);
   const isAllSelected = selectedCount === totalCount && totalCount > 0;
   const hasSelection = selectedCount > 0;
   const deleteBusy = actionKey === "delete";
   const showingExportPanel = mode === "export_panel";
   const showingDeletePanel = mode === "delete_panel";
   const selectedMode =
-    EXPORT_MODE_OPTIONS.find((option) => option.mode === exportMode) ||
-    EXPORT_MODE_OPTIONS[0];
+    exportModeOptions.find((option) => option.mode === exportMode) ||
+    exportModeOptions[0];
   const selectedFormat =
-    EXPORT_OPTIONS.find((option) => option.format === selectedExportFormat) ||
-    EXPORT_OPTIONS[0];
+    exportOptions.find((option) => option.format === selectedExportFormat) ||
+    exportOptions[0];
   const feedbackClassName =
     feedback?.tone === "error"
       ? "is-error"
@@ -157,12 +163,12 @@ export function BatchActionBar({
     .filter(Boolean)
     .join(" ");
   const copyButtonLabel = copyBusy
-    ? "Generating"
+    ? t.common.loading
     : copyJustSucceeded
-      ? "Copied"
+      ? t.common.copied
       : clipboardAvailable
-        ? "Copy"
-        : "Copy unavailable";
+        ? t.common.copy
+        : t.timeline.batch.clipboardUnavailable;
   const copyButtonIcon = copyBusy ? (
     <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.8} />
   ) : copyJustSucceeded ? (
@@ -178,10 +184,10 @@ export function BatchActionBar({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[12px] font-semibold text-text-primary">
-                Export {selectedCount} selected thread{selectedCount === 1 ? "" : "s"}
+                {t.timeline.batch.exportLabel} {selectedCount} {selectedCount === 1 ? t.timeline.batch.threadSingular : t.timeline.batch.threadPlural}
               </p>
               <p className="mt-0.5 text-[11px] text-text-secondary">
-                Keep Data-style format rows and choose the export density here.
+                {t.timeline.batch.exportPanelDesc}
               </p>
             </div>
             <button
@@ -193,10 +199,10 @@ export function BatchActionBar({
             </button>
           </div>
 
-          <p className="mt-3 data-subgroup-label">Export mode</p>
+          <p className="mt-3 data-subgroup-label">{t.timeline.batch.exportModeLabel}</p>
           <div className="rounded-lg bg-bg-secondary p-1">
             <div className="grid grid-cols-3 gap-1">
-              {EXPORT_MODE_OPTIONS.map((option) => {
+              {exportModeOptions.map((option) => {
                 const active = exportMode === option.mode;
                 return (
                   <button
@@ -219,9 +225,9 @@ export function BatchActionBar({
             {selectedMode.description}
           </p>
 
-          <p className="mt-3 data-subgroup-label">Export format</p>
+          <p className="mt-3 data-subgroup-label">{t.timeline.batch.exportFormatLabel}</p>
           <div className="data-format-selector">
-            {EXPORT_OPTIONS.map((option) => {
+            {exportOptions.map((option) => {
               const active = selectedExportFormat === option.format;
               return (
                 <button
@@ -238,7 +244,7 @@ export function BatchActionBar({
             })}
           </div>
           <p className="mt-2 text-[11px] leading-[1.45] text-text-secondary">
-            Current format: {selectedFormat.name}
+            {t.timeline.batch.currentFormat}: {selectedFormat.name}
           </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -253,7 +259,7 @@ export function BatchActionBar({
               ) : (
                 <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
               )}
-              {downloadBusy ? "Generating" : "Download"}
+              {downloadBusy ? t.common.loading : t.common.download}
             </button>
             <button
               type="button"
@@ -287,13 +293,16 @@ export function BatchActionBar({
               <div className="min-w-0">
                 <div className="data-danger-head">
                   <TriangleAlert className="h-4 w-4" strokeWidth={1.8} />
-                  <span>Delete {selectedCount} selected thread{selectedCount === 1 ? "" : "s"}</span>
+                  <span>{t.timeline.batch.deleteLabel} {selectedCount} {selectedCount === 1 ? t.timeline.batch.threadSingular : t.timeline.batch.threadPlural}</span>
                 </div>
                 <p className="data-danger-desc mb-0">
-                  This will remove {selectedCount} selected thread
-                  {selectedCount === 1 ? "" : "s"} and their messages from local
-                  storage. Type <span className="font-semibold text-danger">DELETE</span>{" "}
-                  to continue.
+                  {selectedCount === 1
+                    ? t.timeline.batch.deleteDescSingular
+                    : t.timeline.batch.deleteDescPlural.replace("{count}", String(selectedCount))}
+                  {" "}
+                  <span className="font-semibold text-danger">DELETE</span>
+                  {" "}
+                  {t.timeline.batch.toContinue}.
                 </p>
               </div>
               <button
@@ -306,12 +315,12 @@ export function BatchActionBar({
             </div>
 
             <label className="mt-3 block text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-              Confirmation
+              {t.timeline.batch.confirmation}
             </label>
             <input
               type="text"
               value={deleteConfirmValue}
-              placeholder="Type DELETE"
+              placeholder={t.timeline.batch.deleteConfirm}
               onChange={(event) => onDeleteConfirmValueChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -346,7 +355,7 @@ export function BatchActionBar({
                 ) : (
                   <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
                 )}
-                Confirm delete
+                {t.timeline.batch.confirmDelete}
               </button>
             </div>
           </div>
@@ -380,11 +389,11 @@ export function BatchActionBar({
                   ) : (
                     <Square className="h-4 w-4" strokeWidth={1.5} />
                   )}
-                  {isAllSelected ? "Deselect All" : "Select All"}
+                  {isAllSelected ? t.timeline.batch.deselectAll : t.timeline.batch.selectAll}
                 </button>
                 <p className="min-w-0 truncate text-[11px] leading-4 text-text-tertiary">
                   <span className="font-semibold text-text-secondary">{selectedCount}</span>{" "}
-                  selected &middot; {totalCount} in current results
+                  {t.timeline.batch.selected} &middot; {totalCount} {t.timeline.batch.inCurrentResults}
                 </p>
               </div>
 
@@ -403,7 +412,7 @@ export function BatchActionBar({
                     className={toolbarNeutralActionClassName}
                   >
                     <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    Export
+                    {t.timeline.batch.export}
                   </button>
                   <button
                     type="button"
@@ -412,7 +421,7 @@ export function BatchActionBar({
                     className={toolbarDeleteActionClassName}
                   >
                     <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    Delete
+                    {t.timeline.batch.delete}
                   </button>
                   <button
                     type="button"

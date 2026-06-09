@@ -76,31 +76,43 @@ import type {
   UiThemeMode
 } from "~lib/types"
 
+import { useI18n } from "~lib/i18n"
+import type { SupportedLocale } from "~lib/types"
 import { DisclosureSection } from "../components/DisclosureSection"
 
 const MIN_TURNS_DEFAULT = DEFAULT_CAPTURE_SETTINGS.smartConfig.minTurns
 
-const CAPTURE_MODE_OPTIONS: Array<{
+function getCaptureModeOptions(t: {
+  settings: {
+    captureEngine: {
+      fullMirror: { label: string; desc: string }
+      smartDenoising: { label: string; desc: string }
+      manualArchive: { label: string; desc: string }
+    }
+  }
+}): Array<{
   value: CaptureMode
   label: string
   description: string
-}> = [
-  {
-    value: "mirror",
-    label: "Full Mirror",
-    description: "Capture all parsed conversation updates."
-  },
-  {
-    value: "smart",
-    label: "Smart Denoising",
-    description: "Capture only when min-turn and keyword rules pass."
-  },
-  {
-    value: "manual",
-    label: "Manual Archive",
-    description: "Hold captures until you archive the active thread manually."
-  }
-]
+}> {
+  return [
+    {
+      value: "mirror",
+      label: t.settings.captureEngine.fullMirror.label,
+      description: t.settings.captureEngine.fullMirror.desc
+    },
+    {
+      value: "smart",
+      label: t.settings.captureEngine.smartDenoising.label,
+      description: t.settings.captureEngine.smartDenoising.desc
+    },
+    {
+      value: "manual",
+      label: t.settings.captureEngine.manualArchive.label,
+      description: t.settings.captureEngine.manualArchive.desc
+    }
+  ]
+}
 
 const DOCS_HELP_URL = "https://github.com/abraxas914/VESTI#readme"
 const FEEDBACK_ISSUE_URL =
@@ -149,21 +161,33 @@ function SettingsIconTile({ children }: { children: ReactNode }) {
   )
 }
 
-function LanguageSoonRow() {
+function LanguageSelector({
+  locale,
+  onChange
+}: {
+  locale: SupportedLocale
+  onChange: (locale: SupportedLocale) => void
+}) {
+  const { t } = useI18n()
   return (
     <div className="card-shadow-warm flex items-center gap-3 rounded-xl border border-border-subtle bg-bg-surface px-4 py-3">
       <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-bg-secondary text-text-secondary">
         <Languages className="h-4 w-4" strokeWidth={1.5} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium text-text-primary">Language</p>
+        <p className="text-[13px] font-medium text-text-primary">{t.settings.language.title}</p>
         <p className="mt-0.5 text-[11px] text-text-tertiary">
-          Interface language
+          {t.settings.language.description}
         </p>
       </div>
-      <span className="rounded-full border border-border-subtle bg-bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-        Soon
-      </span>
+      <select
+        value={locale}
+        onChange={(e) => onChange(e.target.value as SupportedLocale)}
+        className="rounded-md border border-border-subtle bg-bg-primary px-2 py-1 text-[12px] text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+      >
+        <option value="en">{t.settings.language.en}</option>
+        <option value="zh">{t.settings.language.zh}</option>
+      </select>
     </div>
   )
 }
@@ -252,18 +276,21 @@ function feedbackFromDiagnostic(
   }
 }
 
-function formatModelTestResultMessage(result: {
-  ok: boolean
-  message?: string
-  diagnostic?: LlmDiagnostic | null
-}): ModelAccessFeedback {
+function formatModelTestResultMessage(
+  result: {
+    ok: boolean
+    message?: string
+    diagnostic?: LlmDiagnostic | null
+  },
+  t: { settings: { modelAccess: { connectionVerified: string; testFailed: string } } }
+): ModelAccessFeedback {
   if (result.ok) {
-    return { summary: "Connection verified." }
+    return { summary: t.settings.modelAccess.connectionVerified }
   }
   if (result.diagnostic) {
     return feedbackFromDiagnostic(result.diagnostic)
   }
-  return toModelAccessFeedback(result.message, "Connection test failed.")
+  return toModelAccessFeedback(result.message, t.settings.modelAccess.testFailed)
 }
 
 function parseKeywordsInput(value: string): string[] {
@@ -281,45 +308,86 @@ function parseKeywordsInput(value: string): string[] {
 }
 
 function formatCaptureStatusReason(
-  reason?: ActiveCaptureStatus["reason"]
+  reason?: ActiveCaptureStatus["reason"],
+  t?: { capture: { status: Record<string, string> } }
 ): string {
+  if (!t) {
+    switch (reason) {
+      case "ok":
+        return t?.capture.status.ready ?? "Ready"
+      case "mode_mirror":
+        return "Mirror mode does not need manual archive."
+      case "unsupported_tab":
+        return "Open a ChatGPT, Claude, Gemini, DeepSeek, Doubao, Qwen, Kimi, or Yuanbao thread in the active tab."
+      case "no_transient":
+        return "No active thread snapshot detected yet."
+      case "content_unreachable":
+        return "Cannot reach page content script. Refresh the page and try again."
+      default:
+        return "Status unavailable"
+    }
+  }
   switch (reason) {
     case "ok":
-      return "Ready"
+      return t.capture.status.ready
     case "mode_mirror":
-      return "Mirror mode does not need manual archive."
+      return t.capture.status.mirrorMode
     case "unsupported_tab":
-      return "Open a ChatGPT, Claude, Gemini, DeepSeek, Doubao, Qwen, Kimi, or Yuanbao thread in the active tab."
+      return t.capture.status.unsupported_tab
     case "no_transient":
-      return "No active thread snapshot detected yet."
+      return t.capture.status.no_transient
     case "content_unreachable":
-      return "Cannot reach page content script. Refresh the page and try again."
+      return t.capture.status.content_unreachable
     default:
-      return "Status unavailable"
+      return t.capture.status.ready
   }
 }
 
-function mapArchiveErrorMessage(error: unknown): string {
+function mapArchiveErrorMessage(error: unknown, t?: { capture: { errors: Record<string, string> } }): string {
   const code = getErrorMessage(error)
+  if (!t) {
+    switch (code) {
+      case "ARCHIVE_MODE_DISABLED":
+        return "Manual archive is available only in Smart or Manual mode."
+      case "ACTIVE_TAB_UNSUPPORTED":
+        return "Active tab is unsupported. Open ChatGPT, Claude, Gemini, DeepSeek, Doubao, Qwen, Kimi, or Yuanbao."
+      case "ACTIVE_TAB_UNAVAILABLE":
+        return "No active tab found."
+      case "TRANSIENT_NOT_FOUND":
+        return "No active thread snapshot found. Send one message and try again."
+      case "missing_conversation_id":
+        return "Current URL has no stable conversation ID yet. Continue the thread and retry."
+      case "empty_payload":
+        return "No parsed messages available to archive."
+      case "storage_limit_blocked":
+        return "Storage hard limit reached. Export or clear data before archiving."
+      case "persist_failed":
+        return "Archive write failed. Please retry."
+      case "FORCE_ARCHIVE_FAILED":
+        return "Manual archive failed. Please retry."
+      default:
+        return code
+    }
+  }
   switch (code) {
     case "ARCHIVE_MODE_DISABLED":
-      return "Manual archive is available only in Smart or Manual mode."
+      return t.capture.errors.archiveModeDisabled
     case "ACTIVE_TAB_UNSUPPORTED":
-      return "Active tab is unsupported. Open ChatGPT, Claude, Gemini, DeepSeek, Doubao, Qwen, Kimi, or Yuanbao."
+      return t.capture.errors.activeTabUnsupported
     case "ACTIVE_TAB_UNAVAILABLE":
-      return "No active tab found."
+      return t.capture.errors.activeTabUnavailable
     case "TRANSIENT_NOT_FOUND":
-      return "No active thread snapshot found. Send one message and try again."
+      return t.capture.errors.transientNotFound
     case "missing_conversation_id":
-      return "Current URL has no stable conversation ID yet. Continue the thread and retry."
+      return t.capture.errors.missingConversationId
     case "empty_payload":
-      return "No parsed messages available to archive."
+      return t.capture.errors.emptyPayload
     case "storage_limit_blocked":
-      return "Storage hard limit reached. Export or clear data before archiving."
+      return t.capture.errors.storageLimit
     case "persist_failed":
-      return "Archive write failed. Please retry."
+      return t.capture.errors.persistFailed
     case "FORCE_ARCHIVE_FAILED":
-      return "Manual archive failed. Please retry."
+      return t.capture.errors.forceArchiveFailed
     default:
       return code
   }
@@ -379,6 +447,7 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
+  const { locale, t, setLocale } = useI18n()
   const [llmSettings, setLlmSettingsState] = useState<LlmConfig>(
     buildDefaultLlmSettings()
   )
@@ -630,7 +699,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       const next = resolveSettingsForMode(llmSettings)
       if (getLlmAccessMode(next) === "custom_byok" && !next.apiKey.trim()) {
         setModelStatus("error")
-        setModelFeedback({ summary: "API key is required in custom mode." })
+        setModelFeedback({ summary: t.settings.modelAccess.apiKeyRequired })
         return
       }
 
@@ -638,14 +707,14 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       setLlmSettingsState(next)
       setSavedLlmSettingsState(next)
       setModelStatus("ready")
-      setModelFeedback({ summary: "Saved." })
+      setModelFeedback({ summary: t.settings.modelAccess.saved })
     } catch (error) {
       const diagnostic = getLlmDiagnostic(error)
       setModelStatus("error")
       setModelFeedback(
         diagnostic
           ? feedbackFromDiagnostic(diagnostic)
-          : toModelAccessFeedback(getErrorMessage(error), "Save failed.")
+          : toModelAccessFeedback(getErrorMessage(error), t.settings.modelAccess.save + " " + t.common.error.toLowerCase() + ".")
       )
     }
   }
@@ -658,7 +727,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       const next = resolveSettingsForMode(llmSettings)
       if (getLlmAccessMode(next) === "custom_byok" && !next.apiKey.trim()) {
         setModelStatus("error")
-        setModelFeedback({ summary: "API key is required in custom mode." })
+        setModelFeedback({ summary: t.settings.modelAccess.apiKeyRequired })
         return
       }
 
@@ -667,7 +736,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       setSavedLlmSettingsState(next)
       const result = await testLlmConnection()
       setModelStatus(result.ok ? "ready" : "error")
-      setModelFeedback(formatModelTestResultMessage(result))
+      setModelFeedback(formatModelTestResultMessage(result, t))
     } catch (error) {
       const diagnostic = getLlmDiagnostic(error)
       setModelStatus("error")
@@ -676,7 +745,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
           ? feedbackFromDiagnostic(diagnostic)
           : toModelAccessFeedback(
               getErrorMessage(error),
-              "Connection test failed."
+              t.settings.modelAccess.testFailed
             )
       )
     }
@@ -690,7 +759,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       const saved = await connectToNotion()
       setNotionSettingsState(saved)
       setNotionStatus("ready")
-      setNotionMessage("Notion connected.")
+      setNotionMessage(t.settings.notionExport.connectedMsg)
       setNotionDatabaseQuery("")
       await loadNotionDatabases("")
     } catch (error) {
@@ -711,7 +780,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       setNotionDatabasesMessage(null)
       setNotionDatabaseQuery("")
       setNotionStatus("ready")
-      setNotionMessage("Notion disconnected.")
+      setNotionMessage(t.settings.notionExport.disconnectedMsg)
     } catch (error) {
       setNotionStatus("error")
       setNotionMessage(formatNotionErrorMessage(error))
@@ -726,7 +795,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       const saved = await selectNotionDatabase(database)
       setNotionSettingsState(saved)
       setNotionStatus("ready")
-      setNotionMessage(`Selected ${database.title}.`)
+      setNotionMessage(`${t.settings.notionExport.selected} ${database.title}.`)
     } catch (error) {
       setNotionStatus("error")
       setNotionMessage(formatNotionErrorMessage(error))
@@ -764,7 +833,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       setMinTurnsInput(String(normalized.smartConfig.minTurns))
       setBlacklistInput(normalized.smartConfig.blacklistKeywords.join(", "))
       setCaptureStatus("ready")
-      setCaptureMessage("Capture settings saved.")
+      setCaptureMessage(t.settings.captureEngine.settingsSaved)
       await refreshActiveCaptureStatus()
     } catch (error) {
       setCaptureStatus("error")
@@ -790,11 +859,11 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
         )
       } else {
         setArchiveStatus("error")
-        setArchiveMessage(mapArchiveErrorMessage(result.decision.reason))
+        setArchiveMessage(mapArchiveErrorMessage(result.decision.reason, t))
       }
     } catch (error) {
       setArchiveStatus("error")
-      setArchiveMessage(mapArchiveErrorMessage(error))
+      setArchiveMessage(mapArchiveErrorMessage(error, t))
     } finally {
       await refreshActiveCaptureStatus()
     }
@@ -816,8 +885,8 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
       setThemeStatus("ready")
       setThemeMessage(
         saved.themeMode === "dark"
-          ? "Dark mode enabled."
-          : "Light mode enabled."
+          ? t.settings.appearance.darkEnabled
+          : t.settings.appearance.lightEnabled
       )
     } catch (error) {
       setThemeMode(previous)
@@ -870,11 +939,11 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
   return (
     <div className="vesti-shell flex h-full flex-col overflow-y-auto vesti-scroll bg-bg-app">
       <header className="vesti-page-header">
-        <h1 className="vesti-page-title text-text-primary">Settings</h1>
+        <h1 className="vesti-page-title text-text-primary">{t.settings.title}</h1>
       </header>
 
       <div className="flex flex-col gap-3 p-4">
-        <SettingsGroupLabel label="Personalisation" />
+        <SettingsGroupLabel label={t.settings.groups.personalisation} />
 
         <section
           className="appearance-shell"
@@ -894,9 +963,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                 )}
               </span>
               <span className="min-w-0">
-                <span className="appearance-title">Appearance</span>
+                <span className="appearance-title">{t.settings.appearance.title}</span>
                 <span className="appearance-description">
-                  Theme and display preferences.
+                  {t.settings.appearance.description}
                 </span>
               </span>
             </span>
@@ -910,9 +979,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
             <div id="settings-appearance-panel" className="appearance-body">
               <div className="appearance-inner-row">
                 <div className="min-w-0">
-                  <span className="appearance-inner-label">Dark Mode</span>
+                  <span className="appearance-inner-label">{t.settings.appearance.darkMode}</span>
                   <span className="appearance-inner-sub">
-                    Minimalist dark palette.
+                    {t.settings.appearance.darkModeDesc}
                   </span>
                 </div>
                 <button
@@ -928,9 +997,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
 
               <div className="appearance-inner-row">
                 <div className="min-w-0">
-                  <span className="appearance-inner-label">Compact Cards</span>
+                  <span className="appearance-inner-label">{t.settings.appearance.compactCards}</span>
                   <span className="appearance-inner-sub">
-                    Reduce card padding.
+                    {t.settings.appearance.compactCardsDesc}
                   </span>
                 </div>
                 <button
@@ -952,7 +1021,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                       : "text-text-secondary"
                   }`}>
                   {themeStatus === "loading"
-                    ? "Applying theme..."
+                    ? t.settings.appearance.themeLoading
                     : themeMessage}
                 </p>
               )}
@@ -960,9 +1029,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
           ) : null}
         </section>
 
-        <LanguageSoonRow />
+        <LanguageSelector locale={locale} onChange={setLocale} />
 
-        <SettingsGroupLabel label="System" />
+        <SettingsGroupLabel label={t.settings.groups.system} />
 
         <section
           className="model-access-shell"
@@ -978,9 +1047,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                 <Cpu className="h-4 w-4" strokeWidth={1.4} />
               </span>
               <span className="min-w-0">
-                <span className="model-access-title">Model Access</span>
+                <span className="model-access-title">{t.settings.modelAccess.title}</span>
                 <span className="model-access-description">
-                  BYOK &amp; proxy configuration
+                  {t.settings.modelAccess.description}
                 </span>
               </span>
             </span>
@@ -994,9 +1063,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
             <div id="settings-model-access-panel" className="model-access-body">
               <div className="model-access-mode-row">
                 <div>
-                  <p className="model-access-mode-label">Use Custom API Key</p>
+                  <p className="model-access-mode-label">{t.settings.modelAccess.useCustomApiKey}</p>
                   <p className="model-access-mode-sub">
-                    BYOK - your key, direct routing
+                    {t.settings.modelAccess.byokDesc}
                   </p>
                 </div>
                 <button
@@ -1016,7 +1085,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                     <div className="model-access-info-head">
                       <span className="model-access-status-chip model-access-status-chip-demo">
                         <span className="model-access-status-dot" />
-                        Proxy Active
+                        {t.settings.modelAccess.proxyActive}
                       </span>
                       <CircleAlert
                         className="h-3.5 w-3.5 text-text-tertiary"
@@ -1025,13 +1094,13 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                     </div>
                     <div className="model-access-info-divider" />
                     <div className="model-access-info-row">
-                      <span className="model-access-info-key">Primary</span>
+                      <span className="model-access-info-key">{t.settings.modelAccess.primary}</span>
                       <span className="model-access-info-value">
                         {DEFAULT_STABLE_MODEL}
                       </span>
                     </div>
                     <div className="model-access-info-row">
-                      <span className="model-access-info-key">Backup</span>
+                      <span className="model-access-info-key">{t.settings.modelAccess.backup}</span>
                       <span className="model-access-info-value">
                         {DEFAULT_BACKUP_MODEL}
                       </span>
@@ -1042,35 +1111,32 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                     <span>Proxy</span>
                   </div>
                   <p className="text-[11px] font-sans text-text-tertiary">
-                    Chat requests attach the service-token header only when this
-                    field is non-empty. Some proxy deployments or embeddings
-                    routes may enforce it, but the current inspected chat route
-                    may not.
+                    {t.settings.modelAccess.proxyDesc}
                   </p>
                   <div className="model-access-info-block">
                     <div className="model-access-info-row">
-                      <span className="model-access-info-key">Route</span>
+                      <span className="model-access-info-key">{t.settings.modelAccess.proxyRoute}</span>
                       <span className="model-access-info-value">
-                        Proxy chat
+                        {t.settings.modelAccess.proxyChat}
                       </span>
                     </div>
                     <div className="model-access-info-row">
-                      <span className="model-access-info-key">Base URL</span>
+                      <span className="model-access-info-key">{t.settings.modelAccess.proxyBaseUrl}</span>
                       <span className="model-access-info-value">
                         {proxyConnectionBaseUrl}
                       </span>
                     </div>
                     <div className="model-access-info-row">
-                      <span className="model-access-info-key">Header</span>
+                      <span className="model-access-info-key">{t.settings.modelAccess.proxyHeader}</span>
                       <span className="model-access-info-value">
                         Service token header:{" "}
-                        {proxyServiceTokenAttached ? "attached" : "omitted"}
+                        {proxyServiceTokenAttached ? t.settings.modelAccess.serviceTokenAttached : t.settings.modelAccess.serviceTokenOmitted}
                       </span>
                     </div>
                   </div>
 
                   <div className="model-access-field-group">
-                    <label className="model-access-input-label">Base URL</label>
+                    <label className="model-access-input-label">{t.settings.modelAccess.proxyBaseUrl}</label>
                     <input
                       type="text"
                       value={llmSettings.proxyBaseUrl ?? DEFAULT_PROXY_BASE_URL}
@@ -1089,9 +1155,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
 
                   <div className="model-access-field-group">
                     <label className="model-access-input-label">
-                      Service Token{" "}
+                      {t.settings.modelAccess.serviceTokenLabel}{" "}
                       <span className="model-access-label-optional">
-                        - optional
+                        - {t.settings.modelAccess.serviceTokenOptional}
                       </span>
                     </label>
                     <div className="model-access-input-wrap">
@@ -1129,7 +1195,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                     <div className="model-access-info-head">
                       <span className="model-access-status-chip model-access-status-chip-byok">
                         <span className="model-access-status-dot" />
-                        BYOK Active
+                        {t.settings.modelAccess.byokActive}
                       </span>
                       <CircleAlert
                         className="h-3.5 w-3.5 text-text-tertiary"
@@ -1138,7 +1204,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                     </div>
                     <div className="model-access-info-divider" />
                     <div className="model-access-info-row">
-                      <span className="model-access-info-key">Endpoint</span>
+                      <span className="model-access-info-key">{t.settings.modelAccess.endpoint}</span>
                       <span className="model-access-info-value">
                         {byokEndpointHost}
                       </span>
@@ -1146,12 +1212,12 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                   </div>
 
                   <div className="model-access-section-divider">
-                    <span>Credentials</span>
+                    <span>{t.settings.modelAccess.credentials}</span>
                   </div>
 
                   <div className="model-access-field-group">
                     <label className="model-access-input-label">
-                      API Key (Chat / ModelScope)
+                      {t.settings.modelAccess.apiKeyLabel}
                     </label>
                     <div className="model-access-input-wrap">
                       <input
@@ -1164,7 +1230,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                           }))
                         }
                         className="model-access-input model-access-input-with-icon"
-                        placeholder="ms-..."
+                        placeholder={t.settings.modelAccess.apiKeyPlaceholder}
                       />
                       <button
                         type="button"
@@ -1186,9 +1252,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
 
                   <div className="model-access-field-group">
                     <label className="model-access-input-label">
-                      Model{" "}
+                      {t.settings.modelAccess.modelLabel}{" "}
                       <span className="model-access-label-optional">
-                        - whitelist only
+                        - {t.settings.modelAccess.whitelistOnly}
                       </span>
                     </label>
                     <select
@@ -1220,20 +1286,20 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                   type="button"
                   onClick={handleSave}
                   className="model-access-save-btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
-                  Save
+                  {t.settings.modelAccess.save}
                 </button>
                 <button
                   type="button"
                   onClick={handleTest}
                   className="model-access-test-btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
-                  Test
+                  {t.settings.modelAccess.test}
                 </button>
               </div>
 
               {modelStatus === "loading" && (
                 <div className="model-access-feedback text-text-tertiary">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Working...
+                  {t.settings.modelAccess.testing}
                 </div>
               )}
 
@@ -1275,9 +1341,9 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                 <BookOpen className="h-4 w-4" strokeWidth={1.4} />
               </span>
               <span className="min-w-0">
-                <span className="model-access-title">Notion Export</span>
+                <span className="model-access-title">{t.settings.notionExport.title}</span>
                 <span className="model-access-description">
-                  One-shot export for saved annotations
+                  {t.settings.notionExport.description}
                 </span>
               </span>
             </span>
@@ -1293,7 +1359,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                 <div className="model-access-info-head">
                   <span className="model-access-status-chip model-access-status-chip-demo">
                     <span className="model-access-status-dot" />
-                    {notionConnected ? "OAuth Connected" : "Official OAuth"}
+                    {notionConnected ? t.settings.notionExport.oauthConnected : t.settings.notionExport.officialOAuth}
                   </span>
                   <CircleAlert
                     className="h-3.5 w-3.5 text-text-tertiary"
@@ -1302,8 +1368,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                 </div>
                 <div className="model-access-info-divider" />
                 <p className="text-[11px] font-sans leading-[1.5] text-text-tertiary">
-                  Connect with Notion, then choose the database used for
-                  one-shot annotation exports.
+                  {t.settings.notionExport.connectDesc}
                 </p>
               </div>
 
@@ -1315,19 +1380,19 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                       <div className="text-[12px] font-sans font-medium text-text-primary">
                         {notionConnected
                           ? notionSettings.workspaceName ||
-                            "Notion workspace connected"
+                            t.settings.notionExport.connected
                           : notionAvailable
-                            ? "Connect to Notion"
-                            : "Extension-only feature"}
+                            ? t.settings.notionExport.connectBtn
+                            : t.settings.notionExport.extensionOnly}
                       </div>
                       <p className="mt-1 text-[11px] font-sans leading-[1.5] text-text-tertiary">
                         {notionConnected
                           ? notionSettings.authMode === "legacy_manual"
-                            ? "Legacy token detected. Reconnect to upgrade to official OAuth."
-                            : "Your workspace is ready. Choose a database below."
+                            ? t.settings.notionExport.legacyToken
+                            : t.settings.notionExport.workspaceReady
                           : notionAvailable
-                            ? "Opens the official Notion authorization flow in a secure browser window."
-                            : "OAuth login is available only inside the extension build."}
+                            ? t.settings.notionExport.oauthFlowDesc
+                            : t.settings.notionExport.extensionOnly}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -1339,10 +1404,10 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                         }
                         className="model-access-save-btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:opacity-60">
                         {notionStatus === "loading"
-                          ? "Connecting..."
+                          ? t.settings.notionExport.connecting
                           : notionConnected
-                            ? "Change"
-                            : "Connect"}
+                            ? t.settings.notionExport.reconnect
+                            : t.settings.notionExport.connectBtn}
                       </button>
                       {notionConnected ? (
                         <button
@@ -1350,7 +1415,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                           onClick={() => void handleDisconnectNotion()}
                           disabled={notionStatus === "loading"}
                           className="model-access-test-btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus disabled:opacity-60">
-                          Disconnect
+                          {t.settings.notionExport.disconnect}
                         </button>
                       ) : null}
                     </div>
@@ -1362,7 +1427,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                 <>
                   <div className="model-access-field-group">
                     <label className="model-access-input-label">
-                      Target Database
+                      {t.settings.notionExport.targetDatabase}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -1374,7 +1439,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                           setNotionDatabasesMessage(null)
                         }}
                         className="model-access-input"
-                        placeholder="Search shared databases"
+                        placeholder={t.settings.notionExport.databasePlaceholder}
                       />
                       <button
                         type="button"
@@ -1421,7 +1486,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                     ) : (
                       <div className="px-2 py-3 text-[11px] font-sans leading-[1.5] text-text-tertiary">
                         {notionDatabasesStatus === "loading"
-                          ? "Loading shared databases..."
+                          ? t.settings.notionExport.noDatabases
                           : "No databases loaded yet. Connect and refresh to fetch shared databases."}
                       </div>
                     )}
@@ -1441,7 +1506,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
               {notionStatus === "loading" && (
                 <div className="model-access-feedback text-text-tertiary">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Waiting for Notion...
+                  {t.settings.notionExport.connecting}
                 </div>
               )}
 
@@ -1471,8 +1536,8 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
         </section>
 
         <DisclosureSection
-          title="Capture Engine"
-          description="Mode and archive controls."
+          title={t.settings.captureEngine.title}
+          description={t.settings.captureEngine.description}
           icon={
             <SettingsIconTile>
               <ShieldCheck className="h-4 w-4" strokeWidth={1.5} />
@@ -1483,8 +1548,8 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
               <div
                 className="grid gap-2"
                 role="radiogroup"
-                aria-label="Capture Mode">
-                {CAPTURE_MODE_OPTIONS.map((option) => (
+                aria-label={t.settings.captureEngine.modeLabel}>
+                {getCaptureModeOptions(t).map((option) => (
                   <label
                     key={option.value}
                     className={`cursor-pointer rounded-md border px-3 py-2 transition-colors duration-200 ${
@@ -1518,7 +1583,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                 <div className="grid gap-2 rounded-md border border-border-subtle bg-bg-surface-hover p-3">
                   <div className="grid gap-1">
                     <label className="text-[11px] text-text-tertiary">
-                      Minimum turns (1-20)
+                      {t.settings.captureEngine.minTurnsLabel}
                     </label>
                     <input
                       type="number"
@@ -1531,7 +1596,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                   </div>
                   <div className="grid gap-1">
                     <label className="text-[11px] text-text-tertiary">
-                      Blacklist keywords (comma separated)
+                      {t.settings.captureEngine.blacklistLabel}
                     </label>
                     <input
                       type="text"
@@ -1540,7 +1605,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                         setBlacklistInput(event.target.value)
                       }
                       className="settings-input"
-                      placeholder="translation, draft"
+                      placeholder={t.settings.captureEngine.blacklistPlaceholder}
                     />
                   </div>
                 </div>
@@ -1548,36 +1613,35 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
 
               {isManualMode && (
                 <p className="rounded-md border border-border-subtle bg-bg-surface-hover px-3 py-2 text-[12px] text-text-secondary">
-                  Manual mode blocks automatic writes until you archive.
+                  {t.settings.captureEngine.manualModeHint}
                 </p>
               )}
 
               <p className="text-[11px] text-text-tertiary">
-                Capture writes only after a stable conversation URL ID is
-                available.
+                {t.settings.captureEngine.captureHint}
               </p>
 
               <div className="grid gap-1 rounded-md border border-border-subtle bg-bg-surface-hover px-3 py-2 text-[11px] text-text-secondary">
                 <p>
-                  Active thread:{" "}
-                  {formatCaptureStatusReason(activeCaptureStatus?.reason)}
+                  {t.settings.captureEngine.activeThread}:{" "}
+                  {formatCaptureStatusReason(activeCaptureStatus?.reason, t)}
                 </p>
                 <p>
-                  Snapshot:{" "}
+                  {t.settings.captureEngine.snapshot}:{" "}
                   {activeCaptureStatus?.available
-                    ? `${activeCaptureStatus.messageCount ?? 0} messages - ${
+                    ? `${activeCaptureStatus.messageCount ?? 0} ${t.settings.captureEngine.messages} - ${
                         activeCaptureStatus.turnCount ?? 0
-                      } turns`
-                    : "Unavailable"}
+                      } ${t.settings.captureEngine.turns}`
+                    : t.settings.captureEngine.unavailable}
                 </p>
                 <p>
-                  Last update:{" "}
+                  {t.settings.captureEngine.lastUpdate}:{" "}
                   {formatStatusTimestamp(activeCaptureStatus?.updatedAt)}
                 </p>
                 {activeCaptureStatus?.lastDecision && (
                   <p>
-                    Last decision: {activeCaptureStatus.lastDecision.reason} -{" "}
-                    {activeCaptureStatus.lastDecision.messageCount} messages
+                    {t.settings.captureEngine.lastDecision}: {activeCaptureStatus.lastDecision.reason} -{" "}
+                    {activeCaptureStatus.lastDecision.messageCount} {t.settings.captureEngine.messages}
                   </p>
                 )}
               </div>
@@ -1585,10 +1649,10 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border-subtle bg-bg-surface-hover p-3">
                 <div>
                   <p className="text-[12px] font-medium text-text-primary">
-                    Archive Active Thread
+                    {t.settings.captureEngine.archiveActiveThread}
                   </p>
                   <p className="mt-0.5 text-[11px] text-text-tertiary">
-                    Available in Smart/Manual mode with an active snapshot.
+                    {t.settings.captureEngine.archiveHint}
                   </p>
                 </div>
                 <button
@@ -1606,7 +1670,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                   ) : (
                     <Archive className="h-3.5 w-3.5" strokeWidth={1.5} />
                   )}
-                  {archiveStatus === "loading" ? "Archiving..." : "Archive"}
+                  {archiveStatus === "loading" ? t.settings.captureEngine.archiving : t.settings.captureEngine.archive}
                 </button>
               </div>
 
@@ -1637,12 +1701,12 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                   type="button"
                   onClick={handleSaveCaptureSettings}
                   className="rounded-md border border-text-primary bg-text-primary px-4 py-2 text-[13px] font-medium text-text-inverse transition-colors duration-200 hover:bg-accent-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
-                  Save Capture Settings
+                  {t.settings.captureEngine.saveSettings}
                 </button>
                 {captureStatus === "loading" && (
                   <div className="flex items-center gap-1 text-[12px] text-text-tertiary">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Working...
+                    {t.settings.modelAccess.testing}
                   </div>
                 )}
                 {captureMessage && captureStatus !== "loading" && (
@@ -1661,8 +1725,8 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
         </DisclosureSection>
 
         <DisclosureSection
-          title="Data Management"
-          description="Storage, export, and cleanup."
+          title={t.settings.dataManagement.title}
+          description={t.settings.dataManagement.description}
           icon={
             <SettingsIconTile>
               <FolderGit2 className="h-4 w-4" strokeWidth={1.5} />
@@ -1671,10 +1735,10 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
           <div className="card-shadow-warm rounded-card border border-border-subtle bg-bg-surface p-4">
             <div className="rounded-md border border-border-subtle bg-bg-surface-hover p-3">
               <p className="text-[13px] font-medium text-text-primary">
-                Data tools are available in the Data tab.
+                {t.settings.dataManagement.dataToolsDesc}
               </p>
               <p className="mt-1 text-[12px] text-text-secondary">
-                Use it for storage overview, exports, and cleanup.
+                {t.settings.dataManagement.dataToolsHint}
               </p>
               <button
                 type="button"
@@ -1685,19 +1749,19 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                     ? "border-text-primary bg-text-primary text-text-inverse hover:bg-accent-primary-hover"
                     : "border-border-default bg-bg-surface text-text-tertiary"
                 }`}>
-                Open Data Management
+                {t.settings.dataManagement.openDataTab}
                 <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.5} />
               </button>
             </div>
           </div>
         </DisclosureSection>
 
-        <SettingsGroupLabel label="Support" />
+        <SettingsGroupLabel label={t.settings.groups.support} />
 
         <section className="settings-support-shell">
           <div className="settings-support-item">
             <SupportRow
-              label="Docs & Help"
+              label={t.settings.support.docsHelp}
               icon={<Github className="h-4 w-4" strokeWidth={1.5} />}
               onClick={() => openExternalUrl(DOCS_HELP_URL)}
             />
@@ -1705,7 +1769,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
 
           <div className="settings-support-item">
             <SupportRow
-              label="Send Feedback"
+              label={t.settings.support.sendFeedback}
               icon={<Mail className="h-4 w-4" strokeWidth={1.5} />}
               onClick={handleToggleFeedback}
               expanded={feedbackExpanded}
@@ -1714,7 +1778,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
             {feedbackExpanded ? (
               <div className="settings-support-reveal">
                 <p className="text-[11px] text-text-tertiary">
-                  Contact us directly or open an issue on GitHub.
+                  {t.settings.support.contactHint}
                 </p>
                 <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border-subtle bg-bg-surface-hover px-3 py-2">
                   <span className="text-[12px] font-mono text-text-secondary">
@@ -1730,17 +1794,17 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
                       <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
                     )}
                     {feedbackCopyState === "copied"
-                      ? "Copied"
+                      ? t.settings.support.copied
                       : feedbackCopyState === "error"
-                        ? "Retry"
-                        : "Copy"}
+                        ? t.settings.support.retry
+                        : t.settings.support.copyEmail}
                   </button>
                 </div>
                 <button
                   type="button"
                   onClick={() => openExternalUrl(FEEDBACK_ISSUE_URL)}
                   className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-text-secondary underline underline-offset-2 transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus">
-                  Open a GitHub Issue
+                  {t.settings.support.openIssue}
                   <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.5} />
                 </button>
               </div>
@@ -1749,7 +1813,7 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
 
           <div className="settings-support-item">
             <SupportRow
-              label="What's New"
+              label={t.settings.support.whatsNew}
               icon={<Megaphone className="h-4 w-4" strokeWidth={1.5} />}
               onClick={() => openExternalUrl(WHATS_NEW_URL)}
             />

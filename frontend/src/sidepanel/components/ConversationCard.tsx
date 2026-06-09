@@ -18,6 +18,7 @@ import {
   Star,
   Trash2,
 } from "lucide-react";
+import { useI18n } from "~lib/i18n";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,17 +48,20 @@ const THREADS_OVERFLOW_SUBTRIGGER_CLASS =
   `${THREADS_OVERFLOW_ITEM_CLASS} data-[state=open]:!bg-bg-secondary data-[state=open]:!text-text-primary [&>svg:last-child]:h-3.5 [&>svg:last-child]:w-3.5 [&>svg:last-child]:text-text-tertiary`;
 const THREADS_OVERFLOW_SEPARATOR_CLASS = "-mx-0 my-1 bg-border-subtle";
 
-function formatRelativeTime(timestamp: number): string {
+function formatRelativeTime(
+  timestamp: number,
+  labels: { justNow: string; minutesAgo: string; hoursAgo: string; daysAgo: string; monthsAgo: string }
+): string {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return labels.justNow;
+  if (minutes < 60) return `${minutes}${labels.minutesAgo}`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours}${labels.hoursAgo}`;
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return `${days}${labels.daysAgo}`;
   const months = Math.floor(days / 30);
-  return `${months}mo ago`;
+  return `${months}${labels.monthsAgo}`;
 }
 
 interface ActionIconButtonProps {
@@ -176,6 +180,7 @@ export function ConversationCard({
   onToggleSelect,
   onSelectFromMenu,
 }: ConversationCardProps) {
+  const { t } = useI18n();
   const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -459,7 +464,7 @@ export function ConversationCard({
           {isBatchMode && (
             <button
               type="button"
-              aria-label={isSelected ? "Deselect conversation" : "Select conversation"}
+              aria-label={isSelected ? t.timeline.deselectConversation : t.timeline.selectConversation}
               onClick={(event) => {
                 event.stopPropagation();
                 onToggleSelect?.();
@@ -478,7 +483,7 @@ export function ConversationCard({
         <div className="flex items-center gap-1">
           {!isBatchMode && (
             <ActionIconButton
-              label={conversation.is_starred ? "Unstar" : "Star"}
+              label={conversation.is_starred ? t.timeline.unstar : t.timeline.star}
               onClick={handleToggleStar}
               icon={
                 <Star
@@ -494,7 +499,7 @@ export function ConversationCard({
             />
           )}
           <span className="text-vesti-xs text-text-tertiary">
-            Last captured {formatRelativeTime(getConversationCaptureFreshnessAt(conversation))}
+            {t.timeline.lastCaptured} {formatRelativeTime(getConversationCaptureFreshnessAt(conversation), t.timeline.relativeTime)}
           </span>
         </div>
       </div>
@@ -582,7 +587,7 @@ export function ConversationCard({
                   }}
                 >
                   <Pencil className="h-3.5 w-3.5" strokeWidth={1.6} />
-                  Rename
+                  {t.timeline.rename}
                 </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger
@@ -597,7 +602,7 @@ export function ConversationCard({
                     }}
                   >
                     <FolderOpen className="h-3.5 w-3.5" strokeWidth={1.6} />
-                    Add to project
+                    {t.timeline.addToProject}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className={THREADS_OVERFLOW_CONTENT_CLASS}>
                     <DropdownMenuItem
@@ -613,7 +618,7 @@ export function ConversationCard({
                         });
                       }}
                     >
-                      <span className="text-text-tertiary">No group</span>
+                      <span className="text-text-tertiary">{t.timeline.noGroup}</span>
                     </DropdownMenuItem>
                     {topicOptions.map((topic) => (
                       <DropdownMenuItem
@@ -651,7 +656,7 @@ export function ConversationCard({
                   className={`${THREADS_OVERFLOW_ITEM_CLASS} focus:!bg-accent-primary-light data-[highlighted]:!bg-accent-primary-light`}
                 >
                   <CheckSquare className="h-3.5 w-3.5" strokeWidth={1.6} />
-                  Select
+                  {t.timeline.select}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -676,13 +681,13 @@ export function ConversationCard({
               <div className="flex min-w-0 items-center gap-2">
                 <span className="flex items-center gap-1 whitespace-nowrap text-vesti-xs text-text-tertiary">
                   <MessageSquare className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  {conversation.message_count} messages · {turnCount} turns
+                  {conversation.message_count} {t.timeline.messages} · {turnCount} {t.timeline.turns}
                 </span>
               </div>
 
               <div className="flex items-center gap-1.5">
                 <ActionIconButton
-                  label={copied ? "Copied!" : "Copy Full Text"}
+                  label={copied ? t.timeline.copied : t.timeline.copyFullText}
                   onClick={handleCopy}
                   icon={
                     copied ? (
@@ -695,8 +700,8 @@ export function ConversationCard({
                 <ActionIconButton
                   label={
                     hasSourceUrl
-                      ? "Go to Original URL"
-                      : "Source URL unavailable"
+                      ? t.timeline.goToOriginalUrl
+                      : t.timeline.sourceUrlUnavailable
                   }
                   onClick={handleOpenSource}
                   disabled={!hasSourceUrl}
@@ -704,7 +709,7 @@ export function ConversationCard({
                 />
                 <div className="mx-0.5 h-3.5 w-px bg-border-subtle" />
                 <ActionIconButton
-                  label="Delete conversation"
+                  label={t.timeline.deleteConversation}
                   onClick={handleDelete}
                   tone="danger"
                   icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "~lib/i18n";
 import type {
   Conversation,
   ConversationMatchSummary,
@@ -184,6 +185,7 @@ export function ConversationList({
   onConversationsLoaded,
   bottomInsetPx = 16,
 }: ConversationListProps) {
+  const { t } = useI18n();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -392,9 +394,9 @@ export function ConversationList({
     }
 
     const groups: { label: string; items: FilteredConversationItem[] }[] = [];
-    if (today.length > 0) groups.push({ label: "Started Today", items: today });
-    if (week.length > 0) groups.push({ label: "Started This Week", items: week });
-    if (older.length > 0) groups.push({ label: "Started Earlier", items: older });
+    if (today.length > 0) groups.push({ label: t.timeline.startedToday, items: today });
+    if (week.length > 0) groups.push({ label: t.timeline.startedThisWeek, items: week });
+    if (older.length > 0) groups.push({ label: t.timeline.startedEarlier, items: older });
     return groups;
   }, [filteredConversations]);
 

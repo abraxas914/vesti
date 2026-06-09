@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import { useI18n } from "~lib/i18n";
 import type { Conversation, Message } from "~lib/types";
 import {
   buildReaderTimestampFooterModel,
@@ -48,6 +49,7 @@ export function ReaderView({
   searchModel,
   dispatch,
 }: ReaderViewProps) {
+  const { t, locale } = useI18n();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadedConversationId, setLoadedConversationId] = useState<number | null>(null);
   const [renderPlanByMessageId, setRenderPlanByMessageId] = useState<
@@ -66,8 +68,8 @@ export function ReaderView({
   const isPrimaryContentSettled =
     !isLoading && !isBuilding && loadedConversationId === conversation.id;
   const timestampFooter = useMemo(
-    () => buildReaderTimestampFooterModel(conversation),
-    [conversation]
+    () => buildReaderTimestampFooterModel(conversation, t.reader.timestamp, locale),
+    [conversation, t.reader.timestamp, locale]
   );
 
   const occurrenceIndexMap = useMemo<OccurrenceIndexMap>(() => {

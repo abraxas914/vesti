@@ -18,6 +18,7 @@ import {
   useState,
   type ChangeEvent
 } from "react"
+import { useI18n } from "~lib/i18n"
 
 import {
   clearAllData,
@@ -69,9 +70,9 @@ function formatBytes(value: number): string {
   return `${size.toFixed(digits)} ${units[unitIndex]}`
 }
 
-function formatDateTime(value: number | null): string {
+function formatDateTime(value: number | null, locale: string = "en"): string {
   if (!value || !Number.isFinite(value)) return "—"
-  return new Date(value).toLocaleString("en-US", {
+  return new Date(value).toLocaleString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -162,6 +163,7 @@ function DataAccordion({
 }
 
 export function DataManagementPanel() {
+  const { t, locale } = useI18n()
   const [overview, setOverview] = useState<DataOverviewSnapshot | null>(null)
   const [overviewLoading, setOverviewLoading] = useState(false)
   const [actionKey, setActionKey] = useState<string | null>(null)
@@ -319,13 +321,13 @@ export function DataManagementPanel() {
 
   const statusTone = useMemo(() => {
     if (!storage || storage.status === "ok") {
-      return { label: "Healthy", cls: "is-healthy" }
+      return { label: t.data.healthy, cls: "is-healthy" }
     }
     if (storage.status === "warning") {
-      return { label: "Soft limit warning", cls: "is-warning" }
+      return { label: t.data.softLimitWarning, cls: "is-warning" }
     }
-    return { label: "Write blocked", cls: "is-danger" }
-  }, [storage])
+    return { label: t.data.writeBlocked, cls: "is-danger" }
+  }, [storage, t])
 
   const exportOptions: Array<{
     format: ExportFormat
@@ -335,32 +337,32 @@ export function DataManagementPanel() {
     {
       format: "json",
       name: "JSON",
-      description: "Reversible - includes summaries and weekly caches"
+      description: t.data.exportJsonDesc
     },
     {
       format: "txt",
       name: "TXT",
-      description: "Human-readable plain text export"
+      description: t.data.exportTxtDesc
     },
     {
       format: "md",
       name: "MD",
-      description: "Markdown - compatible with Obsidian and notes tools"
+      description: t.data.exportMdDesc
     }
   ]
 
   return (
     <div className="data-page-stack">
-      <p className="data-group-label">Overview</p>
+      <p className="data-group-label">{t.data.overview}</p>
       <DataAccordion
         icon={<Database className="h-4 w-4" strokeWidth={1.8} />}
         iconTone="storage"
-        label="Storage"
-        subtitle="Used space, quota, and browser details"
+        label={t.data.storage}
+        subtitle={t.data.storageDesc}
         open={openMap.storage}
         onToggle={() => toggleAccordion("storage")}>
         <div className="data-stat-row">
-          <span className="data-stat-label">Used / App limit (1GB)</span>
+          <span className="data-stat-label">{t.data.usedAppLimit}</span>
           <span className="data-stat-value">
             {formatBytes(used)} / {buildLimitLabel(hardLimit)}
           </span>
@@ -374,11 +376,11 @@ export function DataManagementPanel() {
         </div>
 
         <div className="data-stat-row">
-          <span className="data-stat-label">Browser quota</span>
+          <span className="data-stat-label">{t.data.browserQuota}</span>
           <span className="data-stat-value data-inline-status">
             {storage?.originQuota
               ? formatBytes(storage.originQuota)
-              : "Unknown"}
+              : t.data.unknown}
             <span className={`data-status-pill ${statusTone.cls}`}>
               <span className="data-status-dot" />
               {statusTone.label}
@@ -388,13 +390,12 @@ export function DataManagementPanel() {
 
         {storage?.status === "warning" ? (
           <p className="data-state-note is-warning">
-            Storage crossed 900MB. Export or clear old data soon.
+            {t.data.storageWarning}
           </p>
         ) : null}
         {storage?.status === "blocked" ? (
           <p className="data-state-note is-danger">
-            Storage reached 1GB. New writes are blocked until you export or
-            clear data.
+            {t.data.storageBlocked}
           </p>
         ) : null}
 
@@ -408,48 +409,47 @@ export function DataManagementPanel() {
             className="data-detail-chevron h-3 w-3"
             strokeWidth={1.8}
           />
-          <span>Advanced storage details</span>
+          <span>{t.data.advancedStorageDetails}</span>
         </button>
 
         <div className={`data-detail-rows ${detailOpen ? "is-open" : ""}`}>
           <div className="data-detail-item">
-            <span>Threads stored</span>
+            <span>{t.data.threadsStored}</span>
             <span>{formatCount(overview?.totalConversations)}</span>
           </div>
           <div className="data-detail-item">
-            <span>Compacted threads</span>
+            <span>{t.data.compactedThreads}</span>
             <span>{formatCount(overview?.compactedThreads)}</span>
           </div>
           <div className="data-detail-item">
-            <span>Summary records</span>
+            <span>{t.data.summaryRecords}</span>
             <span>{formatCount(overview?.summaryRecordCount)}</span>
           </div>
           <div className="data-detail-item">
-            <span>Weekly reports</span>
+            <span>{t.data.weeklyReports}</span>
             <span>{formatCount(overview?.weeklyReportCount)}</span>
           </div>
           <div className="data-detail-item">
-            <span>IndexedDB store</span>
+            <span>{t.data.indexedDbStore}</span>
             <span>{overview?.indexedDbName ?? "MemoryHubDB"}</span>
           </div>
           <div className="data-detail-item">
-            <span>Last compaction</span>
-            <span>{formatDateTime(overview?.lastCompactionAt ?? null)}</span>
+            <span>{t.data.lastCompaction}</span>
+            <span>{formatDateTime(overview?.lastCompactionAt ?? null, locale)}</span>
           </div>
           <p className="data-detail-note">
-            Compacted metrics currently use summary cache proxy and can be
-            upgraded to strict Agent A compaction lineage later.
+            {t.data.compactionNote}
           </p>
           <div className="data-detail-item">
-            <span>Soft limit</span>
+            <span>{t.data.softLimit}</span>
             <span>{buildLimitLabel(softLimit)}</span>
           </div>
           <div className="data-detail-item">
-            <span>chrome.storage.local used</span>
+            <span>{t.data.chromeStorageUsed}</span>
             <span>{formatBytes(storage?.localUsed ?? 0)}</span>
           </div>
           <div className="data-detail-item">
-            <span>Estimated IndexedDB + other</span>
+            <span>{t.data.estimatedIndexedDb}</span>
             <span>
               {formatBytes(
                 storage
@@ -461,12 +461,12 @@ export function DataManagementPanel() {
         </div>
       </DataAccordion>
 
-      <p className="data-group-label">Operations</p>
+      <p className="data-group-label">{t.data.operations}</p>
       <DataAccordion
         icon={<Download className="h-4 w-4" strokeWidth={1.8} />}
         iconTone="export"
-        label="Export"
-        subtitle="Download data in JSON, TXT, or MD"
+        label={t.data.export}
+        subtitle={t.data.exportDesc}
         open={openMap.export}
         onToggle={() => toggleAccordion("export")}>
         <p className="data-subgroup-label">Export format</p>
@@ -492,16 +492,16 @@ export function DataManagementPanel() {
                   ) : (
                     <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
                   )}
-                  Export
+                  {t.data.exportAction}
                 </button>
               </div>
             )
           })}
           <div className="data-export-item">
             <div className="data-export-info">
-              <p className="data-export-name">Import JSON</p>
+              <p className="data-export-name">{t.data.importJson}</p>
               <p className="data-export-desc">
-                Restore a reversible backup and replace captured data tables
+                {t.data.importJsonDesc}
               </p>
             </div>
             <button
@@ -517,7 +517,7 @@ export function DataManagementPanel() {
               ) : (
                 <Upload className="h-3.5 w-3.5" strokeWidth={1.8} />
               )}
-              Import
+              {t.data.importAction}
             </button>
           </div>
         </div>
@@ -533,13 +533,13 @@ export function DataManagementPanel() {
       <DataAccordion
         icon={<FolderArchive className="h-4 w-4" strokeWidth={1.8} />}
         iconTone="cleanup"
-        label="Cleanup"
-        subtitle="Remove summary cache or wipe all local data"
+        label={t.data.cleanup}
+        subtitle={t.data.cleanupDesc}
         open={openMap.cleanup}
         onToggle={() => toggleAccordion("cleanup")}>
         <div className="data-clean-card">
           <div className="data-clean-card-head">
-            <p className="data-clean-card-title">Insights cache</p>
+            <p className="data-clean-card-title">{t.data.insightsCache}</p>
             <button
               type="button"
               className="data-secondary-btn"
@@ -553,23 +553,21 @@ export function DataManagementPanel() {
               ) : (
                 <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
               )}
-              Clear cache
+              {t.data.clearCache}
             </button>
           </div>
           <p className="data-clean-card-desc">
-            Clears cached thread summaries and weekly reports while keeping
-            conversations and messages.
+            {t.data.clearCacheDesc}
           </p>
         </div>
 
         <div className="data-danger-zone">
           <div className="data-danger-head">
             <TriangleAlert className="h-4 w-4" strokeWidth={1.8} />
-            <span>Danger zone</span>
+            <span>{t.data.dangerZone}</span>
           </div>
           <p className="data-danger-desc">
-            Clears all conversations, messages, cached summaries, and weekly
-            reports. LLM configuration remains unchanged.
+            {t.data.dangerDesc}
           </p>
           <button
             type="button"
@@ -581,19 +579,19 @@ export function DataManagementPanel() {
             ) : (
               <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
             )}
-            Clear local data
+            {t.data.clearLocalData}
           </button>
         </div>
       </DataAccordion>
 
-      <p className="data-group-label">Roadmap</p>
+      <p className="data-group-label">{t.data.roadmap}</p>
       <DataAccordion
         icon={<BarChart3 className="h-4 w-4" strokeWidth={1.8} />}
         iconTone="dashboard"
-        label="Dashboard"
-        subtitle="Usage trends and compaction analytics"
+        label={t.data.dashboard}
+        subtitle={t.data.dashboardDesc}
         disabled
-        soonTag="Soon"
+        soonTag={t.common.soon}
       />
 
       {(overviewLoading || actionKey) && (

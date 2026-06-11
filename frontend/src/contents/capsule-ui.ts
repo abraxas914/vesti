@@ -12,6 +12,7 @@ import {
 import type { ActiveCaptureStatus, Platform, UiThemeMode } from "../lib/types";
 import { resolveCapsuleLogoSrc } from "../lib/ui/capsuleLogo";
 import { logger } from "../lib/utils/logger";
+import { detectAndSetLanguage } from "../lib/services/languageSettingsService";
 
 export const config: PlasmoCSConfig = {
   matches: [
@@ -230,6 +231,92 @@ const FALLBACK_PLATFORM_TONE: Record<UiThemeMode, PlatformTone> = {
     border: "hsl(220 16% 36%)",
   },
 };
+
+type CapsuleLocale = "en" | "zh";
+
+const capsuleEn = {
+  unavailable: "Unavailable",
+  mirroring: "Mirroring",
+  held: "Held",
+  ready: "Ready",
+  archiving: "Archiving...",
+  saved: "Saved",
+  actionFailed: "Action failed",
+  messages: "Messages",
+  turns: "Turns",
+  archiveNow: "Archive now",
+  mirrorModeHint: "Mirror mode saves content automatically.",
+  archiveCompleted: "Archive completed.",
+  vestiCapsule: "Vesti capsule",
+  openVestiCapsule: "Open Vesti capsule",
+  openVestiDock: "Open Vesti Dock",
+  openDock: "Open Dock",
+  errorMessages: {
+    ARCHIVE_MODE_DISABLED: "Archive is disabled in mirror mode.",
+    ACTIVE_TAB_UNSUPPORTED: "Current tab host is unsupported.",
+    ACTIVE_TAB_UNAVAILABLE: "Active tab is unavailable.",
+    TRANSIENT_NOT_FOUND: "No thread snapshot available yet.",
+    missing_conversation_id: "Waiting for stable conversation URL.",
+    empty_payload: "No parsed messages available to archive.",
+    storage_limit_blocked: "Storage is full. Export or clean up first.",
+    persist_failed: "Archive failed during persistence.",
+    FORCE_ARCHIVE_FAILED: "Archive action failed. Retry.",
+    content_unreachable: "Capture context is temporarily unreachable.",
+  },
+};
+
+const capsuleZh = {
+  unavailable: "不可用",
+  mirroring: "正在镜像",
+  held: "已暂存",
+  ready: "就绪",
+  archiving: "正在归档...",
+  saved: "已保存",
+  actionFailed: "操作失败",
+  messages: "消息",
+  turns: "轮次",
+  archiveNow: "立即归档",
+  mirrorModeHint: "镜像模式会自动保存内容。",
+  archiveCompleted: "归档完成。",
+  vestiCapsule: "Vesti 胶囊",
+  openVestiCapsule: "打开 Vesti 胶囊",
+  openVestiDock: "打开 Vesti 面板",
+  openDock: "打开面板",
+  errorMessages: {
+    ARCHIVE_MODE_DISABLED: "镜像模式下归档已禁用。",
+    ACTIVE_TAB_UNSUPPORTED: "当前标签页不受支持。",
+    ACTIVE_TAB_UNAVAILABLE: "活动标签页不可用。",
+    TRANSIENT_NOT_FOUND: "尚无可用对话快照。",
+    missing_conversation_id: "正在等待稳定的对话 URL。",
+    empty_payload: "没有可归档的解析消息。",
+    storage_limit_blocked: "存储已满。请先导出或清理数据。",
+    persist_failed: "归档持久化失败。",
+    FORCE_ARCHIVE_FAILED: "归档操作失败。请重试。",
+    content_unreachable: "捕获上下文暂时无法访问。",
+  },
+} as const;
+
+const capsuleTranslations: Record<CapsuleLocale, typeof capsuleEn> = {
+  en: capsuleEn,
+  zh: capsuleZh,
+};
+
+let capsuleLocale: CapsuleLocale = "en";
+let capsuleT = capsuleTranslations.en;
+
+async function initCapsuleLocale(): Promise<void> {
+  try {
+    const locale = await detectAndSetLanguage();
+    capsuleLocale = locale as CapsuleLocale;
+    capsuleT = capsuleTranslations[capsuleLocale] ?? capsuleTranslations.en;
+  } catch {
+    // Keep default English
+  }
+}
+
+function capsuleResolveError(key: string): string {
+  return (capsuleT.errorMessages as Record<string, string>)[key] ?? key;
+}
 
 const ERROR_MESSAGE_MAP: Record<string, string> = {
   ARCHIVE_MODE_DISABLED: "Archive is disabled in mirror mode.",
@@ -1079,30 +1166,30 @@ const resolvePlatform = (host: string): Platform | undefined => {
 
 const resolveReasonMessage = (errorCode?: string | null): string | null => {
   if (!errorCode) return null;
-  const direct = ERROR_MESSAGE_MAP[errorCode];
-  if (direct) return direct;
-  const normalizedKey = Object.keys(ERROR_MESSAGE_MAP).find((key) =>
-    errorCode.includes(key)
+  const direct = capsuleResolveError(errorCode);
+  if (direct !== errorCode) return direct;
+  const key = Object.keys(capsuleT.errorMessages).find((k) =>
+    errorCode.includes(k)
   );
-  return normalizedKey ? ERROR_MESSAGE_MAP[normalizedKey] : errorCode;
+  return key ? capsuleResolveError(key) : errorCode;
 };
 
 const labelForState = (state: CapsuleRuntimeState): string => {
   switch (state) {
     case "idle":
-      return "Unavailable";
+      return capsuleT.unavailable;
     case "mirroring":
-      return "Mirroring";
+      return capsuleT.mirroring;
     case "holding":
-      return "Held";
+      return capsuleT.held;
     case "ready_to_archive":
-      return "Ready";
+      return capsuleT.ready;
     case "archiving":
-      return "Archiving...";
+      return capsuleT.archiving;
     case "saved":
-      return "Saved";
+      return capsuleT.saved;
     case "error":
-      return "Action failed";
+      return capsuleT.actionFailed;
   }
 };
 
@@ -1131,6 +1218,7 @@ const getRetryDelay = (failureCount: number): number => {
 const mount = async () => {
   if (window.top !== window.self) return;
   if (document.getElementById(CAPSULE_ROOT_ID)) return;
+  await initCapsuleLocale();
   ensureCapsuleFontFaceStyleInjected();
 
   const hostname = normalizeHost(window.location.hostname);
@@ -1185,10 +1273,10 @@ const mount = async () => {
   const collapsedButton = document.createElement("button");
   collapsedButton.type = "button";
   collapsedButton.className = "capsule-collapsed";
-  collapsedButton.setAttribute("aria-label", "Vesti capsule");
+  collapsedButton.setAttribute("aria-label", capsuleT.vestiCapsule);
   collapsedButton.title = isPrimaryRolloutHost
-    ? "Open Vesti capsule"
-    : "Open Vesti Dock";
+    ? capsuleT.openVestiCapsule
+    : capsuleT.openVestiDock;
   const logo = document.createElement("img");
   logo.className = "capsule-logo";
   logo.src = resolveCapsuleLogoSrc(themeMode);
@@ -1262,7 +1350,7 @@ const mount = async () => {
   messagesMetric.className = "capsule-metric";
   const messagesLabel = document.createElement("span");
   messagesLabel.className = "capsule-metric-label";
-  messagesLabel.textContent = "Messages";
+  messagesLabel.textContent = capsuleT.messages;
   const messagesValue = document.createElement("span");
   messagesValue.className = "capsule-metric-value is-empty";
   messagesValue.textContent = "--";
@@ -1273,7 +1361,7 @@ const mount = async () => {
   turnsMetric.className = "capsule-metric";
   const turnsLabel = document.createElement("span");
   turnsLabel.className = "capsule-metric-label";
-  turnsLabel.textContent = "Turns";
+  turnsLabel.textContent = capsuleT.turns;
   const turnsValue = document.createElement("span");
   turnsValue.className = "capsule-metric-value is-empty";
   turnsValue.textContent = "--";
@@ -1293,12 +1381,12 @@ const mount = async () => {
   const archiveBtn = document.createElement("button");
   archiveBtn.type = "button";
   archiveBtn.className = "capsule-action-btn is-primary";
-  archiveBtn.textContent = "Archive now";
+  archiveBtn.textContent = capsuleT.archiveNow;
 
   const openDockBtn = document.createElement("button");
   openDockBtn.type = "button";
   openDockBtn.className = "capsule-action-btn";
-  openDockBtn.textContent = "Open Dock";
+  openDockBtn.textContent = capsuleT.openDock;
 
   actions.appendChild(archiveBtn);
   actions.appendChild(openDockBtn);
@@ -1496,14 +1584,14 @@ const mount = async () => {
 
   const buildReasonLine = () => {
     if (uiState === "error") {
-      return resolveReasonMessage(runtimeError) ?? "Action failed";
+      return resolveReasonMessage(runtimeError) ?? capsuleT.actionFailed;
     }
 
     switch (uiState) {
       case "idle":
         return "Open an active chat thread to continue.";
       case "mirroring":
-        return "Mirror mode saves content automatically.";
+        return capsuleT.mirrorModeHint;
       case "holding":
         return "Waiting for archivable thread snapshot.";
       case "ready_to_archive":
@@ -1511,7 +1599,7 @@ const mount = async () => {
       case "archiving":
         return "Persisting snapshot...";
       case "saved":
-        return "Archive completed.";
+        return capsuleT.archiveCompleted;
       default:
         return null;
     }
@@ -1558,8 +1646,13 @@ const mount = async () => {
     turnsValue.classList.toggle("is-empty", nextTurnCount === "--");
 
     archiveBtn.disabled = uiState !== "ready_to_archive";
-    archiveBtn.textContent = uiState === "archiving" ? "Archiving..." : "Archive now";
+    archiveBtn.textContent = uiState === "archiving" ? capsuleT.archiving : capsuleT.archiveNow;
     reasonLine.textContent = buildReasonLine() ?? "";
+    messagesLabel.textContent = capsuleT.messages;
+    turnsLabel.textContent = capsuleT.turns;
+    openDockBtn.textContent = capsuleT.openDock;
+    collapsedButton.setAttribute("aria-label", capsuleT.vestiCapsule);
+    collapsedButton.title = isPrimaryRolloutHost ? capsuleT.openVestiCapsule : capsuleT.openVestiDock;
   };
 
   const syncPosition = () => {
@@ -1807,6 +1900,17 @@ const mount = async () => {
     areaName: string
   ) => {
     if (destroyed || areaName !== "local") return;
+
+    const languageChange = changes["vesti_language_settings"];
+    if (languageChange && languageChange.newValue) {
+      const { locale: nextLocale } = languageChange.newValue as { locale?: string };
+      if (nextLocale && nextLocale !== capsuleLocale) {
+        capsuleLocale = (nextLocale === "zh" ? "zh" : "en") as CapsuleLocale;
+        capsuleT = capsuleTranslations[capsuleLocale] ?? capsuleTranslations.en;
+        renderCapsule();
+        syncPosition();
+      }
+    }
 
     const uiThemeChange = changes[UI_SETTINGS_STORAGE_KEY];
     if (uiThemeChange) {

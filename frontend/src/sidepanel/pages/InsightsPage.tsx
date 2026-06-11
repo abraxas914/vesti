@@ -9,6 +9,7 @@ import {
   Pause,
   Play,
 } from "lucide-react";
+import { useI18n } from "~lib/i18n";
 import type {
   AsyncStatus,
   Conversation,
@@ -184,9 +185,9 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function formatDateTime(ts: number): string {
+function formatDateTime(ts: number, locale: string = "en"): string {
   const d = new Date(ts);
-  return d.toLocaleString("en-US", {
+  return d.toLocaleString(locale, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -237,38 +238,19 @@ function getLastSevenDaysRangeLocal(referenceDate = new Date()): {
   };
 }
 
-function formatWeekRangeLabel(rangeStart: number, rangeEnd: number): string {
+function formatWeekRangeLabel(rangeStart: number, rangeEnd: number, locale: string = "en"): string {
   const start = new Date(rangeStart);
   const end = new Date(rangeEnd);
   const sameYear = start.getFullYear() === end.getFullYear();
 
-  const startText = start.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-
-  const endText = end.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
+  const dateOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const dateOptsYear: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
 
   if (sameYear) {
-    return `${startText} - ${endText}, ${end.getFullYear()}`;
+    return `${start.toLocaleDateString(locale, dateOpts)} - ${end.toLocaleDateString(locale, dateOpts)}, ${end.getFullYear()}`;
   }
 
-  const startWithYear = start.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  const endWithYear = end.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  return `${startWithYear} - ${endWithYear}`;
+  return `${start.toLocaleDateString(locale, dateOptsYear)} - ${end.toLocaleDateString(locale, dateOptsYear)}`;
 }
 
 function formatTimer(elapsedMs: number): string {
@@ -332,7 +314,7 @@ function getThreadStatusFromPipelineStage(
   status: InsightPipelineStatus
 ): string {
   if (status === "degraded_fallback" || stage === "degraded_fallback") {
-    return "Summary completed with degraded fallback.";
+    return t.insights.summaryDegraded;
   }
 
   switch (stage) {
@@ -345,7 +327,7 @@ function getThreadStatusFromPipelineStage(
     case "persisting_result":
       return "Finalising and persisting...";
     case "completed":
-      return "Summary generated.";
+      return t.insights.summaryGenerated;
     default:
       return "Generating summary...";
   }
@@ -439,9 +421,9 @@ function getThreadThemeClass(platform: Platform): string {
   }
 }
 
-function formatConversationWeekday(conversation: Conversation): string {
+function formatConversationWeekday(conversation: Conversation, locale: string = "en"): string {
   const ts = getConversationOriginAt(conversation);
-  return new Date(ts).toLocaleDateString("en-US", { weekday: "short" });
+  return new Date(ts).toLocaleDateString(locale, { weekday: "short" });
 }
 
 function toThreadSummaryUiState(
@@ -478,6 +460,7 @@ export function InsightsPage({
   refreshToken,
   pipelineProgressEvent = null,
 }: InsightsPageProps) {
+  const { t, locale } = useI18n();
   const [summary, setSummary] = useState<SummaryRecord | null>(null);
   const [summaryStatus, setSummaryStatus] = useState<AsyncStatus>("idle");
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -608,8 +591,8 @@ export function InsightsPage({
           activeThreadPipelineEvent.status
         )
       : threadPhaseIndex >= 0
-        ? THREAD_PHASES[threadPhaseIndex]?.status ?? "Generating summary..."
-        : "Ready to generate.";
+        ? THREAD_PHASES[threadPhaseIndex]?.status ?? t.insights.generating
+        : t.insights.readyToGenerate;
   const getThreadPhaseTimeLabel = (index: number): string => {
     const fallbackHint = THREAD_PHASES[index]?.hint ?? "~10s";
     const stageKey = THREAD_TRACKED_STAGE_ORDER[index];
@@ -634,12 +617,12 @@ export function InsightsPage({
 
   const weeklyRangeLabel =
     weeklyData?.meta.range_label ??
-    formatWeekRangeLabel(weeklyRange.rangeStart, weeklyRange.rangeEnd);
+    formatWeekRangeLabel(weeklyRange.rangeStart, weeklyRange.rangeEnd, locale);
 
   const weeklyThreadCount = weeklyConversations.length;
-  const weeklyCountLabel = `${weeklyThreadCount} thread${
-    weeklyThreadCount === 1 ? "" : "s"
-  } in range`;
+  const weeklyCountLabel = weeklyThreadCount === 1
+    ? `${weeklyThreadCount} ${t.insights.threadInRange}`
+    : `${weeklyThreadCount} ${t.insights.threadsInRange}`;
 
   const sortedWeeklyConversations = useMemo(() => {
     return [...weeklyConversations].sort(
@@ -668,11 +651,11 @@ export function InsightsPage({
 
   const weeklyStatusText =
     weeklyPhase === "ready_to_compile"
-      ? "Ready to compile weekly digest."
+      ? t.insights.readyToCompile
       : WEEKLY_PHASES.find((phase) => phase.phase === weeklyPhase)?.status ??
-        "Generating digest...";
+        t.insights.generatingDigest;
   const weeklyRangeModeLabel =
-    weeklyRangeMode === "last_7_days" ? "Last 7 Days" : "Last Full Week";
+    weeklyRangeMode === "last_7_days" ? t.insights.last7Days : t.insights.lastFullWeek;
 
   const weeklyHighlightItems =
     weeklyData?.highlights && weeklyData.highlights.length > 0
@@ -1068,7 +1051,7 @@ export function InsightsPage({
     if (threadSummaryUiState === "no_thread") {
       return (
         <p className="ins-empty">
-          Select a thread from Threads to generate a summary.
+          {t.insights.selectThreadHint}
         </p>
       );
     }
@@ -1276,13 +1259,13 @@ export function InsightsPage({
           ) : (
             <InsightsWandIcon className="h-3.5 w-3.5 text-accent-primary" />
           )}
-          {summaryData ? "Regenerate" : "Generate Summary"}
+          {summaryData ? t.insights.regenerate : t.insights.generateSummary}
         </button>
 
         {(threadSummaryUiState === "selected_idle" ||
           threadSummaryUiState === "selected_error") && (
           <p className="ins-empty ins-empty-left">
-            No summary yet. Click Generate Summary to begin.
+            {t.insights.noSummaryYet}
           </p>
         )}
 
@@ -1309,7 +1292,7 @@ export function InsightsPage({
             <p className="ins-model-meta-line">
               <span className="ins-model-meta-label">Generated:</span>
               <span className="ins-model-meta-value">
-                {formatDateTime(summary.createdAt)}
+                {formatDateTime(summary.createdAt, locale)}
               </span>
             </p>
           </div>
@@ -1376,7 +1359,7 @@ export function InsightsPage({
               </span>
               <p className="ins-week-thread-title">{item.title}</p>
               <span className="ins-week-thread-day">
-                {formatConversationWeekday(item)}
+                {formatConversationWeekday(item, locale)}
               </span>
             </div>
           ))}
@@ -1398,7 +1381,7 @@ export function InsightsPage({
           )}
 
           {sortedWeeklyConversations.length === 0 && (
-            <p className="ins-empty">No threads started this week yet.</p>
+            <p className="ins-empty">{t.insights.noThreadsThisWeek}</p>
           )}
         </div>
 
@@ -1409,7 +1392,7 @@ export function InsightsPage({
         >
           <InsightsWandIcon className="h-3.5 w-3.5 ins-week-generate-trigger-icon" />
           <span className="ins-week-generate-trigger-text">
-            Generate digest for this week
+            {t.insights.generateDigest}
           </span>
         </button>
       </>
@@ -1439,7 +1422,7 @@ export function InsightsPage({
             <div className="min-w-0 flex-1">
               <p className="ins-week-status-copy">
                 {weeklyGenerationPaused
-                  ? "Paused. Resume to continue progress animation."
+                  ? t.insights.pausedResumeHint
                   : weeklyStatusText}
               </p>
             </div>
@@ -1475,7 +1458,7 @@ export function InsightsPage({
               type="button"
               onClick={handleToggleWeeklyPause}
               aria-pressed={weeklyGenerationPaused}
-              aria-label={weeklyGenerationPaused ? "Resume progress view" : "Pause progress view"}
+              aria-label={weeklyGenerationPaused ? t.insights.resumeProgress : t.insights.pauseProgress}
               className="ins-week-gen-control-btn"
             >
               {weeklyGenerationPaused ? (
@@ -1483,7 +1466,7 @@ export function InsightsPage({
               ) : (
                 <Pause className="h-3.5 w-3.5" strokeWidth={1.8} />
               )}
-              <span>{weeklyGenerationPaused ? "Resume" : "Pause"}</span>
+              <span>{weeklyGenerationPaused ? t.insights.resume : t.insights.pause}</span>
             </button>
             <p className="ins-week-gen-control-note">
               UI pause only. Background generation continues.
@@ -1636,7 +1619,7 @@ export function InsightsPage({
             <p className="ins-model-meta-line">
               <span className="ins-model-meta-label">Generated:</span>
               <span className="ins-model-meta-value">
-                {formatDateTime(weeklyReport.createdAt)}
+                {formatDateTime(weeklyReport.createdAt, locale)}
               </span>
             </p>
           </div>
@@ -1686,7 +1669,7 @@ export function InsightsPage({
             </p>
           )}
           <div className="ins-week-sparse-stats">
-            <span>Threads started in range: {weeklyThreadCount}</span>
+            <span>{t.insights.threadsStartedInRange}: {weeklyThreadCount}</span>
             <span>
               Substantial summaries:{" "}
               {weeklySubstantialCount === null ? "unknown" : weeklySubstantialCount}
@@ -1762,15 +1745,15 @@ export function InsightsPage({
   return (
     <div className="vesti-shell flex h-full flex-col overflow-y-auto vesti-scroll bg-bg-app">
       <header className="vesti-page-header">
-        <h1 className="vesti-page-title text-text-primary">Insights</h1>
+        <h1 className="vesti-page-title text-text-primary">{t.pages.insights}</h1>
       </header>
 
       <div className="flex flex-col gap-3 p-4">
-        <p className="ins-group-label">On-demand</p>
+        <p className="ins-group-label">{t.insights.onDemand}</p>
 
         <InsightsAccordionItem
-          title="Thread Summary"
-          description="AI-generated digest of the active thread"
+          title={t.insights.threadSummary}
+          description={t.insights.threadSummaryDesc}
           open={threadSummaryOpen}
           onToggle={() => setThreadSummaryOpen((prev) => !prev)}
           icon={
@@ -1783,27 +1766,27 @@ export function InsightsPage({
           {renderThreadSummaryBody()}
         </InsightsAccordionItem>
 
-        <p className="ins-group-label">Scheduled</p>
+        <p className="ins-group-label">{t.insights.scheduled}</p>
 
         <InsightsAccordionItem
-          title="Weekly Digest"
-          description="Highlights from the past seven days"
+          title={t.insights.weeklyDigest}
+          description={t.insights.weeklyDigestDesc}
           open={weeklyDigestOpen}
           onToggle={
             WEEKLY_DIGEST_SOON ? undefined : () => setWeeklyDigestOpen((prev) => !prev)
           }
           icon={<CalendarDays className="h-4 w-4" strokeWidth={1.5} />}
           disabled={WEEKLY_DIGEST_SOON}
-          soonTag={WEEKLY_DIGEST_SOON ? "Soon" : undefined}
+          soonTag={WEEKLY_DIGEST_SOON ? t.common.soon : undefined}
         >
           {renderWeeklyBody()}
         </InsightsAccordionItem>
 
-        <p className="ins-group-label">Discovery</p>
+        <p className="ins-group-label">{t.insights.discovery}</p>
 
         <InsightsAccordionItem
-          title="Explore & Network"
-          description="Knowledge graph and thread connections"
+          title={t.insights.exploreNetwork}
+          description={t.insights.exploreNetworkDesc}
           open={discoveryOpen}
           onToggle={() => setDiscoveryOpen((prev) => !prev)}
           icon={<Network className="h-4 w-4" strokeWidth={1.5} />}
@@ -1819,9 +1802,9 @@ export function InsightsPage({
               <div className="flex items-center gap-2.5">
                 <Compass className="w-4 h-4 text-text-secondary" strokeWidth={1.75} />
                 <div className="text-left">
-                  <p className="text-[13px] font-medium text-text-primary">Explore</p>
+                  <p className="text-[13px] font-medium text-text-primary">{t.insights.explore}</p>
                   <p className="text-[11px] text-text-tertiary">
-                    Browse and search your knowledge base
+                    {t.insights.exploreDesc}
                   </p>
                 </div>
               </div>
@@ -1841,9 +1824,9 @@ export function InsightsPage({
               <div className="flex items-center gap-2.5">
                 <Network className="w-4 h-4 text-text-secondary" strokeWidth={1.75} />
                 <div className="text-left">
-                  <p className="text-[13px] font-medium text-text-primary">Network</p>
+                  <p className="text-[13px] font-medium text-text-primary">{t.insights.network}</p>
                   <p className="text-[11px] text-text-tertiary">
-                    Visualize connections between conversations
+                    {t.insights.networkDesc}
                   </p>
                 </div>
               </div>

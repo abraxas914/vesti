@@ -12,6 +12,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Added
 - Added message-sidecar metadata for structured citations and artifact presence.
+- Added a **Prompt Management** system: a new dashboard **Prompts** tab that
+  intelligently archives high-value prompts extracted from captured
+  conversations (LLM-assisted titling/summary/scoring with heuristic fallback),
+  a personal favorites ("常用") library with full CRUD, and an in-page assist
+  content script offering slash/quick-insert (`/v`) of saved prompts plus
+  LLM-powered draft "补写" (smart completion) across all supported AI platforms.
+- Added a new IndexedDB `prompts` store (schema v17) and offscreen routes for
+  prompt CRUD, library extraction, search, usage tracking, and completion.
 
 ### Changed
 - Unified citation stripping with structured source retention across capture, reader, and export.
@@ -35,6 +43,8 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ### Docs
 - Added DOM sampling bootstrap and platform handoff notes for thinking-boundary repair, citation governance, and five-platform parser sampling.
+- Added the Prompt Management engineering spec, README, and manual acceptance
+  checklist under `documents/prompt_management/`.
 
 ### Chore
 - Added Playwright local auth and DOM sampling tooling for repeatable capture verification.

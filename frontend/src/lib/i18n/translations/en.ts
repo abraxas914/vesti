@@ -443,7 +443,7 @@ export const enTranslations = {
   },
 
   dashboard: {
-    tabs: { library: "LIBRARY", explore: "EXPLORE", network: "NETWORK" },
+    tabs: { library: "LIBRARY", explore: "EXPLORE", network: "NETWORK", prompts: "PROMPTS" },
     nav: {
       backToExplore: "Back to Explore",
       backToNetwork: "Back to Network",

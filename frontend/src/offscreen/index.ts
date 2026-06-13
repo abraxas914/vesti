@@ -40,6 +40,21 @@ import {
   updateExploreSession,
   updateNote
 } from "../lib/db/repository"
+import {
+  createPrompt,
+  deletePrompt,
+  extractPromptsFromLibrary,
+  incrementPromptUsage,
+  listPrompts,
+  searchPrompts,
+  togglePromptFavorite,
+  updatePrompt
+} from "../lib/db/promptRepository"
+import {
+  completePromptDraft,
+  enrichPromptCandidates,
+  resolveUsableLlmConfig
+} from "../lib/services/promptLlmService"
 import { isRequestMessage } from "../lib/messaging/protocol"
 import type { RequestMessage, ResponseMessage } from "../lib/messaging/protocol"
 import {
@@ -388,6 +403,69 @@ async function handleRequest(
           message.payload.rangeEnd
         )
         return { ok: true, type: messageType, data: record }
+      }
+      case "LIST_PROMPTS": {
+        const data = await listPrompts(message.payload?.filter)
+        return { ok: true, type: messageType, data }
+      }
+      case "SEARCH_PROMPTS": {
+        const data = await searchPrompts(
+          message.payload.query,
+          message.payload.limit
+        )
+        return { ok: true, type: messageType, data }
+      }
+      case "CREATE_PROMPT": {
+        const data = await createPrompt(message.payload.input)
+        return { ok: true, type: messageType, data }
+      }
+      case "UPDATE_PROMPT": {
+        const prompt = await updatePrompt(
+          message.payload.id,
+          message.payload.changes
+        )
+        return { ok: true, type: messageType, data: { prompt } }
+      }
+      case "DELETE_PROMPT": {
+        const deleted = await deletePrompt(message.payload.id)
+        return { ok: true, type: messageType, data: { deleted } }
+      }
+      case "TOGGLE_PROMPT_FAVORITE": {
+        const prompt = await togglePromptFavorite(
+          message.payload.id,
+          message.payload.isFavorite
+        )
+        return { ok: true, type: messageType, data: { prompt } }
+      }
+      case "INCREMENT_PROMPT_USAGE": {
+        const prompt = await incrementPromptUsage(message.payload.id)
+        return { ok: true, type: messageType, data: { prompt } }
+      }
+      case "EXTRACT_PROMPTS_FROM_LIBRARY": {
+        // Use the LLM enricher when configured; otherwise heuristic-only.
+        const config = await resolveUsableLlmConfig()
+        const enrich = config
+          ? (candidates: Parameters<typeof enrichPromptCandidates>[0]) =>
+              enrichPromptCandidates(candidates, config)
+          : undefined
+        const data = await extractPromptsFromLibrary(
+          { scope: message.payload?.scope, limit: message.payload?.limit },
+          enrich
+        )
+        return { ok: true, type: messageType, data }
+      }
+      case "COMPLETE_PROMPT": {
+        const config = await resolveUsableLlmConfig()
+        const relatedPrompts =
+          config && message.payload.useLibrary !== false
+            ? await searchPrompts(message.payload.draft, 3)
+            : []
+        const data = await completePromptDraft(config, {
+          draft: message.payload.draft,
+          platform: message.payload.platform,
+          relatedPrompts
+        })
+        return { ok: true, type: messageType, data }
       }
       default:
         return {

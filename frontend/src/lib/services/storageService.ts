@@ -23,6 +23,12 @@ import type {
   ObsidianImportFileEntry,
   ObsidianImportSummary,
   Platform,
+  Prompt,
+  CreatePromptInput,
+  UpdatePromptChanges,
+  PromptListFilter,
+  PromptExtractionResult,
+  PromptCompletionResult,
   RagResponse,
   RelatedConversation,
   SearchConversationMatchesQuery,
@@ -730,4 +736,105 @@ export async function forceArchiveTransient(): Promise<ForceArchiveTransientResu
     type: "FORCE_ARCHIVE_TRANSIENT",
     target: "background"
   }) as Promise<ForceArchiveTransientResult>
+}
+
+// ---- Prompt Management -----------------------------------------------------
+
+export async function listPrompts(filter?: PromptListFilter): Promise<Prompt[]> {
+  return sendRequest({
+    type: "LIST_PROMPTS",
+    target: "offscreen",
+    payload: { filter }
+  }) as Promise<Prompt[]>
+}
+
+export async function searchPrompts(
+  query: string,
+  limit?: number
+): Promise<Prompt[]> {
+  return sendRequest({
+    type: "SEARCH_PROMPTS",
+    target: "offscreen",
+    payload: { query, limit }
+  }) as Promise<Prompt[]>
+}
+
+export async function createPrompt(
+  input: CreatePromptInput
+): Promise<{ prompt: Prompt; created: boolean }> {
+  return sendRequest({
+    type: "CREATE_PROMPT",
+    target: "offscreen",
+    payload: { input }
+  }) as Promise<{ prompt: Prompt; created: boolean }>
+}
+
+export async function updatePrompt(
+  id: number,
+  changes: UpdatePromptChanges
+): Promise<Prompt> {
+  const result = (await sendRequest({
+    type: "UPDATE_PROMPT",
+    target: "offscreen",
+    payload: { id, changes }
+  })) as { prompt: Prompt }
+  return result.prompt
+}
+
+export async function deletePrompt(id: number): Promise<void> {
+  await sendRequest({
+    type: "DELETE_PROMPT",
+    target: "offscreen",
+    payload: { id }
+  })
+}
+
+export async function togglePromptFavorite(
+  id: number,
+  isFavorite: boolean
+): Promise<Prompt> {
+  const result = (await sendRequest({
+    type: "TOGGLE_PROMPT_FAVORITE",
+    target: "offscreen",
+    payload: { id, isFavorite }
+  })) as { prompt: Prompt }
+  return result.prompt
+}
+
+export async function incrementPromptUsage(id: number): Promise<Prompt> {
+  const result = (await sendRequest({
+    type: "INCREMENT_PROMPT_USAGE",
+    target: "offscreen",
+    payload: { id }
+  })) as { prompt: Prompt }
+  return result.prompt
+}
+
+export async function extractPromptsFromLibrary(options?: {
+  scope?: "all" | "recent"
+  limit?: number
+}): Promise<PromptExtractionResult> {
+  return sendRequest(
+    {
+      type: "EXTRACT_PROMPTS_FROM_LIBRARY",
+      target: "offscreen",
+      payload: options
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  ) as Promise<PromptExtractionResult>
+}
+
+export async function completePrompt(payload: {
+  draft: string
+  platform?: Platform
+  useLibrary?: boolean
+}): Promise<PromptCompletionResult> {
+  return sendRequest(
+    {
+      type: "COMPLETE_PROMPT",
+      target: "offscreen",
+      payload
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  ) as Promise<PromptCompletionResult>
 }

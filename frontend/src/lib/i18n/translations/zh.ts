@@ -445,7 +445,7 @@ export const zhTranslations: TranslationsType = {
   },
 
   dashboard: {
-    tabs: { library: "库", explore: "探索", network: "网络" },
+    tabs: { library: "库", explore: "探索", network: "网络", prompts: "提示词" },
     nav: {
       backToExplore: "返回探索",
       backToNetwork: "返回网络",

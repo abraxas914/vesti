@@ -2,6 +2,7 @@ export { VestiDashboard } from "./dashboard";
 export { LibraryTab } from "./tabs/library-tab";
 export { ExploreTab } from "./tabs/explore-tab";
 export { NetworkTab } from "./tabs/network-tab";
+export { PromptsTab } from "./tabs/prompts-tab";
 export { StructuredSummaryCard } from "./components/StructuredSummaryCard";
 export { SummaryPipelineProgress } from "./components/SummaryPipelineProgress";
 export { MOCK_NOTES } from "./mock-data";
@@ -54,4 +55,11 @@ export type {
   Note,
   StorageApi,
   ConversationFilters,
+  Prompt,
+  PromptSource,
+  CreatePromptInput,
+  UpdatePromptChanges,
+  PromptListFilter,
+  PromptExtractionResult,
+  PromptCompletionResult,
 } from "./types";

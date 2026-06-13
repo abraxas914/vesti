@@ -26,6 +26,12 @@ import type {
   ObsidianImportFileEntry,
   ObsidianImportSummary,
   Platform,
+  Prompt,
+  CreatePromptInput,
+  UpdatePromptChanges,
+  PromptListFilter,
+  PromptExtractionResult,
+  PromptCompletionResult,
   RagResponse,
   RelatedConversation,
   SearchConversationMatchesQuery,
@@ -507,6 +513,69 @@ export type RequestMessage =
       target?: "background"
       requestId?: string
     }
+  | {
+      type: "LIST_PROMPTS"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload?: { filter?: PromptListFilter }
+    }
+  | {
+      type: "SEARCH_PROMPTS"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: { query: string; limit?: number }
+    }
+  | {
+      type: "CREATE_PROMPT"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: { input: CreatePromptInput }
+    }
+  | {
+      type: "UPDATE_PROMPT"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: { id: number; changes: UpdatePromptChanges }
+    }
+  | {
+      type: "DELETE_PROMPT"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: { id: number }
+    }
+  | {
+      type: "TOGGLE_PROMPT_FAVORITE"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: { id: number; isFavorite: boolean }
+    }
+  | {
+      type: "INCREMENT_PROMPT_USAGE"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: { id: number }
+    }
+  | {
+      type: "EXTRACT_PROMPTS_FROM_LIBRARY"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload?: { scope?: "all" | "recent"; limit?: number }
+    }
+  | {
+      type: "COMPLETE_PROMPT"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: { draft: string; platform?: Platform; useLibrary?: boolean }
+    }
 
 export type ResponseDataMap = {
   CAPTURE_CONVERSATION: {
@@ -584,6 +653,15 @@ export type ResponseDataMap = {
   GET_ACTIVE_CAPTURE_STATUS: ActiveCaptureStatus
   FORCE_ARCHIVE_TRANSIENT: ForceArchiveTransientResult
   RUN_VECTORIZATION: { queued: boolean }
+  LIST_PROMPTS: Prompt[]
+  SEARCH_PROMPTS: Prompt[]
+  CREATE_PROMPT: { prompt: Prompt; created: boolean }
+  UPDATE_PROMPT: { prompt: Prompt }
+  DELETE_PROMPT: { deleted: boolean }
+  TOGGLE_PROMPT_FAVORITE: { prompt: Prompt }
+  INCREMENT_PROMPT_USAGE: { prompt: Prompt }
+  EXTRACT_PROMPTS_FROM_LIBRARY: PromptExtractionResult
+  COMPLETE_PROMPT: PromptCompletionResult
 }
 
 export type ResponseMessage<

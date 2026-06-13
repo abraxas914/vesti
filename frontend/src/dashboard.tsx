@@ -55,6 +55,15 @@ import {
   getStorageUsage,
   exportData,
   clearAllData,
+  listPrompts,
+  searchPrompts,
+  createPrompt,
+  updatePrompt,
+  deletePrompt,
+  togglePromptFavorite,
+  incrementPromptUsage,
+  extractPromptsFromLibrary,
+  completePrompt,
 } from "~lib/services/storageService";
 import { VestiDashboard as VestiDashboardShell } from "~vendor/vesti-ui";
 
@@ -205,6 +214,15 @@ function VestiDashboardInner({
         getStorageUsage,
         exportData,
         clearAllData,
+        listPrompts,
+        searchPrompts,
+        createPrompt,
+        updatePrompt,
+        deletePrompt,
+        togglePromptFavorite,
+        incrementPromptUsage,
+        extractPromptsFromLibrary,
+        completePrompt,
       }}
     />
   );

@@ -16,6 +16,7 @@ import { LibraryDataProvider } from "./contexts/library-data";
 import { ExploreTab } from "./tabs/explore-tab";
 import { LibraryTab } from "./tabs/library-tab";
 import { NetworkTab } from "./tabs/network-tab";
+import { PromptsTab } from "./tabs/prompts-tab";
 import type { DashboardLabels, StorageApi, UiThemeMode } from "./types";
 import type { NotionDatabaseOption, NotionSettings } from "./notion-integration";
 import {
@@ -29,7 +30,7 @@ import {
   selectNotionDatabase,
 } from "./notion-integration";
 
-type Tab = "library" | "explore" | "network";
+type Tab = "library" | "explore" | "network" | "prompts";
 type DrawerView = "settings" | "data";
 type ReturnTab = Exclude<Tab, "library">;
 type DashboardNavRequest = {
@@ -41,7 +42,7 @@ type ThemeSyncStatus = "idle" | "syncing" | "error";
 const DASHBOARD_NAV_REQUEST_KEY = "vesti_dashboard_open_tab";
 
 const DEFAULT_LABELS: DashboardLabels = {
-  tabs: { library: "LIBRARY", explore: "EXPLORE", network: "NETWORK" },
+  tabs: { library: "LIBRARY", explore: "EXPLORE", network: "NETWORK", prompts: "PROMPTS" },
   nav: {
     backToExplore: "Back to Explore",
     backToNetwork: "Back to Network",
@@ -185,7 +186,13 @@ export function VestiDashboard({
     if (typeof window === "undefined") return "library";
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
-    if (tab === "explore" || tab === "network" || tab === "library") return tab;
+    if (
+      tab === "explore" ||
+      tab === "network" ||
+      tab === "library" ||
+      tab === "prompts"
+    )
+      return tab;
     return "library";
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -221,6 +228,7 @@ export function VestiDashboard({
     library: activeTab === "library",
     explore: activeTab === "explore",
     network: activeTab === "network",
+    prompts: activeTab === "prompts",
   }));
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const notionAvailable =
@@ -246,7 +254,12 @@ export function VestiDashboard({
     const applyNavRequest = (raw: unknown) => {
       if (!raw || typeof raw !== "object") return;
       const tab = (raw as DashboardNavRequest).tab;
-      if (tab === "library" || tab === "explore" || tab === "network") {
+      if (
+        tab === "library" ||
+        tab === "explore" ||
+        tab === "network" ||
+        tab === "prompts"
+      ) {
         setActiveTab(tab);
       }
     };
@@ -525,6 +538,17 @@ export function VestiDashboard({
       >
         {labels.tabs.network}
       </button>
+      <button
+        type="button"
+        onClick={() => handleSelectTab("prompts")}
+        className={`inline-flex items-center px-3 py-1.5 text-[14px] leading-none font-mono font-medium uppercase tracking-[0.26em] transition-colors ${
+          activeTab === "prompts"
+            ? "text-text-primary"
+            : "text-text-tertiary hover:text-text-secondary"
+        }`}
+      >
+        {labels.tabs.prompts}
+      </button>
     </nav>
   );
 
@@ -615,6 +639,16 @@ export function VestiDashboard({
                 isActive={activeTab === "network"}
                 onSelectConversation={handleOpenConversation}
                 labels={labels.network}
+              />
+            </div>
+          )}
+          {mountedTabs.prompts && (
+            <div className={`h-full ${activeTab === "prompts" ? "block" : "hidden"}`}>
+              <PromptsTab
+                storage={storage}
+                themeMode={themeMode}
+                isActive={activeTab === "prompts"}
+                onOpenConversation={handleOpenConversation}
               />
             </div>
           )}

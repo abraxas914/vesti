@@ -492,7 +492,98 @@ export type StorageApi = {
     format: ExportFormat
   ) => Promise<{ blob: Blob; filename: string; mime: string }>;
   clearAllData?: () => Promise<void>;
+  // Prompt Management
+  listPrompts?: (filter?: PromptListFilter) => Promise<Prompt[]>;
+  searchPrompts?: (query: string, limit?: number) => Promise<Prompt[]>;
+  createPrompt?: (
+    input: CreatePromptInput
+  ) => Promise<{ prompt: Prompt; created: boolean }>;
+  updatePrompt?: (id: number, changes: UpdatePromptChanges) => Promise<Prompt>;
+  deletePrompt?: (id: number) => Promise<void>;
+  togglePromptFavorite?: (id: number, isFavorite: boolean) => Promise<Prompt>;
+  incrementPromptUsage?: (id: number) => Promise<Prompt>;
+  extractPromptsFromLibrary?: (options?: {
+    scope?: "all" | "recent";
+    limit?: number;
+  }) => Promise<PromptExtractionResult>;
+  completePrompt?: (payload: {
+    draft: string;
+    platform?: Platform;
+    useLibrary?: boolean;
+  }) => Promise<PromptCompletionResult>;
 };
+
+// ---- Prompt Management types (mirror of frontend/src/lib/types) -------------
+
+export type PromptSource = "manual" | "extracted";
+
+export interface Prompt {
+  id: number;
+  title: string;
+  body: string;
+  category: string | null;
+  tags: string[];
+  source: PromptSource;
+  source_platform: Platform | null;
+  source_conversation_id: number | null;
+  source_message_id: number | null;
+  is_favorite: boolean;
+  is_archived: boolean;
+  quality_score: number;
+  summary: string | null;
+  variables: string[];
+  use_count: number;
+  last_used_at: number | null;
+  body_hash: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface CreatePromptInput {
+  title?: string;
+  body: string;
+  category?: string | null;
+  tags?: string[];
+  source?: PromptSource;
+  source_platform?: Platform | null;
+  source_conversation_id?: number | null;
+  source_message_id?: number | null;
+  is_favorite?: boolean;
+  summary?: string | null;
+  quality_score?: number;
+}
+
+export interface UpdatePromptChanges {
+  title?: string;
+  body?: string;
+  category?: string | null;
+  tags?: string[];
+  is_favorite?: boolean;
+  is_archived?: boolean;
+  summary?: string | null;
+  quality_score?: number;
+}
+
+export interface PromptListFilter {
+  category?: string | null;
+  favoritesOnly?: boolean;
+  includeArchived?: boolean;
+  source?: PromptSource;
+  search?: string;
+  sort?: "recent" | "score" | "usage";
+}
+
+export interface PromptExtractionResult {
+  created: number;
+  skipped: number;
+  candidates: number;
+  usedLlm: boolean;
+}
+
+export interface PromptCompletionResult {
+  completion: string;
+  usedLlm: boolean;
+}
 
 export interface ArtifactMetaData {
   title: string;
@@ -662,6 +753,7 @@ export interface DashboardLabels {
     library: string;
     explore: string;
     network: string;
+    prompts: string;
   };
   nav: {
     backToExplore: string;

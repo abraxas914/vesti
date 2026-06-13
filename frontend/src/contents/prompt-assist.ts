@@ -1,14 +1,43 @@
 import type { PlasmoCSConfig } from "plasmo";
 import { sendRequest } from "../lib/messaging/runtime";
 import { getCapsuleSettingsForHost } from "../lib/services/capsuleSettingsService";
-import type { Platform, Prompt } from "../lib/types";
+import {
+  getPromptAssistSettingsForHost,
+  subscribePromptAssistSettings,
+  updatePromptAssistSettings,
+  type PromptAssistSettings,
+} from "../lib/services/promptAssistSettingsService";
+import {
+  getComposerText,
+  isComposerElement,
+  normalizeHost,
+  platformForHost,
+  resolveComposer,
+  setComposerText,
+  type ComposerEl,
+} from "../lib/contents/composerIo";
+import {
+  detectClarityIssues,
+  generateSuggestions,
+  getScoreBreakdown,
+  scoreLevel,
+  type ScoreLevel,
+} from "../lib/promptlib";
+import {
+  getContentTranslations,
+  onLocaleChange,
+  type Translations,
+} from "../lib/i18n/contentI18n";
+import type { Prompt } from "../lib/types";
 import { logger } from "../lib/utils/logger";
 
-// In-page prompt assist: a Shadow-DOM launcher offering (1) slash/quick-insert
-// of saved prompts and (2) LLM "补写" (smart completion) of the current draft.
-// It only ever writes into the composer on explicit user action and never
-// auto-submits. Per-platform composer selectors will need maintenance like the
-// capture parsers.
+// In-page prompt assist (Shadow-DOM). Three capabilities, all opt-out-able:
+//  1. Slash/quick-insert ("/v") of saved prompts.
+//  2. Real-time, offline prompt SCORING + clarity checks + suggestions as you
+//     type (heuristics only on the hot path — zero network/LLM per keystroke).
+//  3. On-demand LLM "Optimize" (cold path) + one-click fill, with preview.
+// It writes into the composer ONLY on explicit user action and NEVER submits.
+// Composer selectors live in the shared composerIo module.
 
 export const config: PlasmoCSConfig = {
   matches: [
@@ -32,108 +61,7 @@ const ROOT_ID = "vesti-prompt-assist-root";
 const Z_INDEX = 2147483645; // one below the capsule
 const SLASH_TRIGGER = "/v";
 
-const normalizeHost = (host: string): string =>
-  host.startsWith("www.") ? host.slice(4) : host;
-
-const PLATFORM_BY_HOST: Record<string, Platform> = {
-  "chatgpt.com": "ChatGPT",
-  "chat.openai.com": "ChatGPT",
-  "claude.ai": "Claude",
-  "gemini.google.com": "Gemini",
-  "chat.deepseek.com": "DeepSeek",
-  "chat.qwen.ai": "Qwen",
-  "doubao.com": "Doubao",
-  "kimi.com": "Kimi",
-  "kimi.moonshot.cn": "Kimi",
-  "yuanbao.tencent.com": "Yuanbao",
-};
-
-// Per-host composer hints, tried in order. A generic fallback handles drift.
-const COMPOSER_SELECTORS: Record<string, string[]> = {
-  "chatgpt.com": ["#prompt-textarea", "div[contenteditable='true']#prompt-textarea", "textarea"],
-  "chat.openai.com": ["#prompt-textarea", "textarea"],
-  "claude.ai": ["div[contenteditable='true'].ProseMirror", "div[contenteditable='true']"],
-  "gemini.google.com": ["div.ql-editor[contenteditable='true']", "rich-textarea div[contenteditable='true']"],
-  "chat.deepseek.com": ["#chat-input", "textarea#chat-input", "textarea"],
-  "doubao.com": ["textarea", "div[contenteditable='true']"],
-  "chat.qwen.ai": ["textarea", "div[contenteditable='true']"],
-  "kimi.com": [".chat-input-editor", "div[contenteditable='true']", "textarea"],
-  "kimi.moonshot.cn": [".chat-input-editor", "div[contenteditable='true']", "textarea"],
-  "yuanbao.tencent.com": [".ql-editor[contenteditable='true']", "div[contenteditable='true']", "textarea"],
-};
-
-const GENERIC_COMPOSER_SELECTORS = [
-  "div[contenteditable='true']",
-  "textarea",
-];
-
-type ComposerEl = HTMLTextAreaElement | HTMLElement;
-
-function isVisible(el: Element): boolean {
-  const rect = el.getBoundingClientRect();
-  if (rect.width < 40 || rect.height < 12) return false;
-  const style = window.getComputedStyle(el);
-  return style.visibility !== "hidden" && style.display !== "none";
-}
-
-/** Resolve the active composer, preferring per-host hints, then a heuristic. */
-function resolveComposer(host: string): ComposerEl | null {
-  const active = document.activeElement;
-  if (
-    active &&
-    (active instanceof HTMLTextAreaElement ||
-      (active instanceof HTMLElement && active.isContentEditable))
-  ) {
-    return active as ComposerEl;
-  }
-
-  const hints = COMPOSER_SELECTORS[host] ?? [];
-  for (const selector of [...hints, ...GENERIC_COMPOSER_SELECTORS]) {
-    const candidates = Array.from(document.querySelectorAll(selector)).filter(
-      (el): el is HTMLElement => el instanceof HTMLElement && isVisible(el),
-    );
-    // Prefer the lowest visible editable (composers sit at the bottom).
-    candidates.sort(
-      (a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top,
-    );
-    if (candidates[0]) return candidates[0];
-  }
-  return null;
-}
-
-function getComposerText(el: ComposerEl): string {
-  if (el instanceof HTMLTextAreaElement) return el.value;
-  return el.innerText;
-}
-
-/** Write text into a composer in a way React/ProseMirror editors register. */
-function setComposerText(el: ComposerEl, text: string): void {
-  el.focus();
-
-  if (el instanceof HTMLTextAreaElement) {
-    const setter = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value",
-    )?.set;
-    setter?.call(el, text);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-    return;
-  }
-
-  // contenteditable: select all then insert so frameworks see a real edit.
-  const selection = window.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  selection?.removeAllRanges();
-  selection?.addRange(range);
-  // execCommand is deprecated but remains the most reliable cross-editor path.
-  const inserted = document.execCommand("insertText", false, text);
-  if (!inserted) {
-    el.textContent = text;
-    el.dispatchEvent(new InputEvent("input", { bubbles: true }));
-  }
-}
+// ---- background RPC helpers ------------------------------------------------
 
 async function searchPrompts(query: string): Promise<Prompt[]> {
   try {
@@ -152,7 +80,7 @@ async function searchPrompts(query: string): Promise<Prompt[]> {
 
 async function completeDraft(
   draft: string,
-  platform: Platform | undefined,
+  platform: ReturnType<typeof platformForHost>,
 ): Promise<{ completion: string; usedLlm: boolean }> {
   return (await sendRequest(
     {
@@ -176,7 +104,10 @@ async function incrementUsage(id: number): Promise<void> {
   }
 }
 
-async function saveDraftAsPrompt(body: string, platform: Platform | undefined): Promise<boolean> {
+async function saveDraftAsPrompt(
+  body: string,
+  platform: ReturnType<typeof platformForHost>,
+): Promise<boolean> {
   try {
     const result = (await sendRequest({
       type: "CREATE_PROMPT",
@@ -194,6 +125,13 @@ async function saveDraftAsPrompt(body: string, platform: Platform | undefined): 
   }
 }
 
+const LEVEL_COLOR: Record<ScoreLevel, string> = {
+  poor: "#dc2626",
+  fair: "#d97706",
+  good: "#2563eb",
+  excellent: "#059669",
+};
+
 const STYLE = `
 :host { all: initial; }
 * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
@@ -205,9 +143,11 @@ const STYLE = `
   box-shadow: 0 4px 14px rgba(79,70,229,0.35);
 }
 .launcher:hover { background: #4338ca; }
+.la-score { display:none; align-items:center; justify-content:center; min-width:22px; height:18px; padding:0 5px; border-radius:999px; background:#fff; color:#111; font-size:11px; font-weight:700; }
+.launcher[data-has-score="1"] .la-score { display:inline-flex; }
 .panel {
   position: fixed; left: 20px; bottom: 64px; z-index: ${Z_INDEX};
-  width: 340px; max-height: 70vh; overflow: hidden; display: flex; flex-direction: column;
+  width: 348px; max-height: 78vh; overflow-y: auto; display: flex; flex-direction: column;
   background: #fff; color: #1f2937; border: 1px solid #e5e7eb; border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.18);
 }
@@ -215,11 +155,25 @@ const STYLE = `
 .panel-head { display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
 .panel-title { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color:#6b7280; }
 .panel-close { background:none; border:none; cursor:pointer; color:#9ca3af; font-size:16px; line-height:1; }
+.quality { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+.q-head { display:flex; align-items:center; justify-content:space-between; }
+.q-label { font-size:12px; font-weight:700; color:#374151; }
+.q-score { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; }
+.q-dot { width:9px; height:9px; border-radius:50%; }
+.q-bar { height:5px; border-radius:999px; background:#eee; margin-top:8px; overflow:hidden; }
+.q-bar > i { display:block; height:100%; border-radius:999px; transition: width .15s ease; }
+.q-issues { list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:5px; }
+.q-issue { display:flex; gap:7px; font-size:11.5px; color:#4b5563; line-height:1.35; }
+.q-issue::before { content:"•"; color:#9ca3af; }
+.q-issue[data-sev="critical"]::before { color:#dc2626; }
+.q-issue[data-sev="warn"]::before { color:#d97706; }
+.q-empty { font-size:11.5px; color:#9ca3af; margin-top:6px; }
 .row { display:flex; gap:6px; padding: 10px 12px; }
 .search { flex:1; padding: 7px 9px; border:1px solid #e5e7eb; border-radius:8px; font-size:13px; outline:none; }
 .search:focus { border-color:#4f46e5; }
 .btn { padding: 7px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; cursor:pointer; font-size:12px; color:#374151; white-space:nowrap; }
 .btn:hover { background:#f3f4f6; }
+.btn:disabled { opacity:.6; cursor:default; }
 .btn-primary { background:#4f46e5; color:#fff; border-color:#4f46e5; }
 .btn-primary:hover { background:#4338ca; }
 .list { overflow-y:auto; padding: 4px 6px 8px; }
@@ -231,21 +185,30 @@ const STYLE = `
 .preview { padding: 10px 12px; border-top:1px solid #f0f0f0; }
 .preview-text { white-space:pre-wrap; font-size:12px; color:#374151; max-height: 180px; overflow-y:auto; background:#f9fafb; border-radius:8px; padding:8px; }
 .preview-actions { display:flex; gap:6px; margin-top:8px; justify-content:flex-end; }
-.hint { font-size:11px; color:#9ca3af; padding: 0 12px 10px; }
+.hint { font-size:11px; color:#9ca3af; padding: 0 12px 8px; }
+.foot { display:flex; gap:10px; padding: 8px 12px; border-top:1px solid #f0f0f0; }
+.foot button { background:none; border:none; cursor:pointer; color:#6b7280; font-size:11px; padding:0; }
+.foot button:hover { color:#4f46e5; text-decoration:underline; }
 `;
+
+interface ScoreState {
+  text: string;
+  score: number;
+  level: ScoreLevel;
+  suggestionKeys: Array<{ key: string; sev: string }>;
+}
 
 const mount = async () => {
   if (window.top !== window.self) return;
   if (document.getElementById(ROOT_ID)) return;
 
   const hostname = normalizeHost(window.location.hostname);
-  const platform = PLATFORM_BY_HOST[hostname];
+  const platform = platformForHost(window.location.hostname);
 
-  // Reuse capsule per-host visibility so disabling Vesti on a host also hides
-  // the assist.
+  // Reuse capsule per-host visibility so disabling Vesti on a host hides assist.
   try {
-    const settings = await getCapsuleSettingsForHost(hostname);
-    if (!settings.enabled || settings.hiddenHosts.includes(hostname)) {
+    const capsule = await getCapsuleSettingsForHost(hostname);
+    if (!capsule.enabled || capsule.hiddenHosts.includes(hostname)) {
       logger.info("content", "Prompt assist hidden by settings", { host: hostname });
       return;
     }
@@ -253,6 +216,12 @@ const mount = async () => {
     // fall through with default-on behavior
   }
 
+  let assistSettings: PromptAssistSettings = await getPromptAssistSettingsForHost(
+    hostname,
+  );
+  let t: Translations = await getContentTranslations();
+
+  // ---- shadow root + UI ----------------------------------------------------
   const root = document.createElement("div");
   root.id = ROOT_ID;
   document.body.appendChild(root);
@@ -264,45 +233,250 @@ const mount = async () => {
   const launcher = document.createElement("button");
   launcher.className = "launcher";
   launcher.type = "button";
-  launcher.innerHTML = "✨ Prompt";
-  launcher.title = "Vesti prompt assist — insert saved prompts or improve your draft";
+  launcher.innerHTML = `<span class="la-icon">✨</span><span class="la-score"></span>`;
   shadow.appendChild(launcher);
+  const launcherScore = launcher.querySelector(".la-score") as HTMLElement;
 
   const panel = document.createElement("div");
   panel.className = "panel hidden";
   panel.innerHTML = `
     <div class="panel-head">
-      <span class="panel-title">Vesti Prompts</span>
+      <span class="panel-title"></span>
       <button class="panel-close" type="button" aria-label="Close">✕</button>
     </div>
+    <div class="quality">
+      <div class="q-head">
+        <span class="q-label"></span>
+        <span class="q-score"><span class="q-dot"></span><span class="q-num"></span></span>
+      </div>
+      <div class="q-bar"><i></i></div>
+      <ul class="q-issues"></ul>
+      <div class="q-empty"></div>
+      <div class="row" style="padding:10px 0 0">
+        <button class="btn btn-primary btn-optimize" type="button" style="flex:1"></button>
+      </div>
+    </div>
     <div class="row">
-      <input class="search" type="text" placeholder="Search your prompt library…" />
+      <input class="search" type="text" />
     </div>
     <div class="list"></div>
     <div class="row">
-      <button class="btn btn-improve" type="button" style="flex:1">✨ Improve my draft</button>
-      <button class="btn btn-save" type="button">Save draft</button>
+      <button class="btn btn-save" type="button" style="flex:1"></button>
     </div>
-    <div class="hint">Tip: type "${SLASH_TRIGGER} keyword" in the chat box to insert a saved prompt.</div>
+    <div class="hint"></div>
     <div class="preview" style="display:none"></div>
+    <div class="foot">
+      <button class="foot-off" type="button"></button>
+    </div>
   `;
   shadow.appendChild(panel);
 
-  const searchInput = panel.querySelector(".search") as HTMLInputElement;
-  const listEl = panel.querySelector(".list") as HTMLElement;
-  const previewEl = panel.querySelector(".preview") as HTMLElement;
-  const improveBtn = panel.querySelector(".btn-improve") as HTMLButtonElement;
-  const saveBtn = panel.querySelector(".btn-save") as HTMLButtonElement;
-  const closeBtn = panel.querySelector(".panel-close") as HTMLButtonElement;
+  const $ = <T extends HTMLElement>(sel: string) => panel.querySelector(sel) as T;
+  const titleEl = $(".panel-title");
+  const qLabel = $(".q-label");
+  const qDot = $(".q-dot");
+  const qNum = $(".q-num");
+  const qBar = $(".q-bar > i") as HTMLElement;
+  const qIssues = $(".q-issues");
+  const qEmpty = $(".q-empty");
+  const optimizeBtn = $(".btn-optimize") as HTMLButtonElement;
+  const searchInput = $(".search") as HTMLInputElement;
+  const listEl = $(".list");
+  const saveBtn = $(".btn-save") as HTMLButtonElement;
+  const hintEl = $(".hint");
+  const previewEl = $(".preview");
+  const offBtn = $(".foot-off") as HTMLButtonElement;
 
   let panelOpen = false;
-  let slashAnchor: ComposerEl | null = null; // set when opened via slash trigger
+  let slashAnchor: ComposerEl | null = null;
+  let scoreState: ScoreState | null = null;
 
+  // ---- static label application (re-run on locale change) ------------------
+  const applyStaticLabels = () => {
+    const a = t.realTimeAssist;
+    titleEl.textContent = "Vesti";
+    qLabel.textContent = a.panelTitle;
+    optimizeBtn.textContent = a.actions.optimize;
+    searchInput.placeholder = t.realTimeAssist.empty.noScore;
+    saveBtn.textContent = a.actions.saveAsPrompt;
+    hintEl.textContent = `${SLASH_TRIGGER} … — ${a.toggle.label}`;
+    offBtn.textContent = a.toggle.turnOffHere;
+    optimizeBtn.style.display = assistSettings.optimizeWithLlm ? "" : "none";
+  };
+
+  // ---- score rendering (hot path output) -----------------------------------
+  const renderScore = () => {
+    const showChip = assistSettings.realtimeEnabled && !!scoreState && scoreState.text.length > 0;
+    launcher.setAttribute("data-has-score", showChip ? "1" : "0");
+    if (showChip && scoreState) {
+      const pct = Math.round(scoreState.score * 100);
+      launcherScore.textContent = String(pct);
+      launcherScore.style.color = LEVEL_COLOR[scoreState.level];
+    }
+    if (!panelOpen) return;
+
+    const a = t.realTimeAssist;
+    if (!assistSettings.realtimeEnabled) {
+      qLabel.textContent = a.panelTitle;
+      qNum.textContent = "";
+      qDot.style.background = "transparent";
+      qBar.style.width = "0%";
+      qIssues.innerHTML = "";
+      qEmpty.textContent = a.toggle.disabled;
+      return;
+    }
+    if (!scoreState || scoreState.text.length === 0) {
+      qNum.textContent = "";
+      qDot.style.background = "#d1d5db";
+      qBar.style.width = "0%";
+      qIssues.innerHTML = "";
+      qEmpty.textContent = a.empty.noScore;
+      return;
+    }
+    const color = LEVEL_COLOR[scoreState.level];
+    qNum.textContent = `${a.score[scoreState.level]} · ${Math.round(scoreState.score * 100)}`;
+    (qNum.parentElement as HTMLElement).style.color = color;
+    qDot.style.background = color;
+    qBar.style.width = `${Math.round(scoreState.score * 100)}%`;
+    qBar.style.background = color;
+
+    qIssues.innerHTML = "";
+    const suggestions = scoreState.suggestionKeys;
+    if (suggestions.length === 0) {
+      qEmpty.textContent = a.empty.allClear;
+    } else {
+      qEmpty.textContent = "";
+      for (const s of suggestions) {
+        const li = document.createElement("li");
+        li.className = "q-issue";
+        li.setAttribute("data-sev", s.sev);
+        li.textContent = resolveI18n(s.key);
+        qIssues.appendChild(li);
+      }
+    }
+  };
+
+  // Resolve a dotted i18n key like "realTimeAssist.suggestion.noRole".
+  const resolveI18n = (key: string): string => {
+    const parts = key.split(".");
+    let node: unknown = t;
+    for (const part of parts) {
+      if (node && typeof node === "object" && part in (node as Record<string, unknown>)) {
+        node = (node as Record<string, unknown>)[part];
+      } else {
+        return key;
+      }
+    }
+    return typeof node === "string" ? node : key;
+  };
+
+  // ---- offline scoring (pure; safe per keystroke) --------------------------
+  const computeScore = (text: string): ScoreState => {
+    const breakdown = getScoreBreakdown(text);
+    const issues = detectClarityIssues(text);
+    const suggestions = assistSettings.showClarityBadge
+      ? generateSuggestions(issues, 4)
+      : [];
+    return {
+      text,
+      score: breakdown.score,
+      level: scoreLevel(breakdown.score),
+      suggestionKeys: suggestions.map((s) => ({ key: s.suggestionKey, sev: s.severity })),
+    };
+  };
+
+  let rafHandle: number | null = null;
+  const scheduleScore = (text: string) => {
+    const trimmed = text.trim();
+    if (scoreState && scoreState.text === trimmed) return; // dirty-check
+    if (rafHandle !== null) return;
+    rafHandle = window.requestAnimationFrame(() => {
+      rafHandle = null;
+      scoreState = computeScore(trimmed);
+      renderScore();
+    });
+  };
+
+  // ---- IME-safe debounced input pipeline -----------------------------------
+  let isComposing = false;
+  let scoreTimer: number | null = null;
+  const cancelScoreTimer = () => {
+    if (scoreTimer !== null) {
+      window.clearTimeout(scoreTimer);
+      scoreTimer = null;
+    }
+  };
+
+  const onComposerInput = (target: ComposerEl) => {
+    const text = getComposerText(target);
+
+    // (1) slash trigger — independent of the real-time toggle.
+    const trimmedStart = text.trimStart();
+    const match = trimmedStart.match(/^\/v\s?(.*)$/s);
+    if (match) {
+      slashAnchor = target;
+      const query = (match[1] ?? "").split("\n")[0] ?? "";
+      searchInput.value = query;
+      if (!panelOpen) setPanel(true);
+      else void renderResults(query);
+    } else if (slashAnchor && panelOpen) {
+      slashAnchor = null;
+    }
+
+    // (2) real-time scoring — debounced, never during IME composition.
+    if (!assistSettings.realtimeEnabled) return;
+    cancelScoreTimer();
+    if (isComposing) return;
+    scoreTimer = window.setTimeout(() => {
+      scoreTimer = null;
+      scheduleScore(text);
+    }, assistSettings.debounceMs);
+  };
+
+  document.addEventListener(
+    "compositionstart",
+    () => {
+      isComposing = true;
+      cancelScoreTimer();
+    },
+    true,
+  );
+  document.addEventListener(
+    "compositionend",
+    (event) => {
+      isComposing = false;
+      const target = event.target;
+      if (isComposerElement(target) && assistSettings.realtimeEnabled) {
+        cancelScoreTimer();
+        scoreTimer = window.setTimeout(() => {
+          scoreTimer = null;
+          scheduleScore(getComposerText(target));
+        }, assistSettings.debounceMs);
+      }
+    },
+    true,
+  );
+  document.addEventListener(
+    "input",
+    (event) => {
+      const target = event.target;
+      if (!isComposerElement(target)) return;
+      onComposerInput(target);
+    },
+    true,
+  );
+
+  // ---- panel + library -----------------------------------------------------
   const setPanel = (open: boolean) => {
     panelOpen = open;
     panel.classList.toggle("hidden", !open);
     if (open) {
-      searchInput.focus();
+      // Refresh score from the live composer when opening.
+      const composer = resolveComposer(window.location.hostname);
+      if (composer && assistSettings.realtimeEnabled) {
+        scoreState = computeScore(getComposerText(composer));
+      }
+      renderScore();
       void renderResults(searchInput.value);
     } else {
       slashAnchor = null;
@@ -311,13 +485,11 @@ const mount = async () => {
   };
 
   const insertPrompt = async (prompt: Prompt) => {
-    const composer = slashAnchor ?? resolveComposer(hostname);
+    const composer = slashAnchor ?? resolveComposer(window.location.hostname);
     if (!composer) {
       logger.info("content", "Prompt assist: composer not found");
       return;
     }
-    // From slash mode, replace the whole draft (it was just the trigger);
-    // otherwise append to whatever the user already has.
     if (slashAnchor) {
       setComposerText(composer, prompt.body);
     } else {
@@ -334,9 +506,7 @@ const mount = async () => {
     if (prompts.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty";
-      empty.textContent = query.trim()
-        ? "No matching prompts."
-        : "Your library is empty. Save prompts from the dashboard.";
+      empty.textContent = "—";
       listEl.appendChild(empty);
       return;
     }
@@ -356,22 +526,22 @@ const mount = async () => {
   };
 
   const showPreview = (completion: string, usedLlm: boolean) => {
+    const a = t.realTimeAssist;
     previewEl.style.display = "block";
     previewEl.innerHTML = `
       <div class="preview-text"></div>
       <div class="preview-actions">
-        <button class="btn btn-cancel" type="button">Cancel</button>
-        <button class="btn btn-primary btn-replace" type="button">Replace draft</button>
+        <button class="btn btn-cancel" type="button"></button>
+        <button class="btn btn-primary btn-replace" type="button"></button>
       </div>
     `;
     (previewEl.querySelector(".preview-text") as HTMLElement).textContent = completion;
     const replaceBtn = previewEl.querySelector(".btn-replace") as HTMLButtonElement;
     const cancelBtn = previewEl.querySelector(".btn-cancel") as HTMLButtonElement;
-    if (!usedLlm) {
-      replaceBtn.textContent = "Use suggestion";
-    }
+    cancelBtn.textContent = a.actions.cancel;
+    replaceBtn.textContent = usedLlm ? a.actions.replaceDraft : a.actions.useSuggestion;
     replaceBtn.addEventListener("click", () => {
-      const composer = resolveComposer(hostname);
+      const composer = resolveComposer(window.location.hostname);
       if (composer) setComposerText(composer, completion);
       previewEl.style.display = "none";
       setPanel(false);
@@ -381,10 +551,9 @@ const mount = async () => {
     });
   };
 
-  // --- wiring ---------------------------------------------------------------
-
+  // ---- actions -------------------------------------------------------------
   launcher.addEventListener("click", () => setPanel(!panelOpen));
-  closeBtn.addEventListener("click", () => setPanel(false));
+  $(".panel-close").addEventListener("click", () => setPanel(false));
 
   let searchDebounce: number | null = null;
   searchInput.addEventListener("input", () => {
@@ -392,79 +561,85 @@ const mount = async () => {
     searchDebounce = window.setTimeout(() => void renderResults(searchInput.value), 180);
   });
 
-  improveBtn.addEventListener("click", async () => {
-    const composer = resolveComposer(hostname);
+  optimizeBtn.addEventListener("click", async () => {
+    const a = t.realTimeAssist;
+    const composer = resolveComposer(window.location.hostname);
     const draft = composer ? getComposerText(composer).trim() : "";
     if (!draft) {
       previewEl.style.display = "block";
-      previewEl.innerHTML = `<div class="empty">Type a draft in the chat box first.</div>`;
+      previewEl.innerHTML = `<div class="empty">${a.empty.noScore}</div>`;
       return;
     }
-    improveBtn.disabled = true;
-    improveBtn.textContent = "✨ Improving…";
+    optimizeBtn.disabled = true;
+    optimizeBtn.textContent = a.actions.optimizing;
     try {
       const result = await completeDraft(draft, platform);
-      showPreview(result.completion, result.usedLlm);
-    } catch (error) {
+      if (!result.usedLlm && result.completion.trim() === draft) {
+        previewEl.style.display = "block";
+        previewEl.innerHTML = `<div class="empty">${a.actions.offlineHint}</div>`;
+      } else {
+        showPreview(result.completion, result.usedLlm);
+      }
+    } catch {
       previewEl.style.display = "block";
-      previewEl.innerHTML = `<div class="empty">Completion failed: ${
-        (error as Error)?.message ?? "unknown error"
-      }</div>`;
+      previewEl.innerHTML = `<div class="empty">${a.actions.completionFailed}</div>`;
     } finally {
-      improveBtn.disabled = false;
-      improveBtn.textContent = "✨ Improve my draft";
+      optimizeBtn.disabled = false;
+      optimizeBtn.textContent = a.actions.optimize;
     }
   });
 
   saveBtn.addEventListener("click", async () => {
-    const composer = resolveComposer(hostname);
+    const composer = resolveComposer(window.location.hostname);
     const draft = composer ? getComposerText(composer).trim() : "";
     if (!draft) return;
     const created = await saveDraftAsPrompt(draft, platform);
-    saveBtn.textContent = created ? "Saved ✓" : "Already saved";
+    const original = t.realTimeAssist.actions.saveAsPrompt;
+    saveBtn.textContent = created ? "✓" : "•";
     window.setTimeout(() => {
-      saveBtn.textContent = "Save draft";
-    }, 1800);
+      saveBtn.textContent = original;
+    }, 1600);
   });
 
-  // Slash trigger: when the composer text begins with the trigger, open the
-  // panel pre-seeded with the query after it.
-  document.addEventListener(
-    "input",
-    (event) => {
-      const target = event.target;
-      if (
-        !(target instanceof HTMLTextAreaElement) &&
-        !(target instanceof HTMLElement && target.isContentEditable)
-      ) {
-        return;
-      }
-      const text = getComposerText(target as ComposerEl).trimStart();
-      const match = text.match(/^\/v\s?(.*)$/s);
-      if (!match) {
-        if (slashAnchor && panelOpen) {
-          // user cleared the trigger; detach slash anchor
-          slashAnchor = null;
-        }
-        return;
-      }
-      slashAnchor = target as ComposerEl;
-      const query = (match[1] ?? "").split("\n")[0] ?? "";
-      searchInput.value = query;
-      if (!panelOpen) setPanel(true);
-      else void renderResults(query);
-    },
-    true,
-  );
+  offBtn.addEventListener("click", async () => {
+    await updatePromptAssistSettings(hostname, { realtimeEnabled: false });
+    // settings subscription will apply the change + re-render.
+  });
 
-  // Dismiss panel on outside click.
   document.addEventListener("click", (event) => {
     if (!panelOpen) return;
     const path = event.composedPath();
     if (!path.includes(root)) setPanel(false);
   });
 
-  logger.info("content", "Prompt assist mounted", { host: hostname, platform });
+  // ---- live settings + locale subscriptions --------------------------------
+  const unsubscribeSettings = subscribePromptAssistSettings(hostname, (next) => {
+    assistSettings = next;
+    applyStaticLabels();
+    if (!next.realtimeEnabled) {
+      scoreState = null;
+    }
+    renderScore();
+  });
+
+  const unsubscribeLocale = onLocaleChange((next) => {
+    t = next;
+    applyStaticLabels();
+    renderScore();
+  });
+
+  window.addEventListener("pagehide", () => {
+    unsubscribeSettings();
+    unsubscribeLocale();
+  });
+
+  applyStaticLabels();
+  renderScore();
+  logger.info("content", "Prompt assist mounted", {
+    host: hostname,
+    platform,
+    realtime: assistSettings.realtimeEnabled,
+  });
 };
 
 if (document.readyState === "loading") {

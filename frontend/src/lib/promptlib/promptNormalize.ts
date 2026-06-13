@@ -80,7 +80,7 @@ export interface PromptTextMetrics {
 
 const ROLE_FRAMING = /\b(you are|act as|as an?|imagine you|你是|扮演|作为一名?|请你作为)\b/i;
 const CONSTRAINTS = /\b(must|should|do not|don't|avoid|ensure|requirement|constraints?|format|步骤|要求|限制|不要|必须|确保|输出格式)\b/i;
-const INSTRUCTION_VERBS = /\b(write|create|generate|explain|summarize|translate|analyze|design|implement|review|refactor|list|compare|draft|optimi[sz]e|帮我|生成|写一|总结|翻译|分析|设计|解释|列出|对比|优化|润色)\b/i;
+const INSTRUCTION_VERBS = /\b(write|create|generate|explain|summari[sz]e|translate|analy[sz]e|design|implement|review|refactor|rewrite|rephrase|edit|revise|fix|improve|build|make|describe|outline|plan|brainstorm|evaluate|assess|recommend|suggest|calculate|convert|extract|classify|categori[sz]e|debug|document|draft|compare|list|optimi[sz]e|help me)\b|帮我|生成|写一|编写|重写|改写|润色|修改|总结|概括|翻译|分析|设计|实现|解释|说明|列出|对比|比较|优化|评估|推荐|建议|制定|计划|提取|转换|分类|描述|检查|调试/i;
 
 /** Cheap structural metrics used by the heuristic scorer. */
 export function computeTextMetrics(body: string): PromptTextMetrics {

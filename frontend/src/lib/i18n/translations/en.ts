@@ -735,6 +735,89 @@ export const enTranslations = {
     Kimi: "Kimi",
     Yuanbao: "Yuanbao",
   },
+
+  realTimeAssist: {
+    panelTitle: "Prompt quality",
+    issuesTitle: "Suggestions",
+    score: {
+      label: "Quality",
+      poor: "Poor",
+      fair: "Fair",
+      good: "Good",
+      excellent: "Excellent",
+    },
+    breakdown: {
+      length: "Useful length",
+      instruction: "Clear action verb",
+      role: "Role / persona",
+      constraints: "Constraints",
+      structure: "Steps or bullets",
+      variables: "Reusable variables",
+      codeFence: "Code block",
+      questionPenalty: "Bare short question",
+    },
+    clarity: {
+      tooShort: "Too short to evaluate",
+      pureQuestion: "Just a question, no instruction",
+      noInstructionVerb: "No clear action verb",
+      noRole: "No role or expertise set",
+      noFormat: "Output format unspecified",
+      noConstraints: "No constraints given",
+      noExample: "No example provided",
+      noContext: "Missing context",
+      vagueScope: "Scope is broad / vague",
+      noStructure: "Long but unstructured",
+      undefinedVariables: "Variables not defined",
+    },
+    suggestion: {
+      tooShort: "Add detail: describe the task, the context, and what a good answer looks like.",
+      pureQuestion: "Turn this into an instruction: state the task, who should answer, and the constraints.",
+      noInstructionVerb: "Start with a clear action verb (write, analyze, refactor, summarize…).",
+      noRole: "Specify a role or expertise, e.g. “You are a senior TypeScript engineer…”.",
+      noFormat: "Describe the desired output format (bullet list, table, JSON, word count).",
+      noConstraints: "Add constraints: what to include, what to avoid, length, tone, or audience.",
+      noExample: "Provide a short example of the input and/or output you expect.",
+      noContext: "Add the background the model needs: audience, goal, prior context.",
+      vagueScope: "Narrow the scope: give concrete specifics, inputs, and the exact deliverable.",
+      noStructure: "Break this into numbered steps or bullet points.",
+      undefinedVariables: "Define each {{variable}}: say what it represents and give an example value.",
+    },
+    actions: {
+      optimize: "Optimize with AI",
+      optimizing: "Optimizing…",
+      replaceDraft: "Replace draft",
+      useSuggestion: "Use suggestion",
+      cancel: "Cancel",
+      offlineHint: "Configure an LLM in Settings to enable AI rewrite.",
+      completionFailed: "Optimization failed. Try again.",
+      saveAsPrompt: "Save as prompt",
+    },
+    toggle: {
+      label: "Real-time prompt assistant",
+      description: "Score prompts and suggest improvements as you type.",
+      enabled: "Real-time assist is on",
+      disabled: "Real-time assist is off",
+      turnOffHere: "Turn off on this site",
+      openSettings: "Open settings",
+    },
+    status: {
+      analyzing: "Analyzing…",
+      ready: "Ready to optimize",
+    },
+    empty: {
+      noScore: "Start typing to get suggestions.",
+      allClear: "Looks clear — no issues found.",
+    },
+  },
 } as const;
 
-export type TranslationsType = typeof enTranslations;
+// Widen string *literals* to `string` while preserving the nested key shape, so
+// locale files (e.g. zh.ts) must mirror en.ts's structure but may use their own
+// strings. Without this, `typeof enTranslations` (from `as const`) forces every
+// translated value to equal the English literal, producing a type error on
+// every non-English string.
+type DeepStringify<T> = {
+  [K in keyof T]: T[K] extends string ? string : DeepStringify<T[K]>;
+};
+
+export type TranslationsType = DeepStringify<typeof enTranslations>;

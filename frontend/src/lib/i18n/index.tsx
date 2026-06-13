@@ -2,15 +2,18 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import type { ReactNode } from "react";
 import type { SupportedLocale } from "./locales";
 import { enTranslations } from "./translations/en";
+import type { TranslationsType } from "./translations/en";
 import { zhTranslations } from "./translations/zh";
 import { detectAndSetLanguage, setLanguage, subscribeLanguageSettings } from "../services/languageSettingsService";
 
-const translationsMap = {
+// Widened, string-leaf translations shape (same nested keys as en, any strings)
+// so both en (literal) and zh assign cleanly and consumers read plain strings.
+export type Translations = TranslationsType;
+
+const translationsMap: Record<SupportedLocale, Translations> = {
   en: enTranslations,
   zh: zhTranslations,
 };
-
-export type Translations = typeof enTranslations;
 
 interface I18nContextValue {
   locale: SupportedLocale;

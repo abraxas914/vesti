@@ -6,6 +6,7 @@ import {
   initializeUiTheme,
   subscribeUiSettings,
 } from "~lib/services/uiSettingsService";
+import { I18nProvider } from "~lib/i18n";
 import { VestiSidepanel } from "./VestiSidepanel";
 
 void initializeUiTheme().catch(() => {
@@ -23,7 +24,11 @@ function VestiSidepanelPage() {
     };
   }, []);
 
-  return <VestiSidepanel />;
+  return (
+    <I18nProvider>
+      <VestiSidepanel />
+    </I18nProvider>
+  );
 }
 
 export default VestiSidepanelPage;

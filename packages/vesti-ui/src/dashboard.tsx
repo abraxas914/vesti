@@ -16,7 +16,7 @@ import { LibraryDataProvider } from "./contexts/library-data";
 import { ExploreTab } from "./tabs/explore-tab";
 import { LibraryTab } from "./tabs/library-tab";
 import { NetworkTab } from "./tabs/network-tab";
-import type { StorageApi, UiThemeMode } from "./types";
+import type { DashboardLabels, StorageApi, UiThemeMode } from "./types";
 import type { NotionDatabaseOption, NotionSettings } from "./notion-integration";
 import {
   connectToNotion,
@@ -40,6 +40,122 @@ type ThemeSyncStatus = "idle" | "syncing" | "error";
 
 const DASHBOARD_NAV_REQUEST_KEY = "vesti_dashboard_open_tab";
 
+const DEFAULT_LABELS: DashboardLabels = {
+  tabs: { library: "LIBRARY", explore: "EXPLORE", network: "NETWORK" },
+  nav: {
+    backToExplore: "Back to Explore",
+    backToNetwork: "Back to Network",
+    dashboardSections: "Dashboard sections",
+    closeDrawer: "Close drawer backdrop",
+  },
+  settings: {
+    settings: "Settings",
+    dataOperations: "Data Operations",
+    appearance: "Appearance",
+    modelIntegration: "Model / Integration",
+    themeShared: "Shared with dock appearance.",
+    themeSharedDark: "Dark mode is active.",
+    themeSharedLight: "Light mode is active.",
+    syncingAppearance: "Syncing appearance...",
+    changesStayInSync: "Changes here stay in sync with the dock settings panel.",
+    modelscopeKeyPlaceholder: "Paste your ModelScope key",
+    savedLocally: "Saved locally",
+    saveFailed: "Save failed",
+    storedInChromeStorage: "Stored in chrome.storage.local",
+    availableInExtension: "Available in extension only",
+    notionWorkspaceConnected: "Notion workspace connected",
+    connectToNotion: "Connect to Notion",
+    legacyToken: "Legacy token detected. Reconnect to upgrade to official OAuth.",
+    oauthFlowDesc: "Opens the official Notion authorization flow.",
+    connecting: "Connecting...",
+    change: "Change",
+    connect: "Connect",
+    searchSharedDatabases: "Search shared databases",
+    loadingSharedDatabases: "Loading shared databases...",
+    noDatabasesLoaded: "No databases loaded yet.",
+    chooseDatabase: "Choose a database to enable export",
+    actionFailed: "Action failed",
+    notionConnected: "Notion connected.",
+    notionDisconnected: "Notion disconnected.",
+    settingsSaved: "Saved locally",
+  },
+  library: {
+    allConversations: "All Conversations",
+    starred: "Starred",
+    recent: "Recent",
+    folders: "FOLDERS",
+    myNotes: "My Notes",
+    exporting: "Exporting...",
+    notion: "Notion",
+    general: "General",
+    libraryNavigation: "Library navigation",
+    conversationCount: "conversations",
+    noMessages: "No messages captured yet.",
+    loadingMessages: "Loading messages...",
+    you: "You",
+    untitled: "Untitled",
+    newNote: "New Note",
+    saving: "Saving...",
+    unsavedChanges: "Unsaved changes",
+    noNoteYet: "No note yet",
+    deleteNote: "Delete note",
+    exitSplitView: "Exit split view",
+    deleteNotAvailable: "Delete is not available yet.",
+    renameNotAvailable: "Renaming is not available yet.",
+    deleteFolderNotAvailable: "Deleting folders is not available yet.",
+    renameFolderFailed: "Failed to rename folder.",
+    deleteFolderFailed: "Failed to delete folder.",
+    updateStarFailed: "Failed to update star.",
+    renameConversationFailed: "Failed to rename conversation.",
+    newFolderPrompt: "New folder name",
+    renameFolderPrompt: "Rename folder",
+    renameConversationPrompt: "Rename conversation",
+    deleteConversationLabel: "Delete conversation",
+    initiatingPipeline: "Initiating pipeline...",
+    extractingCore: "Extracting core question...",
+    generatingInsights: "Generating insights...",
+    savingSummary: "Saving summary...",
+    loadRelatedFailed: "Failed to load related conversations",
+    loadMessagesFailed: "Failed to load messages",
+    directoryExportNotSupported: "This browser surface does not support local directory export.",
+    directorySelectionCancelled: "Directory selection was cancelled.",
+    saveBeforeExport: "Save the current note before exporting it.",
+    exportFailed: "Could not export this note to Obsidian.",
+  },
+  explore: {},
+  network: {
+    emptyTitle: "Your temporal network will appear here.",
+    emptyDesc: "Capture a few conversations first, then reopen Network to watch the graph evolve over time.",
+    noConversationsYet: "No conversations captured yet.",
+    replayInfo: "This replay runs the full timeline in 8 seconds, even when everything was captured today.",
+    newConversationOn: "+ New conversation on {platform}",
+    conversationOn: "+ {label} · {platform}",
+    buildingGraph: "Building graph...",
+    trendLabel: "Trend · daily new conversations",
+    noSemanticLinks: "No semantic links yet. Playback still shows how conversations accumulated over time.",
+    dragHint: "Drag the trend line to pause on a moment.",
+    replay: "Replay",
+    edgeLoadingUnavailable: "Semantic edge loading is unavailable in this environment.",
+    edgePlaybackUnavailable: "Semantic edge playback is temporarily unavailable.",
+    close: "Close",
+    started: "Started",
+    messages: "messages",
+    semanticLinks: "semantic links",
+    noPreviewSnippet: "No preview snippet available for this conversation yet.",
+    tags: "Tags",
+    connectedConversations: "Connected conversations",
+    noSemanticLinksForNode: "No semantic links for this node yet.",
+    viewInLibrary: "View in Library",
+    edgeSemanticSimilarity: "edge = semantic similarity",
+    trendScrubberAriaLabel: "Conversation trend scrubber",
+    conversationsVisible: "conversations visible",
+    appearsLaterInReplay: "appears later in replay",
+    starred: "Starred",
+    unknownPlatform: "Unknown platform",
+    conversationN: "Conversation {id}",
+  },
+};
+
 type DashboardProps = {
   storage: StorageApi;
   logoSrc: string;
@@ -49,6 +165,7 @@ type DashboardProps = {
   onToggleTheme?: () => Promise<void> | void;
   themeSyncStatus?: ThemeSyncStatus;
   themeSyncMessage?: string | null;
+  labels?: DashboardLabels;
 };
 
 export function VestiDashboard({
@@ -60,7 +177,9 @@ export function VestiDashboard({
   onToggleTheme,
   themeSyncStatus = "idle",
   themeSyncMessage = null,
+  labels: providedLabels,
 }: DashboardProps) {
+  const labels = providedLabels ?? DEFAULT_LABELS;
   const SETTINGS_KEY = "vesti_llm_settings";
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     if (typeof window === "undefined") return "library";
@@ -281,7 +400,7 @@ export function VestiDashboard({
       setNotionDatabaseQuery("");
       await loadNotionDatabases("");
       setNotionStatus("saved");
-      setNotionMessage("Notion connected.");
+      setNotionMessage(labels.settings.notionConnected);
       setTimeout(() => setNotionStatus("idle"), 1500);
     } catch (error) {
       setNotionStatus("error");
@@ -300,7 +419,7 @@ export function VestiDashboard({
       setNotionDatabasesMessage("");
       setNotionDatabaseQuery("");
       setNotionStatus("saved");
-      setNotionMessage("Notion disconnected.");
+      setNotionMessage(labels.settings.notionDisconnected);
       setTimeout(() => setNotionStatus("idle"), 1500);
     } catch (error) {
       setNotionStatus("error");
@@ -346,17 +465,17 @@ export function VestiDashboard({
   const isDarkMode = themeMode === "dark";
   const isThemeSwitchDisabled = !onToggleTheme || themeSyncStatus === "syncing";
   const themeDescription = isDarkMode
-    ? "Shared with dock appearance. Dark mode is active."
-    : "Shared with dock appearance. Light mode is active.";
+    ? `${labels.settings.themeShared} ${labels.settings.themeSharedDark}`
+    : `${labels.settings.themeShared} ${labels.settings.themeSharedLight}`;
   const themeFeedback =
     themeSyncStatus === "syncing"
-      ? "Syncing appearance..."
-      : themeSyncMessage || "Changes here stay in sync with the dock settings panel.";
+      ? labels.settings.syncingAppearance
+      : themeSyncMessage || labels.settings.changesStayInSync;
   const returnToSourceLabel =
     activeTab === "library" && returnTab
       ? returnTab === "explore"
-        ? "Back to Explore"
-        : "Back to Network"
+        ? labels.nav.backToExplore
+        : labels.nav.backToNetwork
       : null;
 
   const brand = (
@@ -370,7 +489,7 @@ export function VestiDashboard({
 
   const tabNav = (
     <nav
-      aria-label="Dashboard sections"
+      aria-label={labels.nav.dashboardSections}
       className="flex items-center justify-center gap-3 lg:gap-5"
     >
       <button
@@ -382,7 +501,7 @@ export function VestiDashboard({
             : "text-text-tertiary hover:text-text-secondary"
         }`}
       >
-        LIBRARY
+        {labels.tabs.library}
       </button>
       <button
         type="button"
@@ -393,7 +512,7 @@ export function VestiDashboard({
             : "text-text-tertiary hover:text-text-secondary"
         }`}
       >
-        EXPLORE
+        {labels.tabs.explore}
       </button>
       <button
         type="button"
@@ -404,7 +523,7 @@ export function VestiDashboard({
             : "text-text-tertiary hover:text-text-secondary"
         }`}
       >
-        NETWORK
+        {labels.tabs.network}
       </button>
     </nav>
   );
@@ -429,7 +548,7 @@ export function VestiDashboard({
             className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-sans text-text-primary transition-colors hover:bg-bg-surface-card"
           >
             <Settings strokeWidth={1.6} className="h-4 w-4" />
-            <span>Settings</span>
+            <span>{labels.settings.settings}</span>
           </button>
           <button
             type="button"
@@ -437,7 +556,7 @@ export function VestiDashboard({
             className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-sans text-text-primary transition-colors hover:bg-bg-surface-card"
           >
             <Database strokeWidth={1.6} className="h-4 w-4" />
-            <span>Data Operations</span>
+            <span>{labels.settings.dataOperations}</span>
           </button>
         </div>
       )}
@@ -474,6 +593,7 @@ export function VestiDashboard({
                 onConversationOpened={() => setOpenConversationId(null)}
                 returnToSourceLabel={returnToSourceLabel}
                 onReturnToSource={returnToSourceLabel ? handleReturnToSource : undefined}
+                labels={labels.library}
               />
             </div>
           )}
@@ -483,6 +603,7 @@ export function VestiDashboard({
                 storage={storage}
                 themeMode={themeMode}
                 onOpenConversation={handleOpenConversation}
+                labels={labels.explore}
               />
             </div>
           )}
@@ -493,6 +614,7 @@ export function VestiDashboard({
                 themeMode={themeMode}
                 isActive={activeTab === "network"}
                 onSelectConversation={handleOpenConversation}
+                labels={labels.network}
               />
             </div>
           )}
@@ -502,7 +624,7 @@ export function VestiDashboard({
           <>
             <button
               type="button"
-              aria-label="Close drawer backdrop"
+              aria-label={labels.nav.closeDrawer}
               onClick={() => setDrawerOpen(false)}
               className="absolute inset-0 z-40 bg-black/20"
             />
@@ -514,7 +636,7 @@ export function VestiDashboard({
                   ) : (
                     <Database strokeWidth={1.6} className="h-4 w-4" />
                   )}
-                  <span>{drawerView === "settings" ? "Settings" : "Data Operations"}</span>
+                  <span>{drawerView === "settings" ? labels.settings.settings : labels.settings.dataOperations}</span>
                 </div>
                 <button
                   type="button"
@@ -539,7 +661,7 @@ export function VestiDashboard({
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-[13px] font-medium text-text-primary">Appearance</p>
+                            <p className="text-[13px] font-medium text-text-primary">{labels.settings.appearance}</p>
                             <p className="mt-1 text-[11px] text-text-tertiary">{themeDescription}</p>
                           </div>
                         </div>
@@ -574,19 +696,19 @@ export function VestiDashboard({
 
                     <section className="rounded-xl border border-border-subtle bg-bg-surface p-4">
                       <div className="mb-3">
-                        <p className="text-[13px] font-medium text-text-primary">Model / Integration</p>
+                        <p className="text-[13px] font-medium text-text-primary">{labels.settings.modelIntegration}</p>
                         <p className="mt-1 text-[11px] text-text-tertiary">
-                          Manage dashboard-only integration keys.
+                          {labels.settings.manageIntegrationKeys}
                         </p>
                       </div>
                       <label className="mb-2 block text-[12px] font-sans text-text-secondary">
-                        ModelScope Key
+                        {labels.settings.modelscopeKeyLabel}
                       </label>
                       <input
                         type="password"
                         value={modelscopeKey}
                         onChange={(event) => setModelscopeKey(event.target.value)}
-                        placeholder="Paste your ModelScope key"
+                        placeholder={labels.settings.modelscopeKeyPlaceholder}
                         disabled={!settingsAvailable}
                         className="w-full rounded-md border border-border-default bg-bg-primary px-3 py-2 text-sm font-sans text-text-primary placeholder:text-text-tertiary focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 disabled:opacity-60"
                       />
@@ -596,26 +718,26 @@ export function VestiDashboard({
                           onClick={handleSaveModelscopeKey}
                           className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-primary-hover"
                         >
-                          Save
+                          {labels.settings.save}
                         </button>
                         <span className="text-right text-[11px] font-sans text-text-tertiary">
                           {settingsAvailable
                             ? settingsStatus === "saved"
-                              ? "Saved locally"
+                              ? labels.settings.savedLocally
                               : settingsStatus === "error"
-                                ? "Save failed"
-                                : "Stored in chrome.storage.local"
-                          : "Available in extension only"}
+                                ? labels.settings.saveFailed
+                                : labels.settings.storedInChromeStorage
+                          : labels.settings.availableInExtension}
                         </span>
                       </div>
 
                       <div className="mt-4 rounded-lg border border-border-subtle bg-bg-primary p-4">
                         <div className="mb-3">
                           <p className="text-[13px] font-medium text-text-primary">
-                            Notion Export
+                            {labels.settings.notionExportTitle}
                           </p>
                           <p className="mt-1 text-[11px] text-text-tertiary">
-                            Connect with Notion and choose the database used for annotation export.
+                            {labels.settings.notionExportDesc}
                           </p>
                         </div>
 
@@ -624,19 +746,19 @@ export function VestiDashboard({
                             <div className="min-w-0">
                               <div className="text-[12px] font-sans font-medium text-text-primary">
                                 {notionConnected
-                                  ? notionSettings.workspaceName || "Notion workspace connected"
+                                  ? notionSettings.workspaceName || labels.settings.notionWorkspaceConnected
                                   : notionAvailable
-                                    ? "Connect to Notion"
-                                    : "Available in extension only"}
+                                    ? labels.settings.connectToNotion
+                                    : labels.settings.availableInExtension}
                               </div>
                               <p className="mt-1 text-[11px] font-sans leading-relaxed text-text-tertiary">
                                 {notionConnected
                                   ? notionSettings.authMode === "legacy_manual"
-                                    ? "Legacy token detected. Reconnect to upgrade to official OAuth."
-                                    : "Connected. Choose the database used for one-shot exports."
+                                    ? labels.settings.legacyToken
+                                    : labels.settings.connectedChooseDatabase
                                   : notionAvailable
-                                    ? "Opens the official Notion authorization flow."
-                                    : "OAuth login is unavailable outside the extension build."}
+                                    ? labels.settings.oauthFlowDesc
+                                    : labels.settings.oauthUnavailableOutsideExtension}
                               </p>
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
@@ -647,10 +769,10 @@ export function VestiDashboard({
                                 className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-sans font-medium text-white transition-colors hover:bg-accent-primary-hover disabled:opacity-60"
                               >
                                 {notionStatus === "loading"
-                                  ? "Connecting..."
+                                  ? labels.settings.connecting
                                   : notionConnected
-                                    ? "Change"
-                                    : "Connect"}
+                                    ? labels.settings.change
+                                    : labels.settings.connect}
                               </button>
                               {notionConnected ? (
                                 <button
@@ -659,7 +781,7 @@ export function VestiDashboard({
                                   disabled={notionStatus === "loading"}
                                   className="rounded-md border border-border-subtle px-3 py-1.5 text-xs font-sans text-text-secondary transition-colors hover:bg-bg-secondary disabled:opacity-60"
                                 >
-                                  Disconnect
+                                  {labels.settings.disconnect}
                                 </button>
                               ) : null}
                             </div>
@@ -669,7 +791,7 @@ export function VestiDashboard({
                         {notionConnected ? (
                           <>
                             <label className="mb-2 mt-3 block text-[12px] font-sans text-text-secondary">
-                              Target Database
+                              {labels.settings.targetDatabase}
                             </label>
                             <div className="flex gap-2">
                               <input
@@ -680,7 +802,7 @@ export function VestiDashboard({
                                   setNotionDatabasesStatus("idle");
                                   setNotionDatabasesMessage("");
                                 }}
-                                placeholder="Search shared databases"
+                                placeholder={labels.settings.databaseSearchPlaceholder}
                                 className="w-full rounded-md border border-border-default bg-bg-primary px-3 py-2 text-sm font-sans text-text-primary placeholder:text-text-tertiary focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
                               />
                               <button
@@ -694,12 +816,11 @@ export function VestiDashboard({
                                 ) : (
                                   <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.6} />
                                 )}
-                                Refresh
+                                {labels.settings.refresh}
                               </button>
                             </div>
                             <p className="mt-2 text-[11px] font-sans leading-relaxed text-text-tertiary">
-                              Share the database with your Notion integration, then refresh if it does
-                              not appear yet.
+                              {labels.settings.shareDatabaseHint}
                             </p>
 
                             <div className="mt-3 rounded-md border border-border-subtle bg-bg-primary p-2">
@@ -732,8 +853,8 @@ export function VestiDashboard({
                               ) : (
                                 <div className="px-1 py-2 text-[11px] font-sans text-text-tertiary">
                                   {notionDatabasesStatus === "loading"
-                                    ? "Loading shared databases..."
-                                    : "No databases loaded yet."}
+                                    ? labels.settings.loadingSharedDatabases
+                                    : labels.settings.noDatabasesLoaded}
                                 </div>
                               )}
                             </div>
@@ -741,11 +862,11 @@ export function VestiDashboard({
                             <div className="mt-3 flex items-center justify-between">
                               <span className="text-right text-[11px] font-sans text-text-tertiary">
                                 {notionExportReady
-                                  ? `Selected: ${
+                                  ? `${labels.settings.selectedColon}${
                                       notionSettings.selectedDatabaseTitle ||
                                       notionSettings.selectedDatabaseId
                                     }`
-                                  : "Choose a database to enable export"}
+                                  : labels.settings.chooseDatabase}
                               </span>
                             </div>
                           </>
@@ -755,13 +876,13 @@ export function VestiDashboard({
                           <span className="text-right text-[11px] font-sans text-text-tertiary">
                             {settingsAvailable
                               ? notionStatus === "saved"
-                                ? "Saved locally"
+                                ? labels.settings.savedLocally
                                 : notionStatus === "error"
-                                  ? "Action failed"
+                                  ? labels.settings.actionFailed
                                   : notionConnected
-                                    ? "Ready for one-shot export"
-                                    : "Stored in chrome.storage.local"
-                              : "Available in extension only"}
+                                    ? labels.settings.readyForOneShotExport
+                                    : labels.settings.storedInChromeStorage
+                              : labels.settings.availableInExtension}
                           </span>
                         </div>
                         {notionMessage ? (

@@ -1,5 +1,6 @@
 import { SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useI18n } from "~lib/i18n";
 import type {
   Conversation,
   ConversationMatchSummary,
@@ -16,7 +17,7 @@ import { SearchInput } from "../components/SearchInput";
 import { ConversationList } from "../containers/ConversationList";
 import { SearchLineIcon } from "../components/ThreadSearchIcons";
 import {
-  DATE_PRESET_OPTIONS,
+  getDatePresetOptions,
   PLATFORM_OPTIONS,
   type DatePreset,
 } from "../types/timelineFilters";
@@ -71,20 +72,20 @@ function toggleSetMember<T>(set: Set<T>, value: T): Set<T> {
   return next;
 }
 
-function getDatePresetSummary(datePreset: DatePreset): string {
+function getDatePresetSummary(datePreset: DatePreset, labels: { allTime: string; today: string; thisWeek: string; thisMonth: string }): string {
   return (
-    DATE_PRESET_OPTIONS.find((preset) => preset.id === datePreset)?.label ??
-    "Started any time"
+    getDatePresetOptions(labels).find((preset) => preset.id === datePreset)?.label ??
+    labels.allTime
   );
 }
 
-function getSourceSummary(selectedPlatforms: Set<Platform>): string {
+function getSourceSummary(selectedPlatforms: Set<Platform>, allSourcesLabel: string): string {
   const selected = PLATFORM_OPTIONS.filter((platform) =>
     selectedPlatforms.has(platform)
   );
 
   if (selected.length === 0) {
-    return "All sources";
+    return allSourcesLabel;
   }
 
   if (selected.length <= 2) {
@@ -100,6 +101,7 @@ export function TimelinePage({
   onSelectConversation,
   refreshToken,
 }: TimelinePageProps) {
+  const { t } = useI18n();
   const compactExportVariant = "experimental" as const;
   const {
     headerMode,
@@ -175,8 +177,9 @@ export function TimelinePage({
   }, [clearCopySuccess]);
   const firstCapturedTodayCount = stats?.firstCapturedTodayCount ?? 0;
   const platformDistribution = stats?.platformDistribution ?? null;
-  const dateSummary = getDatePresetSummary(datePreset);
-  const sourceSummary = getSourceSummary(selectedPlatforms);
+  const datePresetOptions = getDatePresetOptions(t.timeline.datePresets);
+  const dateSummary = getDatePresetSummary(datePreset, t.timeline.datePresets);
+  const sourceSummary = getSourceSummary(selectedPlatforms, t.timeline.allSources);
   const handleAnchorConsumed = useCallback(() => {
     dispatch({ type: "ANCHOR_CONSUMED" });
   }, [dispatch]);
@@ -272,8 +275,8 @@ export function TimelinePage({
     ) => {
       const actionHint =
         action === "download"
-          ? `Saved as ${result.filename}.`
-          : "Copied export to clipboard.";
+          ? t.timeline.batch.savedAs.replace("{filename}", result.filename)
+          : t.timeline.batch.copiedToClipboard;
 
       if (
         result.notice?.title ||
@@ -291,19 +294,22 @@ export function TimelinePage({
         };
       }
 
+      const formatExt = result.filename.split(".").pop()?.toUpperCase() || "";
       return {
         message:
           action === "download"
             ? result.notice
-            ? `${result.notice.message} Saved as ${result.filename}.`
-              : `Exported ${result.filename}`
+              ? `${result.notice.message} ${t.timeline.batch.savedAs.replace("{filename}", result.filename)}`
+              : t.timeline.batch.exported.replace("{filename}", result.filename)
             : result.notice
-              ? `${result.notice.message} Copied export to clipboard.`
-              : `Copied ${result.filename.split(".").pop()?.toUpperCase() || "export"} export to clipboard.`,
+              ? `${result.notice.message} ${t.timeline.batch.copiedToClipboard}`
+              : (formatExt
+                  ? t.timeline.batch.copiedFormatToClipboard.replace("{format}", formatExt)
+                  : t.timeline.batch.copiedToClipboard),
         tone: result.notice?.tone ?? "default",
       };
     },
-    []
+    [t]
   );
 
   const runExportAction = useCallback(
@@ -331,15 +337,15 @@ export function TimelinePage({
             setBatchFeedback(buildExportFeedback(result, "copy"));
           } catch (error) {
             setBatchFeedback({
-              message: "Generated export could not be copied to the clipboard.",
+              message: t.timeline.batch.clipboardFailed,
               tone: "error",
               title: result.notice?.title,
               detail:
                 result.notice?.detail ||
                 getErrorMessage(error),
               hint: result.notice?.hint
-                ? `${result.notice.hint} Check clipboard permissions or use Download instead.`
-                : "Check clipboard permissions or use Download instead.",
+                ? `${result.notice.hint} ${t.timeline.batch.clipboardHint}`
+                : t.timeline.batch.clipboardHint,
             });
           }
         }
@@ -347,7 +353,7 @@ export function TimelinePage({
         setBatchFeedback({
           message:
             action === "copy"
-              ? "Generated export could not be copied to the clipboard."
+              ? t.timeline.batch.clipboardFailed
               : getErrorMessage(error),
           tone: "error",
           detail:
@@ -356,7 +362,7 @@ export function TimelinePage({
               : undefined,
           hint:
             action === "copy"
-              ? "Check clipboard permissions or use Download instead."
+              ? t.timeline.batch.clipboardHint
               : undefined,
         });
       } finally {
@@ -372,6 +378,7 @@ export function TimelinePage({
       markCopySuccess,
       selectedConversations,
       selectedExportFormat,
+      t,
     ]
   );
 
@@ -497,8 +504,8 @@ export function TimelinePage({
                 handleCancelSearch();
               }
             }}
-            placeholder="Search conversations"
-            ariaLabel="Search conversations"
+            placeholder={t.timeline.searchPlaceholder}
+            ariaLabel={t.timeline.searchAriaLabel}
             variant="threads-glass"
             className="threads-header-search-input"
           />
@@ -507,24 +514,24 @@ export function TimelinePage({
             onClick={handleCancelSearch}
             className="threads-header-search-cancel"
           >
-            Cancel
+            {t.timeline.cancel}
           </button>
         </header>
       ) : (
         <header className="vesti-page-header threads-header">
           <div className="threads-header-main">
-            <h1 className="vesti-page-title text-text-primary">Threads</h1>
-            <span className="threads-header-capture-status" title={`${firstCapturedTodayCount} first captured today`}>
+            <h1 className="vesti-page-title text-text-primary">{t.pages.threads}</h1>
+            <span className="threads-header-capture-status" title={`${firstCapturedTodayCount} ${t.timeline.firstCapturedToday}`}>
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
               <span className="threads-header-capture-copy">
-                {firstCapturedTodayCount} first captured today
+                {firstCapturedTodayCount} {t.timeline.firstCapturedToday}
               </span>
             </span>
           </div>
           <div className="threads-header-actions">
             <button
               type="button"
-              aria-label="Search conversations"
+              aria-label={t.timeline.searchAriaLabel}
               onClick={handleOpenSearch}
               className="threads-header-icon-btn"
             >
@@ -532,7 +539,7 @@ export function TimelinePage({
             </button>
             <button
               type="button"
-              aria-label="Filter conversations"
+              aria-label={t.timeline.filterAriaLabel}
               onClick={handleToggleFilter}
               className={`threads-header-icon-btn ${
                 headerMode === "filter"
@@ -550,12 +557,12 @@ export function TimelinePage({
         <div className="shrink-0 border-b border-border-subtle bg-bg-secondary/30 px-4 py-2.5">
           <div className="grid gap-2">
             <ThreadsFilterDisclosure
-              title="Started"
+              title={t.timeline.filters.started}
               summary={dateSummary}
               isActive={datePreset !== "all_time"}
             >
               <div className="flex flex-wrap gap-1">
-                {DATE_PRESET_OPTIONS.map((preset) => {
+                {datePresetOptions.map((preset) => {
                   const isActive = datePreset === preset.id;
                   return (
                     <button
@@ -582,7 +589,7 @@ export function TimelinePage({
             </ThreadsFilterDisclosure>
 
             <ThreadsFilterDisclosure
-              title="Source"
+              title={t.timeline.filters.source}
               summary={sourceSummary}
               isActive={selectedPlatforms.size > 0}
             >

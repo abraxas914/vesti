@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Copy, Check, ChevronDown, Link2, Paperclip, Sparkles } from "lucide-react";
 import type { Message, Platform } from "~lib/types";
 import type { AstRoot } from "~lib/types/ast";
+import { useI18n } from "~lib/i18n";
 import { AstMessageRenderer } from "./AstMessageRenderer";
 import { PLATFORM_TONE } from "./platformTone";
 import { ReaderSidecarDisclosure } from "./ReaderSidecarDisclosure";
@@ -51,6 +52,7 @@ export function MessageBubble({
   sidecarTargetMap,
   currentIndex,
 }: MessageBubbleProps) {
+  const { t } = useI18n();
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [canCollapse, setCanCollapse] = useState(false);
@@ -195,7 +197,7 @@ export function MessageBubble({
               : "reader-role-label-user"
           }`}
         >
-          {isAi ? platform : "You"}
+          {isAi ? platform : t.message.you}
         </span>
 
         <button
@@ -248,7 +250,7 @@ export function MessageBubble({
             onClick={() => setIsExpanded((prev) => !prev)}
             className={`reader-expand-btn ${isExpanded ? "open" : ""}`}
           >
-            {isExpanded ? "Collapse" : "Expand"}
+            {isExpanded ? t.common.collapse : t.common.expand}
             <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
         ) : null}
@@ -259,7 +261,7 @@ export function MessageBubble({
           {citationCount > 0 ? (
             <div className="reader-sidecar-block">
               <ReaderSidecarDisclosure
-                title={citationCount === 1 ? "Source" : "Sources"}
+                title={citationCount === 1 ? t.message.source : t.message.sources}
                 count={citationCount}
                 icon={<Link2 className="h-3.5 w-3.5" />}
                 forceOpen={activeSidecarTarget?.section === "sources"}
@@ -297,7 +299,7 @@ export function MessageBubble({
           {attachmentCount > 0 ? (
             <div className="reader-sidecar-block">
               <ReaderSidecarDisclosure
-                title={attachmentCount === 1 ? "Attachment" : "Attachments"}
+                title={attachmentCount === 1 ? t.message.attachment : t.message.attachments}
                 count={attachmentCount}
                 icon={<Paperclip className="h-3.5 w-3.5" />}
                 trayVariant="compact"
@@ -344,7 +346,7 @@ export function MessageBubble({
           {artifactCount > 0 ? (
             <div className="reader-sidecar-block">
               <ReaderSidecarDisclosure
-                title={artifactCount === 1 ? "Artifact" : "Artifacts"}
+                title={artifactCount === 1 ? t.message.artifact : t.message.artifacts}
                 count={artifactCount}
                 icon={<Sparkles className="h-3.5 w-3.5" />}
                 forceOpen={activeSidecarTarget?.section === "artifacts"}
@@ -487,7 +489,7 @@ function FallbackCodeBlockView({ code, language }: FallbackCodeBlockViewProps) {
           aria-label="Copy code"
         >
           {copied ? <Check className="h-3 w-3" strokeWidth={1.75} /> : <Copy className="h-3 w-3" strokeWidth={1.75} />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? t.common.copied : t.common.copy}
         </button>
       </div>
       <pre className="reader-ast-code-pre">

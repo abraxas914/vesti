@@ -4,6 +4,11 @@ import "katex/dist/katex.min.css";
 import { useCallback, useEffect, useState } from "react";
 import type { UiThemeMode } from "~lib/types";
 import {
+  connectObsidianVault,
+  exportNoteToObsidian,
+  getObsidianVaultStatus,
+} from "~lib/services/obsidianVaultService";
+import {
   applyUiTheme,
   getUiSettings,
   initializeUiTheme,
@@ -11,6 +16,7 @@ import {
   subscribeUiSettings,
 } from "~lib/services/uiSettingsService";
 import { LOGO_BASE64 } from "~lib/ui/logo";
+import { I18nProvider, useI18n } from "~lib/i18n";
 import {
   getConversations,
   getTopics,
@@ -43,6 +49,9 @@ import {
   saveNote,
   updateNote,
   deleteNote,
+  importObsidianDirectory,
+  importObsidianZip,
+  getNoteAsset,
   getStorageUsage,
   exportData,
   clearAllData,
@@ -122,11 +131,37 @@ export default function VestiDashboardPage() {
   }, [themeMode]);
 
   return (
+    <I18nProvider>
+      <VestiDashboardInner
+        themeMode={themeMode}
+        onToggleTheme={handleToggleTheme}
+        themeSyncStatus={themeSyncStatus}
+        themeSyncMessage={themeSyncMessage}
+      />
+    </I18nProvider>
+  );
+}
+
+function VestiDashboardInner({
+  themeMode,
+  onToggleTheme,
+  themeSyncStatus,
+  themeSyncMessage,
+}: {
+  themeMode: UiThemeMode;
+  onToggleTheme: () => Promise<void>;
+  themeSyncStatus: ThemeSyncStatus;
+  themeSyncMessage: string | null;
+}) {
+  const { t } = useI18n();
+
+  return (
     <VestiDashboardShell
       logoSrc={LOGO_BASE64}
       rootClassName="vesti-options"
+      labels={t.dashboard}
       themeMode={themeMode}
-      onToggleTheme={handleToggleTheme}
+      onToggleTheme={onToggleTheme}
       themeSyncStatus={themeSyncStatus}
       themeSyncMessage={themeSyncMessage}
       storage={{
@@ -161,6 +196,12 @@ export default function VestiDashboardPage() {
         saveNote,
         updateNote,
         deleteNote,
+        getObsidianVaultStatus,
+        connectObsidianVault,
+        exportNoteToObsidian,
+        importObsidianDirectory,
+        importObsidianZip,
+        getNoteAsset,
         getStorageUsage,
         exportData,
         clearAllData,

@@ -472,12 +472,21 @@ export type StorageApi = {
   getSummary?: (conversationId: number) => Promise<ChatSummaryData | null>;
   generateSummary?: (conversationId: number) => Promise<ChatSummaryData>;
   getNotes?: () => Promise<Note[]>;
-  saveNote?: (note: Omit<Note, "id" | "created_at" | "updated_at">) => Promise<Note>;
-  updateNote?: (
-    id: number,
-    changes: Partial<Pick<Note, "title" | "content">>
-  ) => Promise<Note>;
+  saveNote?: (note: CreateNoteInput) => Promise<Note>;
+  updateNote?: (id: number, changes: UpdateNoteChanges) => Promise<Note>;
   deleteNote?: (id: number) => Promise<void>;
+  getObsidianVaultStatus?: () => Promise<ObsidianVaultStatus>;
+  connectObsidianVault?: () => Promise<ObsidianVaultStatus>;
+  exportNoteToObsidian?: (note: Note) => Promise<ObsidianNoteExportResult>;
+  importObsidianDirectory?: (
+    vaultName: string,
+    entries: ObsidianImportFileEntry[]
+  ) => Promise<ObsidianImportSummary>;
+  importObsidianZip?: (
+    fileName: string,
+    data: ArrayBuffer
+  ) => Promise<ObsidianImportSummary>;
+  getNoteAsset?: (assetId: string) => Promise<NoteAssetRecord | null>;
   getStorageUsage?: () => Promise<StorageUsageSnapshot>;
   exportData?: (
     format: ExportFormat
@@ -516,11 +525,397 @@ export interface ChatSummaryData {
   plain_text?: string;
 }
 
+export type NoteSourceType = "native" | "obsidian";
+export type ObsidianImportSourceKind = "directory" | "zip";
+export type NoteImportAssetKind = "link" | "embed";
+
+export interface NoteImportAssetRef {
+  path: string;
+  asset_id: string | null;
+  kind: NoteImportAssetKind;
+}
+
+export interface NoteImportConflict {
+  detected_at: number;
+  incoming_source_file_hash: string;
+  incoming_content: string;
+  incoming_frontmatter: Record<string, unknown> | null;
+}
+
+export interface NoteImportMeta {
+  vault_id: string | null;
+  vault_name: string | null;
+  relative_path: string | null;
+  folder_path: string | null;
+  frontmatter: Record<string, unknown> | null;
+  wikilinks: string[];
+  embeds: string[];
+  tags: string[];
+  assets: NoteImportAssetRef[];
+  source_mtime: number | null;
+  source_file_hash: string | null;
+  last_imported_note_hash: string | null;
+  imported_at: number | null;
+  last_imported_at: number | null;
+  conflict: NoteImportConflict | null;
+}
+
+export interface NoteObsidianExportMeta {
+  vault_id: string;
+  relative_path: string;
+  last_exported_at: number;
+}
+
+export type ObsidianVaultConnectionState =
+  | "not_connected"
+  | "connected"
+  | "needs_reconnect";
+
+export interface ObsidianVaultStatus {
+  state: ObsidianVaultConnectionState;
+  vault_id: string | null;
+  vault_name: string | null;
+}
+
 export interface Note {
   id: number;
   title: string;
   content: string;
+  excerpt: string;
+  hash: string;
   created_at: number;
   updated_at: number;
   linked_conversation_ids: number[];
+  source_type: NoteSourceType;
+  source_path: string | null;
+  import_meta: NoteImportMeta | null;
+  obsidian_export: NoteObsidianExportMeta | null;
+}
+
+export interface CreateNoteInput {
+  title: string;
+  content: string;
+  linked_conversation_ids: number[];
+  source_type?: NoteSourceType;
+  source_path?: string | null;
+  import_meta?: NoteImportMeta | null;
+  obsidian_export?: NoteObsidianExportMeta | null;
+}
+
+export interface UpdateNoteChanges {
+  title?: string;
+  content?: string;
+  linked_conversation_ids?: number[];
+  source_type?: NoteSourceType;
+  source_path?: string | null;
+  import_meta?: NoteImportMeta | null;
+  obsidian_export?: NoteObsidianExportMeta | null;
+}
+
+export interface NoteSourceRecord {
+  id: string;
+  name: string;
+  kind: ObsidianImportSourceKind;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface NoteAssetRecord {
+  id: string;
+  vault_id: string;
+  relative_path: string;
+  mime_type: string;
+  hash: string;
+  byte_size: number;
+  blob: Blob;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ObsidianImportFileEntry {
+  path: string;
+  mime_type: string;
+  last_modified: number;
+  data: ArrayBuffer;
+}
+
+export interface ObsidianImportSummary {
+  vaultId: string;
+  importedNotes: number;
+  updatedNotes: number;
+  skippedNotes: number;
+  conflictedNotes: number;
+  importedAssets: number;
+  unsupportedFiles: string[];
+}
+
+export interface ObsidianNoteExportResult {
+  note: Note;
+  vault_id: string;
+  vault_name: string;
+  relative_path: string;
+  exported_at: number;
+}
+
+export interface DashboardLabels {
+  tabs: {
+    library: string;
+    explore: string;
+    network: string;
+  };
+  nav: {
+    backToExplore: string;
+    backToNetwork: string;
+    dashboardSections: string;
+    closeDrawer: string;
+  };
+  settings: {
+    settings: string;
+    dataOperations: string;
+    appearance: string;
+    modelIntegration: string;
+    themeShared: string;
+    themeSharedDark: string;
+    themeSharedLight: string;
+    syncingAppearance: string;
+    changesStayInSync: string;
+    modelscopeKeyPlaceholder: string;
+    savedLocally: string;
+    saveFailed: string;
+    storedInChromeStorage: string;
+    availableInExtension: string;
+    notionWorkspaceConnected: string;
+    connectToNotion: string;
+    legacyToken: string;
+    oauthFlowDesc: string;
+    connecting: string;
+    change: string;
+    connect: string;
+    searchSharedDatabases: string;
+    loadingSharedDatabases: string;
+    noDatabasesLoaded: string;
+    chooseDatabase: string;
+    actionFailed: string;
+    notionConnected: string;
+    notionDisconnected: string;
+    settingsSaved: string;
+    manageIntegrationKeys: string;
+    modelscopeKeyLabel: string;
+    save: string;
+    notionExportTitle: string;
+    notionExportDesc: string;
+    connectedChooseDatabase: string;
+    oauthUnavailableOutsideExtension: string;
+    disconnect: string;
+    targetDatabase: string;
+    databaseSearchPlaceholder: string;
+    refresh: string;
+    shareDatabaseHint: string;
+    selectedColon: string;
+    readyForOneShotExport: string;
+  };
+  library: {
+    allConversations: string;
+    starred: string;
+    recent: string;
+    folders: string;
+    myNotes: string;
+    exporting: string;
+    notion: string;
+    general: string;
+    libraryNavigation: string;
+    conversationCount: string;
+    noMessages: string;
+    loadingMessages: string;
+    you: string;
+    untitled: string;
+    newNote: string;
+    saving: string;
+    unsavedChanges: string;
+    noNoteYet: string;
+    deleteNote: string;
+    exitSplitView: string;
+    deleteNotAvailable: string;
+    renameNotAvailable: string;
+    deleteFolderNotAvailable: string;
+    renameFolderFailed: string;
+    deleteFolderFailed: string;
+    updateStarFailed: string;
+    renameConversationFailed: string;
+    newFolderPrompt: string;
+    renameFolderPrompt: string;
+    renameConversationPrompt: string;
+    deleteConversationLabel: string;
+    initiatingPipeline: string;
+    extractingCore: string;
+    generatingInsights: string;
+    savingSummary: string;
+    loadRelatedFailed: string;
+    loadMessagesFailed: string;
+    directoryExportNotSupported: string;
+    directorySelectionCancelled: string;
+    saveBeforeExport: string;
+    exportFailed: string;
+    // Reader / conversation detail
+    analyzed: string;
+    notAnalyzedYet: string;
+    summary: string;
+    noSummaryYet: string;
+    generateSummary: string;
+    regenerate: string;
+    importToNotes: string;
+    viewNote: string;
+    originalConversation: string;
+    preview: string;
+    messageCountLabel: string;
+    showOriginalMessages: string;
+    hideOriginalMessages: string;
+    loadingOriginalConversation: string;
+    messagesAvailableButEmpty: string;
+    openOriginal: string;
+    splitView: string;
+    openSplitView: string;
+    exitSplit: string;
+    conversationNote: string;
+    updatedAt: string;
+    updatedAtTime: string;
+    notesForPrefix: string;
+    linkedConversations: string;
+    noLinkedConversations: string;
+    open: string;
+    focusNote: string;
+    noNoteLinkedYet: string;
+    startExtractingHint: string;
+    createConversationNote: string;
+    extractedExcerptsPlaceholder: string;
+    // Related
+    relatedConversations: string;
+    findingRelated: string;
+    noRelatedConversations: string;
+    unableToLoadRelated: string;
+    relatedNotes: string;
+    // Annotation
+    addAnnotation: string;
+    openAnnotation: string;
+    annotation: string;
+    annotationCount: string;
+    annotationsCount: string;
+    deleteThisComment: string;
+    deleting: string;
+    cancel: string;
+    commentPlaceholder: string;
+    commentsUnavailable: string;
+    couldNotSaveComment: string;
+    couldNotDeleteComment: string;
+    myNotesExportUnavailable: string;
+    savedToMyNotes: string;
+    couldNotExportToMyNotes: string;
+    notionExportUnavailable: string;
+    sentToNotion: string;
+    notionSettingsMissing: string;
+    notionReconnectRequired: string;
+    couldNotExportToNotion: string;
+    addedOn: string;
+    dayAfter: string;
+    daysAfter: string;
+    afterTheConversation: string;
+    unknownTime: string;
+    // Note editor
+    localNote: string;
+    obsidianNote: string;
+    noExcerptYet: string;
+    conflict: string;
+    vaultPath: string;
+    sourceHash: string;
+    unknown: string;
+    unavailable: string;
+    attachments: string;
+    attachmentPreview: string;
+    previewAvailableForImages: string;
+    useOpenForOtherAttachments: string;
+    importMetadata: string;
+    exportToObsidian: string;
+    choosingFolder: string;
+    notesWorkspace: string;
+    selectNoteToEdit: string;
+    localNotesAndObsidianShareEditor: string;
+    loadingNotes: string;
+    createLocalNoteHint: string;
+    createNote: string;
+    localNotes: string;
+    noLocalNotesYet: string;
+    importedVaults: string;
+    // Rename / delete dialogs
+    renameNote: string;
+    updateNoteTitle: string;
+    noteTitlePlaceholder: string;
+    deleteNoteConfirm: string;
+    deleteConversationConfirm: string;
+    deleteFolderConfirm: string;
+    // Actions
+    star: string;
+    unstar: string;
+    rename: string;
+    changeFolder: string;
+    removeFromFolder: string;
+    delete: string;
+    folderActions: string;
+    createNewFolder: string;
+    newFolder: string;
+    conversationActions: string;
+    // Selection / Extract
+    extract: string;
+    // Status
+    justNow: string;
+    minutesAgo: string;
+    hoursAgo: string;
+    daysAgo: string;
+    monthsAgo: string;
+    yearsAgo: string;
+    // Source file conflict
+    sourceFileChangedAfterEdits: string;
+    // Formatting
+    dateUnknown: string;
+    // Choose Conversations dialog
+    chooseConversationsTitle: string;
+    chooseConversationsDesc: string;
+    applySelected: string;
+    useAll: string;
+    noSearchResults: string;
+    noPreviewAvailable: string;
+    closeSidebar: string;
+    openSidebar: string;
+  };
+  explore: Record<string, string>;
+  network: {
+    emptyTitle: string;
+    emptyDesc: string;
+    noConversationsYet: string;
+    replayInfo: string;
+    newConversationOn: string;
+    conversationOn: string;
+    buildingGraph: string;
+    trendLabel: string;
+    noSemanticLinks: string;
+    dragHint: string;
+    replay: string;
+    edgeLoadingUnavailable: string;
+    edgePlaybackUnavailable: string;
+    close: string;
+    started: string;
+    messages: string;
+    semanticLinks: string;
+    noPreviewSnippet: string;
+    tags: string;
+    connectedConversations: string;
+    noSemanticLinksForNode: string;
+    viewInLibrary: string;
+    edgeSemanticSimilarity: string;
+    trendScrubberAriaLabel: string;
+    conversationsVisible: string;
+    appearsLaterInReplay: string;
+    starred: string;
+    unknownPlatform: string;
+    conversationN: string;
+  };
 }

@@ -20,8 +20,20 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   LLM-powered draft "补写" (smart completion) across all supported AI platforms.
 - Added a new IndexedDB `prompts` store (schema v17) and offscreen routes for
   prompt CRUD, library extraction, search, usage tracking, and completion.
+- Added a **real-time in-page prompt assistant**: as you type in any supported
+  platform's composer, it scores the draft (offline heuristics), flags clarity
+  issues, and suggests concrete improvements; a one-click "Optimize with AI"
+  rewrites the draft (preview before insert). IME-safe (no scoring mid Chinese
+  input), never auto-submits, and toggleable globally (Settings) or per-site.
+  Localized in English and Chinese.
 
 ### Changed
+- Integrated the team's multi-language (en/zh) i18n, network-page content, and
+  Claude/Gemini parser + warm-start capture improvements from `origin/main`.
+- Hardened the i18n type system: locale files now mirror the English key shape
+  while allowing their own strings (`DeepStringify` of `TranslationsType`),
+  fixing a large class of pre-existing translation type errors and completing
+  the missing Chinese dashboard-settings strings.
 - Unified citation stripping with structured source retention across capture, reader, and export.
 - Hardened Qwen and Yuanbao parser alignment against current live DOM structures.
 - Added a reproducible Playwright auth, storage-state, and DOM sampling bootstrap workflow.

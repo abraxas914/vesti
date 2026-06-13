@@ -62,9 +62,29 @@ Test on at least ChatGPT + one domestic platform (e.g. Yuanbao or DeepSeek):
 - [ ] **Save draft** adds the current composer text to the library.
 - [ ] The script never submits the message automatically.
 
-## 5. Regression / hygiene
+## 5. Real-time in-page prompt assistant
 
-- [ ] Library / Explore / Network tabs and capture flow are unaffected.
+Test on ChatGPT + one domestic platform (e.g. Yuanbao or DeepSeek):
+
+- [ ] Start typing a short, vague prompt in the composer → the launcher badge
+      shows a live quality score; opening the panel shows the score bar and
+      clarity suggestions (e.g. "Specify a role…", "Describe the output format…").
+- [ ] Improve the prompt (add role, constraints, format) → score rises and
+      suggestions shrink.
+- [ ] **IME**: type Chinese via pinyin → no scoring flicker mid-composition;
+      score updates once after you commit the characters.
+- [ ] **Optimize with AI** (LLM configured) → preview appears; "Replace draft"
+      writes the improved prompt into the composer; nothing is auto-submitted.
+      With no LLM, it shows the "configure an LLM" hint.
+- [ ] **Toggle**: Settings → "Real-time prompt assistant" off → the score badge
+      and panel quality section stop updating; on → resumes. "Turn off on this
+      site" from the panel footer disables it for that host only.
+- [ ] Switch language (Settings → Language → 中文) → the assistant panel labels
+      and suggestions localize to Chinese without reload.
+
+## 6. Regression / hygiene
+
+- [ ] Library / Explore / Network / Prompts tabs and capture flow are unaffected.
 - [ ] `node scripts/check-frontend-ui-boundary.mjs` → OK.
 - [ ] No new entries appear in the `chrome://extensions` Errors panel during
       normal use (parser heuristics are now `console.debug`).

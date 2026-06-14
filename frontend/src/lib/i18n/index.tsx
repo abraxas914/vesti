@@ -5,9 +5,9 @@ import { enTranslations } from "./translations/en";
 import { zhTranslations } from "./translations/zh";
 import { detectAndSetLanguage, setLanguage, subscribeLanguageSettings } from "../services/languageSettingsService";
 
-const translationsMap = {
+const translationsMap: Record<SupportedLocale, Translations> = {
   en: enTranslations,
-  zh: zhTranslations,
+  zh: zhTranslations as unknown as Translations,
 };
 
 export type Translations = typeof enTranslations;

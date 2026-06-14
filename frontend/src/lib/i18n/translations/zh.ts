@@ -351,7 +351,7 @@ export const zhTranslations: TranslationsType = {
     exploreNetworkDesc: "知识图谱和对话连接",
     explore: "探索",
     exploreDesc: "浏览和搜索你的知识库",
-    network: "网络",
+    network: "知识图谱",
     networkDesc: "可视化对话之间的连接",
     conversationSummary: "对话摘要",
     generate: "生成",
@@ -445,10 +445,10 @@ export const zhTranslations: TranslationsType = {
   },
 
   dashboard: {
-    tabs: { library: "对话知识库", explore: "探索", network: "网络", prompts: "提示词库" },
+    tabs: { library: "对话知识库", explore: "探索", network: "知识图谱", prompts: "提示词库" },
     nav: {
       backToExplore: "返回探索",
-      backToNetwork: "返回网络",
+      backToNetwork: "返回知识图谱",
       dashboardSections: "面板导航",
       closeDrawer: "关闭抽屉",
     },
@@ -695,8 +695,8 @@ export const zhTranslations: TranslationsType = {
       starterDeck3Description: "使用推荐提示获取简洁答案，如需验证再查看来源对话",
     },
     network: {
-      emptyTitle: "时序网络将在此显示。",
-      emptyDesc: "先捕获一些对话，然后重新打开「网络」查看图谱随时间演变。",
+      emptyTitle: "知识图谱将在此显示。",
+      emptyDesc: "先捕获一些对话，然后重新打开「知识图谱」查看图谱随时间演变。",
       noConversationsYet: "尚未捕获任何对话。",
       replayInfo: "回放会在 8 秒内播放完整时间线，即使所有内容都是今天捕获的。",
       newConversationOn: "+ {platform} 上的新对话",

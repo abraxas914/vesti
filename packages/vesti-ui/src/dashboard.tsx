@@ -42,10 +42,10 @@ type ThemeSyncStatus = "idle" | "syncing" | "error";
 const DASHBOARD_NAV_REQUEST_KEY = "vesti_dashboard_open_tab";
 
 const DEFAULT_LABELS: DashboardLabels = {
-  tabs: { library: "LIBRARY", explore: "EXPLORE", network: "NETWORK", prompts: "PROMPTS" },
+  tabs: { library: "LIBRARY", explore: "EXPLORE", network: "KNOWLEDGE GRAPH", prompts: "PROMPTS" },
   nav: {
     backToExplore: "Back to Explore",
-    backToNetwork: "Back to Network",
+    backToNetwork: "Back to Knowledge Graph",
     dashboardSections: "Dashboard sections",
     closeDrawer: "Close drawer backdrop",
   },
@@ -125,8 +125,8 @@ const DEFAULT_LABELS: DashboardLabels = {
   },
   explore: {},
   network: {
-    emptyTitle: "Your temporal network will appear here.",
-    emptyDesc: "Capture a few conversations first, then reopen Network to watch the graph evolve over time.",
+    emptyTitle: "Your knowledge graph will appear here.",
+    emptyDesc: "Capture a few conversations first, then reopen the Knowledge Graph to watch it evolve over time.",
     noConversationsYet: "No conversations captured yet.",
     replayInfo: "This replay runs the full timeline in 8 seconds, even when everything was captured today.",
     newConversationOn: "+ New conversation on {platform}",

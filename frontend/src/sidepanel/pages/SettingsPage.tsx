@@ -243,15 +243,10 @@ function RealtimeAssistToggle() {
         aria-label={a.label}
         disabled={!ready}
         onClick={() => void handleToggle()}
-        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus ${
-          enabled ? "bg-accent-primary" : "bg-bg-secondary"
-        } ${ready ? "" : "opacity-60"}`}
+        data-state={enabled ? "checked" : "unchecked"}
+        className="settings-switch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
       >
-        <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-            enabled ? "translate-x-4" : "translate-x-0.5"
-          }`}
-        />
+        <span className="settings-switch-thumb" />
       </button>
     </div>
   )

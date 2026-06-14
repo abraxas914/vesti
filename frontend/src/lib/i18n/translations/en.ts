@@ -349,7 +349,7 @@ export const enTranslations = {
     exploreNetworkDesc: "Knowledge graph and thread connections",
     explore: "Explore",
     exploreDesc: "Browse and search your knowledge base",
-    network: "Network",
+    network: "Knowledge Graph",
     networkDesc: "Visualize connections between conversations",
     conversationSummary: "Conversation Summary",
     generate: "Generate",
@@ -443,10 +443,10 @@ export const enTranslations = {
   },
 
   dashboard: {
-    tabs: { library: "LIBRARY", explore: "EXPLORE", network: "NETWORK", prompts: "PROMPTS" },
+    tabs: { library: "LIBRARY", explore: "EXPLORE", network: "KNOWLEDGE GRAPH", prompts: "PROMPTS" },
     nav: {
       backToExplore: "Back to Explore",
-      backToNetwork: "Back to Network",
+      backToNetwork: "Back to Knowledge Graph",
       dashboardSections: "Dashboard sections",
       closeDrawer: "Close drawer backdrop",
     },
@@ -693,8 +693,8 @@ export const enTranslations = {
       starterDeck3Description: "Use a starter prompt to get a compact answer, then inspect the source conversations if you need verification.",
     },
     network: {
-      emptyTitle: "Your temporal network will appear here.",
-      emptyDesc: "Capture a few conversations first, then reopen Network to watch the graph evolve over time.",
+      emptyTitle: "Your knowledge graph will appear here.",
+      emptyDesc: "Capture a few conversations first, then reopen the Knowledge Graph to watch it evolve over time.",
       noConversationsYet: "No conversations captured yet.",
       replayInfo: "This replay runs the full timeline in 8 seconds, even when everything was captured today.",
       newConversationOn: "+ New conversation on {platform}",

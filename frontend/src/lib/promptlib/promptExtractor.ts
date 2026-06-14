@@ -27,8 +27,10 @@ export interface ExtractOptions {
   minLength?: number;
 }
 
-const DEFAULT_MIN_SCORE = 0.3;
-const DEFAULT_MIN_LENGTH = 24;
+// Relaxed so the auto-built library actually populates: aggressive thresholds
+// previously dropped nearly every user turn, making extraction return 0.
+const DEFAULT_MIN_SCORE = 0.15;
+const DEFAULT_MIN_LENGTH = 16;
 
 // Trivial turns that are never reusable prompts even if long enough.
 const TRIVIAL_PATTERNS = [

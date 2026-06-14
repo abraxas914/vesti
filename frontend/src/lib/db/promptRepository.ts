@@ -233,7 +233,7 @@ interface CandidateGroup {
 }
 
 const MIN_FREQUENCY = 2; // appears in >= 2 conversations to count as "frequent"
-const MIN_RESULTS = 8; // top up with best singletons so first run isn't empty
+const MIN_RESULTS = 24; // top up with best singletons so the library is populated
 
 /**
  * Build the lightweight prompt library by surfacing HIGH-FREQUENCY prompts —

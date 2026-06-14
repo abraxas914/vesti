@@ -178,12 +178,16 @@ const SELECTORS = {
     "h1",
     "title",
   ],
+  // Streaming indicators. Class-substring checks are scoped to inside a message
+  // block so they can't match persistent page chrome (which would leave
+  // isGenerating() permanently true and block every capture).
   generating: [
     "[data-is-streaming='true']",
-    "[data-testid*='stream']",
-    "[data-testid*='typing']",
-    "[class*='typing']",
-    "[class*='stream']",
+    "[data-testid*='streaming']",
+    "[data-testid='message-block-container'] [class*='typing']",
+    "[data-testid='message-block-container'] [class*='stream']",
+    "[data-message-id] [class*='typing']",
+    "[data-message-id] [class*='stream']",
   ],
   noiseContainers: DISCARD_CONTAINERS,
   noiseTextPatterns: [

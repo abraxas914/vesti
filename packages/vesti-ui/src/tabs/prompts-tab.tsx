@@ -244,9 +244,7 @@ export function PromptsTab({
             {labels.title}
           </h2>
           <p className="mt-1 text-[12px] text-text-tertiary">
-            {labels.summary
-              .replace("{count}", String(prompts.length))
-              .replace("{favorites}", String(prompts.filter((p) => p.is_favorite).length))}
+            {labels.summary.replace("{count}", String(prompts.length))}
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, ExternalLink, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { Copy, Download, ExternalLink, Plus, Search, Sparkles, Trash2, Upload } from "lucide-react";
 import type { DashboardLabels, Prompt, StorageApi, UiThemeMode } from "../types";
 
 interface PromptsTabProps {
@@ -204,6 +204,80 @@ export function PromptsTab({
     [storage, labels],
   );
 
+  // #2 Backup: export/import the prompt library as a JSON file (self-contained;
+  // survives reinstall). Uses the existing storage CRUD — no backend changes.
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleExport = useCallback(async () => {
+    if (!storage.listPrompts) return;
+    try {
+      const all = await storage.listPrompts({ includeArchived: true });
+      const payload = JSON.stringify(
+        { schema: "vesti_prompts.v1", prompts: all },
+        null,
+        2,
+      );
+      const blob = new Blob([payload], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "vesti-prompts-backup.json";
+      link.click();
+      URL.revokeObjectURL(url);
+      setToast(labels.toastExported.replace("{n}", String(all.length)));
+    } catch {
+      setToast(labels.toastSaveFailed);
+    }
+  }, [storage, labels]);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      if (!storage.createPrompt) return;
+      let prompts: Array<{ title?: string; body?: string }> = [];
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const list = Array.isArray(parsed)
+          ? parsed
+          : Array.isArray(parsed?.prompts)
+            ? parsed.prompts
+            : null;
+        if (!list) throw new Error("bad format");
+        prompts = list;
+      } catch {
+        setToast(labels.importFailed);
+        return;
+      }
+      let imported = 0;
+      let skipped = 0;
+      for (const item of prompts) {
+        const body = typeof item?.body === "string" ? item.body : "";
+        if (!body.trim()) {
+          skipped += 1;
+          continue;
+        }
+        try {
+          const { created } = await storage.createPrompt({
+            title: typeof item?.title === "string" ? item.title : undefined,
+            body,
+            source: "manual",
+          });
+          if (created) imported += 1;
+          else skipped += 1;
+        } catch {
+          skipped += 1;
+        }
+      }
+      setToast(
+        labels.toastImported
+          .replace("{n}", String(imported))
+          .replace("{skipped}", String(skipped)),
+      );
+      await load();
+    },
+    [storage, labels, load],
+  );
+
   const handleExtract = useCallback(async () => {
     if (!storage.extractPromptsFromLibrary) return;
     setExtractStatus("running");
@@ -258,6 +332,35 @@ export function PromptsTab({
             <Sparkles strokeWidth={1.7} className="h-4 w-4" />
             {extractStatus === "running" ? labels.extracting : labels.extractFromChats}
           </button>
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            title={labels.exportLabel}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle px-3 py-1.5 text-[13px] text-text-primary transition-colors hover:bg-bg-surface-card"
+          >
+            <Download strokeWidth={1.7} className="h-4 w-4" />
+            {labels.exportLabel}
+          </button>
+          <button
+            type="button"
+            onClick={() => importInputRef.current?.click()}
+            title={labels.importBackup}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-subtle px-3 py-1.5 text-[13px] text-text-primary transition-colors hover:bg-bg-surface-card"
+          >
+            <Upload strokeWidth={1.7} className="h-4 w-4" />
+            {labels.importLabel}
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void handleImportFile(file);
+            }}
+          />
           <button
             type="button"
             onClick={openNew}

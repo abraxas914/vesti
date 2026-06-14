@@ -1086,6 +1086,12 @@ export interface DashboardLabels {
     toastImproveFailed: string;
     toastExtract: string;
     unavailable: string;
+    exportLabel: string;
+    importLabel: string;
+    importBackup: string;
+    toastExported: string;
+    toastImported: string;
+    importFailed: string;
     loadFailed: string;
     draftFirst: string;
     extractFailed: string;

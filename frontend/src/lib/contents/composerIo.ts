@@ -70,6 +70,42 @@ export function isComposerElement(el: EventTarget | null): el is ComposerEl {
 }
 
 /**
+ * Resolve the composer from an input/composition event's target. On rich
+ * editors (Claude ProseMirror, Kimi, Quill) the event target is often a nested
+ * text node or span inside the contenteditable, not the editable root — a plain
+ * `isComposerElement(event.target)` check then fails and the keystroke is
+ * silently dropped. This climbs to the top-most contenteditable (or textarea),
+ * falling back to the host resolver.
+ */
+export function resolveComposerFromEvent(
+  target: EventTarget | null,
+  host: string,
+): ComposerEl | null {
+  let node: Node | null =
+    target && (target as Node).nodeType === Node.TEXT_NODE
+      ? (target as Node).parentElement
+      : (target as Node | null);
+
+  let el = node instanceof Element ? node : null;
+  while (el) {
+    if (el instanceof HTMLTextAreaElement) return el;
+    if (el instanceof HTMLElement && el.isContentEditable) {
+      // Climb to the top-most contenteditable in this subtree (the editor root,
+      // not an inner editable node).
+      let top: HTMLElement = el;
+      let parent = el.parentElement;
+      while (parent && parent.isContentEditable) {
+        top = parent;
+        parent = parent.parentElement;
+      }
+      return top;
+    }
+    el = el.parentElement;
+  }
+  return resolveComposer(host);
+}
+
+/**
  * Resolve the active composer, preferring the focused editable, then per-host
  * hints, then a generic heuristic. Returns null (fail-closed) when nothing
  * suitable is visible.
@@ -99,7 +135,11 @@ export function resolveComposer(host: string): ComposerEl | null {
 /** Read the current draft text from a composer. */
 export function getComposerText(el: ComposerEl): string {
   if (el instanceof HTMLTextAreaElement) return el.value;
-  return el.innerText;
+  // Prefer innerText (respects line breaks); fall back to textContent for rich
+  // editors whose nested structure can yield an empty innerText.
+  const inner = el.innerText;
+  if (inner && inner.trim().length > 0) return inner;
+  return el.textContent ?? "";
 }
 
 /** Write text into a composer so React / ProseMirror / Quill register it. */

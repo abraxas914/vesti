@@ -9,10 +9,10 @@ import {
 } from "../lib/services/promptAssistSettingsService";
 import {
   getComposerText,
-  isComposerElement,
   normalizeHost,
   platformForHost,
   resolveComposer,
+  resolveComposerFromEvent,
   setComposerText,
   type ComposerEl,
 } from "../lib/contents/composerIo";
@@ -28,7 +28,8 @@ import {
   onLocaleChange,
   type Translations,
 } from "../lib/i18n/contentI18n";
-import type { Prompt } from "../lib/types";
+import { getUiSettings, subscribeUiSettings } from "../lib/services/uiSettingsService";
+import type { Prompt, UiThemeMode } from "../lib/types";
 import { logger } from "../lib/utils/logger";
 
 // In-page prompt assist (Shadow-DOM). Three capabilities, all opt-out-able:
@@ -125,70 +126,103 @@ async function saveDraftAsPrompt(
   }
 }
 
+// Score-level colors reference Vesti's semantic tokens (defined in STYLE on the
+// shadow host), so they follow the active light/dark theme.
 const LEVEL_COLOR: Record<ScoreLevel, string> = {
-  poor: "#dc2626",
-  fair: "#d97706",
-  good: "#2563eb",
-  excellent: "#059669",
+  poor: "hsl(var(--vdanger))",
+  fair: "hsl(var(--vwarning))",
+  good: "hsl(var(--vsuccess))",
+  excellent: "hsl(var(--vsuccess))",
 };
 
+// Theme tokens mirror frontend/src/style.css (Vesti's monochrome design system).
+// Custom properties are inherited through the shadow boundary; `all: initial`
+// does not reset them. `:host(.dark)` is toggled from the page's theme setting.
 const STYLE = `
-:host { all: initial; }
+:host {
+  all: initial;
+  --vbg: 220 24% 95%;
+  --vbg-hover: 220 22% 92%;
+  --vtext: 224 15% 12%;
+  --vtext2: 224 9% 36%;
+  --vtext3: 224 7% 56%;
+  --vborder: 220 20% 88%;
+  --vaccent: 224 15% 12%;
+  --vaccent-hover: 224 16% 9%;
+  --vaccent-text: 0 0% 100%;
+  --vdanger: 0 55% 51%;
+  --vwarning: 36 90% 43%;
+  --vsuccess: 146 50% 38%;
+}
+:host(.dark) {
+  --vbg: 0 0% 13%;
+  --vbg-hover: 0 0% 17%;
+  --vtext: 0 0% 96%;
+  --vtext2: 0 0% 78%;
+  --vtext3: 0 0% 62%;
+  --vborder: 0 0% 20%;
+  --vaccent: 0 0% 96%;
+  --vaccent-hover: 0 0% 100%;
+  --vaccent-text: 0 0% 10%;
+  --vdanger: 0 72% 60%;
+  --vwarning: 40 85% 58%;
+  --vsuccess: 145 55% 46%;
+}
 * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
 .launcher {
   position: fixed; left: 20px; bottom: 20px; z-index: ${Z_INDEX};
   display: inline-flex; align-items: center; gap: 6px;
   padding: 8px 12px; border-radius: 999px; border: none; cursor: pointer;
-  background: #4f46e5; color: #fff; font-size: 13px; font-weight: 600;
-  box-shadow: 0 4px 14px rgba(79,70,229,0.35);
+  background: hsl(var(--vaccent)); color: hsl(var(--vaccent-text)); font-size: 13px; font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.22);
 }
-.launcher:hover { background: #4338ca; }
-.la-score { display:none; align-items:center; justify-content:center; min-width:22px; height:18px; padding:0 5px; border-radius:999px; background:#fff; color:#111; font-size:11px; font-weight:700; }
+.launcher:hover { background: hsl(var(--vaccent-hover)); }
+.la-score { display:none; align-items:center; justify-content:center; min-width:22px; height:18px; padding:0 5px; border-radius:999px; background:hsl(var(--vbg)); color:hsl(var(--vtext)); font-size:11px; font-weight:700; }
 .launcher[data-has-score="1"] .la-score { display:inline-flex; }
 .panel {
   position: fixed; left: 20px; bottom: 64px; z-index: ${Z_INDEX};
   width: 348px; max-height: 78vh; overflow-y: auto; display: flex; flex-direction: column;
-  background: #fff; color: #1f2937; border: 1px solid #e5e7eb; border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+  background: hsl(var(--vbg)); color: hsl(var(--vtext)); border: 1px solid hsl(var(--vborder)); border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.28);
 }
 .panel.hidden { display: none; }
-.panel-head { display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
-.panel-title { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color:#6b7280; }
-.panel-close { background:none; border:none; cursor:pointer; color:#9ca3af; font-size:16px; line-height:1; }
-.quality { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; }
+.panel-head { display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 1px solid hsl(var(--vborder)); }
+.panel-title { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color:hsl(var(--vtext3)); }
+.panel-close { background:none; border:none; cursor:pointer; color:hsl(var(--vtext3)); font-size:16px; line-height:1; }
+.quality { padding: 10px 12px; border-bottom: 1px solid hsl(var(--vborder)); }
 .q-head { display:flex; align-items:center; justify-content:space-between; }
-.q-label { font-size:12px; font-weight:700; color:#374151; }
+.q-label { font-size:12px; font-weight:700; color:hsl(var(--vtext2)); }
 .q-score { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; }
 .q-dot { width:9px; height:9px; border-radius:50%; }
-.q-bar { height:5px; border-radius:999px; background:#eee; margin-top:8px; overflow:hidden; }
+.q-bar { height:5px; border-radius:999px; background:hsl(var(--vbg-hover)); margin-top:8px; overflow:hidden; }
 .q-bar > i { display:block; height:100%; border-radius:999px; transition: width .15s ease; }
 .q-issues { list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:5px; }
-.q-issue { display:flex; gap:7px; font-size:11.5px; color:#4b5563; line-height:1.35; }
-.q-issue::before { content:"•"; color:#9ca3af; }
-.q-issue[data-sev="critical"]::before { color:#dc2626; }
-.q-issue[data-sev="warn"]::before { color:#d97706; }
-.q-empty { font-size:11.5px; color:#9ca3af; margin-top:6px; }
+.q-issue { display:flex; gap:7px; font-size:11.5px; color:hsl(var(--vtext2)); line-height:1.35; }
+.q-issue::before { content:"•"; color:hsl(var(--vtext3)); }
+.q-issue[data-sev="critical"]::before { color:hsl(var(--vdanger)); }
+.q-issue[data-sev="warn"]::before { color:hsl(var(--vwarning)); }
+.q-empty { font-size:11.5px; color:hsl(var(--vtext3)); margin-top:6px; }
 .row { display:flex; gap:6px; padding: 10px 12px; }
-.search { flex:1; padding: 7px 9px; border:1px solid #e5e7eb; border-radius:8px; font-size:13px; outline:none; }
-.search:focus { border-color:#4f46e5; }
-.btn { padding: 7px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#f9fafb; cursor:pointer; font-size:12px; color:#374151; white-space:nowrap; }
-.btn:hover { background:#f3f4f6; }
+.search { flex:1; padding: 7px 9px; border:1px solid hsl(var(--vborder)); border-radius:8px; font-size:13px; outline:none; background:hsl(var(--vbg)); color:hsl(var(--vtext)); }
+.search:focus { border-color:hsl(var(--vaccent)); }
+.btn { padding: 7px 10px; border:1px solid hsl(var(--vborder)); border-radius:8px; background:hsl(var(--vbg-hover)); cursor:pointer; font-size:12px; color:hsl(var(--vtext2)); white-space:nowrap; }
+.btn:hover { background:hsl(var(--vbg-hover)); color:hsl(var(--vtext)); }
 .btn:disabled { opacity:.6; cursor:default; }
-.btn-primary { background:#4f46e5; color:#fff; border-color:#4f46e5; }
-.btn-primary:hover { background:#4338ca; }
+.btn-primary { background:hsl(var(--vaccent)); color:hsl(var(--vaccent-text)); border-color:hsl(var(--vaccent)); }
+.btn-primary:hover { background:hsl(var(--vaccent-hover)); }
 .list { overflow-y:auto; padding: 4px 6px 8px; }
 .item { padding: 8px 10px; border-radius:8px; cursor:pointer; }
-.item:hover { background:#f5f3ff; }
-.item-title { font-size:13px; font-weight:600; color:#111827; }
-.item-body { font-size:11px; color:#6b7280; margin-top:2px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.empty { padding: 16px; text-align:center; color:#9ca3af; font-size:12px; }
-.preview { padding: 10px 12px; border-top:1px solid #f0f0f0; }
-.preview-text { white-space:pre-wrap; font-size:12px; color:#374151; max-height: 180px; overflow-y:auto; background:#f9fafb; border-radius:8px; padding:8px; }
+.item:hover { background:hsl(var(--vbg-hover)); }
+.item-title { font-size:13px; font-weight:600; color:hsl(var(--vtext)); }
+.item-body { font-size:11px; color:hsl(var(--vtext3)); margin-top:2px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.empty { padding: 16px; text-align:center; color:hsl(var(--vtext3)); font-size:12px; }
+.preview { padding: 10px 12px; border-top:1px solid hsl(var(--vborder)); }
+.preview-text { white-space:pre-wrap; font-size:12px; color:hsl(var(--vtext2)); max-height: 180px; overflow-y:auto; background:hsl(var(--vbg-hover)); border-radius:8px; padding:8px; }
 .preview-actions { display:flex; gap:6px; margin-top:8px; justify-content:flex-end; }
-.hint { font-size:11px; color:#9ca3af; padding: 0 12px 8px; }
-.foot { display:flex; gap:10px; padding: 8px 12px; border-top:1px solid #f0f0f0; }
-.foot button { background:none; border:none; cursor:pointer; color:#6b7280; font-size:11px; padding:0; }
-.foot button:hover { color:#4f46e5; text-decoration:underline; }
+.hint { font-size:11px; color:hsl(var(--vtext3)); padding: 0 12px 8px; }
+.foot { display:flex; gap:10px; padding: 8px 12px; border-top:1px solid hsl(var(--vborder)); }
+.foot button { background:none; border:none; cursor:pointer; color:hsl(var(--vtext3)); font-size:11px; padding:0; }
+.foot button:hover { color:hsl(var(--vtext)); text-decoration:underline; }
 `;
 
 interface ScoreState {
@@ -220,10 +254,17 @@ const mount = async () => {
     hostname,
   );
   let t: Translations = await getContentTranslations();
+  let themeMode: UiThemeMode = "light";
+  try {
+    themeMode = (await getUiSettings()).themeMode;
+  } catch {
+    // default to light tokens
+  }
 
   // ---- shadow root + UI ----------------------------------------------------
   const root = document.createElement("div");
   root.id = ROOT_ID;
+  root.classList.toggle("dark", themeMode === "dark");
   document.body.appendChild(root);
   const shadow = root.attachShadow({ mode: "open" });
   const style = document.createElement("style");
@@ -290,6 +331,14 @@ const mount = async () => {
   let panelOpen = false;
   let slashAnchor: ComposerEl | null = null;
   let scoreState: ScoreState | null = null;
+  // Last composer the user actually typed in. Used as a fallback for actions
+  // (Optimize / Save / insert) because clicking the shadow-DOM panel moves
+  // document.activeElement to the shadow host, so resolveComposer() can miss
+  // the real composer on rich editors (Claude/Kimi).
+  let lastComposer: ComposerEl | null = null;
+
+  const currentComposer = (): ComposerEl | null =>
+    resolveComposer(window.location.hostname) ?? lastComposer;
 
   // ---- static label application (re-run on locale change) ------------------
   const applyStaticLabels = () => {
@@ -408,6 +457,7 @@ const mount = async () => {
   };
 
   const onComposerInput = (target: ComposerEl) => {
+    lastComposer = target;
     const text = getComposerText(target);
 
     // (1) slash trigger — independent of the real-time toggle.
@@ -445,8 +495,9 @@ const mount = async () => {
     "compositionend",
     (event) => {
       isComposing = false;
-      const target = event.target;
-      if (isComposerElement(target) && assistSettings.realtimeEnabled) {
+      const target = resolveComposerFromEvent(event.target, window.location.hostname);
+      if (target && assistSettings.realtimeEnabled) {
+        lastComposer = target;
         cancelScoreTimer();
         scoreTimer = window.setTimeout(() => {
           scoreTimer = null;
@@ -459,8 +510,10 @@ const mount = async () => {
   document.addEventListener(
     "input",
     (event) => {
-      const target = event.target;
-      if (!isComposerElement(target)) return;
+      // event.target may be a nested node inside a rich editor (ProseMirror/
+      // Kimi); resolve up to the contenteditable root rather than dropping it.
+      const target = resolveComposerFromEvent(event.target, window.location.hostname);
+      if (!target) return;
       onComposerInput(target);
     },
     true,
@@ -472,7 +525,7 @@ const mount = async () => {
     panel.classList.toggle("hidden", !open);
     if (open) {
       // Refresh score from the live composer when opening.
-      const composer = resolveComposer(window.location.hostname);
+      const composer = currentComposer();
       if (composer && assistSettings.realtimeEnabled) {
         scoreState = computeScore(getComposerText(composer));
       }
@@ -485,7 +538,7 @@ const mount = async () => {
   };
 
   const insertPrompt = async (prompt: Prompt) => {
-    const composer = slashAnchor ?? resolveComposer(window.location.hostname);
+    const composer = slashAnchor ?? currentComposer();
     if (!composer) {
       logger.info("content", "Prompt assist: composer not found");
       return;
@@ -541,7 +594,7 @@ const mount = async () => {
     cancelBtn.textContent = a.actions.cancel;
     replaceBtn.textContent = usedLlm ? a.actions.replaceDraft : a.actions.useSuggestion;
     replaceBtn.addEventListener("click", () => {
-      const composer = resolveComposer(window.location.hostname);
+      const composer = currentComposer();
       if (composer) setComposerText(composer, completion);
       previewEl.style.display = "none";
       setPanel(false);
@@ -563,9 +616,15 @@ const mount = async () => {
 
   optimizeBtn.addEventListener("click", async () => {
     const a = t.realTimeAssist;
-    const composer = resolveComposer(window.location.hostname);
+    const composer = currentComposer();
     const draft = composer ? getComposerText(composer).trim() : "";
     if (!draft) {
+      logger.debug("content", "Prompt assist optimize: no draft resolved", {
+        host: hostname,
+        hasComposer: !!composer,
+        hasLastComposer: !!lastComposer,
+        active: (document.activeElement as HTMLElement | null)?.tagName ?? null,
+      });
       previewEl.style.display = "block";
       previewEl.innerHTML = `<div class="empty">${a.empty.noScore}</div>`;
       return;
@@ -590,7 +649,7 @@ const mount = async () => {
   });
 
   saveBtn.addEventListener("click", async () => {
-    const composer = resolveComposer(window.location.hostname);
+    const composer = currentComposer();
     const draft = composer ? getComposerText(composer).trim() : "";
     if (!draft) return;
     const created = await saveDraftAsPrompt(draft, platform);
@@ -628,9 +687,14 @@ const mount = async () => {
     renderScore();
   });
 
+  const unsubscribeTheme = subscribeUiSettings((settings) => {
+    root.classList.toggle("dark", settings.themeMode === "dark");
+  });
+
   window.addEventListener("pagehide", () => {
     unsubscribeSettings();
     unsubscribeLocale();
+    unsubscribeTheme();
   });
 
   applyStaticLabels();
@@ -639,6 +703,7 @@ const mount = async () => {
     host: hostname,
     platform,
     realtime: assistSettings.realtimeEnabled,
+    composerResolvable: !!resolveComposer(window.location.hostname),
   });
 };
 

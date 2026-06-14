@@ -1682,12 +1682,11 @@ export function LibraryTab({
       setSelectedNoteId(note.id);
     }
     if (!note) return;
-    if (isDesktopSplitAvailable) {
-      setViewMode("conversations");
-      setWorkspaceMode("split");
-      setIsSplitNavigationOpen(false);
-      return;
-    }
+    // Always open the notes view so the imported note is shown in its editor
+    // with the "New Note" button available. The desktop split path previously
+    // returned here and could leave a blank pane with no add-note affordance
+    // (reported as: "import to notes → blank page, no add-note button").
+    setSelectedNoteId(note.id);
     await openNotesView(note.id);
   }
 

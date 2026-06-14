@@ -740,6 +740,7 @@ async function handleOffscreenRequest(
         const data = await completePromptDraft(config, {
           draft: message.payload.draft,
           platform: message.payload.platform,
+          mode: message.payload.mode,
           relatedPrompts
         })
         return { ok: true, type: messageType, data }

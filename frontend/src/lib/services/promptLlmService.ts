@@ -145,38 +145,50 @@ export async function enrichPromptCandidates(
   return result;
 }
 
-const COMPLETE_SYSTEM_PROMPT = `You are a prompt-engineering assistant. The user gives you a DRAFT prompt they intend to send to an AI assistant.
+export type PromptCompletionMode = "optimize" | "continue";
+
+const OPTIMIZE_SYSTEM_PROMPT = `You are a prompt-engineering assistant. The user gives you a DRAFT prompt they intend to send to an AI assistant.
 Rewrite it into a clearer, more effective prompt: add helpful role framing, explicit task, relevant constraints and a desired output format when useful. Preserve the user's intent and language. Keep any {{variables}} intact.
 Return ONLY the improved prompt text, with no preamble, explanation, or surrounding quotes. Do NOT answer the prompt.`;
 
+const CONTINUE_SYSTEM_PROMPT = `You are a prompt-writing assistant. The user has started writing a prompt but stopped partway. CONTINUE and complete it in the same language, voice, and intent — flesh out the unfinished thought, add the missing specifics (task, constraints, desired output) that the draft was clearly heading toward. Keep any {{variables}} intact.
+Return ONLY the full completed prompt text (the user's draft continued to a natural, complete prompt), with no preamble, explanation, or surrounding quotes. Do NOT answer the prompt.`;
+
 /**
- * Improve / complete a draft prompt. Returns the rewritten prompt, or the
- * original draft when no LLM is configured.
+ * Improve ("optimize") or continue ("续写") a draft prompt. Returns the
+ * rewritten/continued prompt, or the original draft when no LLM is configured.
  */
 export async function completePromptDraft(
   config: LlmConfig | null,
-  payload: { draft: string; platform?: Platform; relatedPrompts?: Prompt[] },
+  payload: {
+    draft: string;
+    platform?: Platform;
+    relatedPrompts?: Prompt[];
+    mode?: PromptCompletionMode;
+  },
 ): Promise<PromptCompletionResult> {
   const draft = payload.draft.trim();
   if (!draft) return { completion: "", usedLlm: false };
   if (!config) return { completion: draft, usedLlm: false };
 
+  const mode: PromptCompletionMode = payload.mode === "continue" ? "continue" : "optimize";
   const references = (payload.relatedPrompts ?? [])
     .slice(0, 3)
     .map((prompt, index) => `Reference ${index + 1} (${prompt.title}):\n${prompt.body.slice(0, 400)}`)
     .join("\n\n");
 
+  const draftLabel = mode === "continue" ? "Draft prompt to continue" : "Draft prompt to improve";
   const userPrompt = [
     payload.platform ? `Target platform: ${payload.platform}` : null,
     references ? `Style references from the user's library:\n${references}` : null,
-    `Draft prompt to improve:\n${draft}`,
+    `${draftLabel}:\n${draft}`,
   ]
     .filter(Boolean)
     .join("\n\n");
 
   try {
     const result = await callInference(config, userPrompt, {
-      systemPrompt: COMPLETE_SYSTEM_PROMPT,
+      systemPrompt: mode === "continue" ? CONTINUE_SYSTEM_PROMPT : OPTIMIZE_SYSTEM_PROMPT,
     });
     const completion = result.content.trim();
     if (!completion) return { completion: draft, usedLlm: false };

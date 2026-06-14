@@ -574,7 +574,12 @@ export type RequestMessage =
       target?: "offscreen"
       via?: "background"
       requestId?: string
-      payload: { draft: string; platform?: Platform; useLibrary?: boolean }
+      payload: {
+        draft: string
+        platform?: Platform
+        useLibrary?: boolean
+        mode?: "optimize" | "continue"
+      }
     }
 
 export type ResponseDataMap = {

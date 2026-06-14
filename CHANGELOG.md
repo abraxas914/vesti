@@ -11,6 +11,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 ## [Unreleased]
 
 ### Added
+- Auto-built prompt library: the dashboard Prompts tab now extracts reusable
+  prompts from captured conversations automatically when opened (empty or stale),
+  not just via the manual button.
 - Added message-sidecar metadata for structured citations and artifact presence.
 - Added a **Prompt Management** system: a new dashboard **Prompts** tab that
   intelligently archives high-value prompts extracted from captured
@@ -28,6 +31,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Localized in English and Chinese.
 
 ### Changed
+- Renamed the conversation library to **对话知识库** (zh) and fully internationalized
+  the Prompts tab (~59 strings, en/zh) so it follows the app/browser language.
+- The in-page real-time assistant now follows Vesti's design tokens (monochrome
+  accent, semantic score colors) in both light and dark themes (was hardcoded).
 - Integrated the team's multi-language (en/zh) i18n, network-page content, and
   Claude/Gemini parser + warm-start capture improvements from `origin/main`.
 - Hardened the i18n type system: locale files now mirror the English key shape
@@ -43,6 +50,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Errors panel as if the extension were failing.
 
 ### Fixed
+- Fixed "Import to Notes" from a summary card landing on a blank page — it now
+  opens the notes view with the imported note shown and the "New Note" button
+  available.
+- Fixed the real-time in-page assistant not working on Kimi and Claude: input
+  events on nested nodes of rich editors (ProseMirror/Quill) are now resolved up
+  to the contenteditable root, and the Optimize/Save actions use a cached
+  composer reference so a focus shift to the panel no longer yields an empty draft.
 - Fixed ChatGPT thinking UI so it no longer splits a single assistant reply into multiple logical messages.
 - Fixed reader rendering so citation and search noise no longer appears as abrupt tail text after the main reply body.
 - Fixed Qwen and Yuanbao capture drift against current production DOM structures while keeping tables, math, and code paths intact.

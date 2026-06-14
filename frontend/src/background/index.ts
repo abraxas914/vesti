@@ -52,7 +52,6 @@ import {
 } from "../lib/db/promptRepository"
 import {
   completePromptDraft,
-  enrichPromptCandidates,
   resolveUsableLlmConfig
 } from "../lib/services/promptLlmService"
 import { isRequestMessage } from "../lib/messaging/protocol"
@@ -725,15 +724,11 @@ async function handleOffscreenRequest(
         return { ok: true, type: messageType, data: { prompt } }
       }
       case "EXTRACT_PROMPTS_FROM_LIBRARY": {
-        const config = await resolveUsableLlmConfig()
-        const enrich = config
-          ? (candidates: Parameters<typeof enrichPromptCandidates>[0]) =>
-              enrichPromptCandidates(candidates, config)
-          : undefined
-        const data = await extractPromptsFromLibrary(
-          { scope: message.payload?.scope, limit: message.payload?.limit },
-          enrich
-        )
+        // Lightweight: high-frequency extraction, offline (no LLM enrichment).
+        const data = await extractPromptsFromLibrary({
+          scope: message.payload?.scope,
+          limit: message.payload?.limit
+        })
         return { ok: true, type: messageType, data }
       }
       case "COMPLETE_PROMPT": {

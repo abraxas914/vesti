@@ -977,6 +977,22 @@ export interface DashboardLabels {
     noPreviewAvailable: string;
     closeSidebar: string;
     openSidebar: string;
+    emptyDetailTitle: string;
+    emptyDetailHint: string;
+    summaryCard: {
+      coreQuestion: string;
+      thinkingJourney: string;
+      step: string;
+      example: string;
+      keyInsights: string;
+      unresolvedThreads: string;
+      metaObservations: string;
+      thinkingStyle: string;
+      emotionalTone: string;
+      depth: string;
+      nextSteps: string;
+      fallback: string;
+    };
   };
   explore: Record<string, string>;
   network: {

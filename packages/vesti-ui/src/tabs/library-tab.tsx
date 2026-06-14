@@ -1696,11 +1696,9 @@ export function LibraryTab({
       createIfMissing: true,
     });
     if (!note) return;
-    if (isDesktopSplitAvailable) {
-      setWorkspaceMode("split");
-      setViewMode("conversations");
-      return;
-    }
+    // Always open the notes view so the new note is shown (avoids the blank
+    // desktop-split pane reported for the notes flow).
+    setSelectedNoteId(note.id);
     await openNotesView(note.id);
   }
 
@@ -3785,9 +3783,9 @@ export function LibraryTab({
                     </div>
                   </div>
 
-                  <DetailSectionEyebrow>
-                    {overviewSectionLabel}
-                  </DetailSectionEyebrow>
+                  {activeTopicName ? (
+                    <DetailSectionEyebrow>{activeTopicName}</DetailSectionEyebrow>
+                  ) : null}
                   <DetailSectionCard className="mb-8">
                     <div className="w-full p-3 flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-sans">
@@ -3861,6 +3859,7 @@ export function LibraryTab({
                               <StructuredSummaryCard
                                 data={summaryData}
                                 compact
+                                labels={labels.summaryCard}
                               />
                             </div>
                           </div>
@@ -4119,6 +4118,16 @@ export function LibraryTab({
                       )}
                       <button
                         type="button"
+                        onClick={() => void handleCreateConversationNote()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-sans
+                      text-text-secondary hover:text-accent-primary hover:bg-accent-primary-light
+                      transition-colors duration-150"
+                      >
+                        <MessageSquarePlus strokeWidth={1.5} className="w-3.5 h-3.5" />
+                        {labels.createConversationNote ?? "New Note"}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => void handleImportConversationToNotes()}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-sans
                       text-text-secondary hover:text-accent-primary hover:bg-accent-primary-light
@@ -4163,7 +4172,7 @@ export function LibraryTab({
                       <div className="space-y-4 p-5">
                         <div className="rounded-[20px] border border-border-subtle bg-bg-secondary/40 px-4 py-4">
                           <div className="flex flex-wrap items-center gap-2 text-[11px] font-sans uppercase tracking-[0.14em] text-text-tertiary">
-                            <span>Preview</span>
+                            <span>{labels.preview ?? "Preview"}</span>
                             <span
                               className="h-1 w-1 rounded-full bg-border-default/80"
                               aria-hidden="true"
@@ -4178,7 +4187,8 @@ export function LibraryTab({
                             }`}
                           >
                             {messagesLoading
-                              ? "Loading original conversation..."
+                              ? labels.loadingOriginalConversation ??
+                                "Loading original conversation..."
                               : originalConversationPreview}
                           </p>
                           {canToggleConversationExpanded && (
@@ -4548,6 +4558,23 @@ export function LibraryTab({
                         ))}
                     </div>
                   </DetailSectionCard>
+                </div>
+              </div>
+            )}
+
+            {viewMode === "conversations" && !selectedConversation && !isSplitActive && (
+              <div className="flex flex-1 items-center justify-center bg-bg-primary px-8">
+                <div className="max-w-sm text-center">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-bg-surface-card text-text-tertiary">
+                    <BookOpen strokeWidth={1.5} className="h-6 w-6" />
+                  </div>
+                  <p className="text-[15px] font-medium text-text-primary">
+                    {labels.emptyDetailTitle ?? "No conversation selected"}
+                  </p>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-text-tertiary">
+                    {labels.emptyDetailHint ??
+                      "Pick a conversation from the left to read it here."}
+                  </p>
                 </div>
               </div>
             )}

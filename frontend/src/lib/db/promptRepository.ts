@@ -227,9 +227,22 @@ export interface ExtractPromptsOptions {
  * `enrich` callback is supplied (LLM available) candidate metadata is refined;
  * otherwise heuristic metadata from the extractor is used.
  */
+interface CandidateGroup {
+  candidate: PromptCandidate;
+  conversationIds: Set<number>;
+}
+
+const MIN_FREQUENCY = 2; // appears in >= 2 conversations to count as "frequent"
+const MIN_RESULTS = 8; // top up with best singletons so first run isn't empty
+
+/**
+ * Build the lightweight prompt library by surfacing HIGH-FREQUENCY prompts —
+ * user prompts that recur across captured conversations. Frequency-ranked,
+ * offline, no LLM enrichment. New prompts get a concise trigger (唤醒词) derived
+ * from the body; the user curates/edits afterwards.
+ */
 export async function extractPromptsFromLibrary(
   options: ExtractPromptsOptions = {},
-  enrich?: PromptBatchEnricher,
 ): Promise<PromptExtractionResult> {
   const scope = options.scope ?? "recent";
   const conversationLimit = options.limit ?? (scope === "all" ? 500 : 50);
@@ -240,9 +253,9 @@ export async function extractPromptsFromLibrary(
     .limit(conversationLimit)
     .toArray();
 
-  const allCandidates: PromptCandidate[] = [];
-  const seenHashes = new Set<string>();
-
+  // Group candidates by canonical body, counting how many DISTINCT conversations
+  // each recurs in (= frequency).
+  const groups = new Map<string, CandidateGroup>();
   for (const conversation of conversations) {
     const conversationId = conversation.id ?? null;
     if (conversationId === null) continue;
@@ -264,59 +277,65 @@ export async function extractPromptsFromLibrary(
       },
     );
 
+    const localSeen = new Set<string>();
     for (const candidate of candidates) {
       const hash = canonicalizeForHash(candidate.body);
-      if (seenHashes.has(hash)) continue;
-      seenHashes.add(hash);
-      allCandidates.push(candidate);
+      if (localSeen.has(hash)) continue; // count each prompt once per conversation
+      localSeen.add(hash);
+      const existing = groups.get(hash);
+      if (existing) {
+        existing.conversationIds.add(conversationId);
+      } else {
+        groups.set(hash, { candidate, conversationIds: new Set([conversationId]) });
+      }
     }
   }
 
-  let usedLlm = false;
-  let enrichments: PromptEnrichment[] | null = null;
-  if (enrich && allCandidates.length > 0) {
-    try {
-      enrichments = await enrich(allCandidates);
-      usedLlm = true;
-    } catch (error) {
-      logger.debug("service", "Prompt enrichment failed; using heuristics", {
-        error: (error as Error)?.message ?? String(error),
-      });
-      enrichments = null;
-    }
+  const allGroups = Array.from(groups.values());
+  const byFrequencyThenScore = (a: CandidateGroup, b: CandidateGroup) =>
+    b.conversationIds.size - a.conversationIds.size ||
+    b.candidate.heuristicScore - a.candidate.heuristicScore;
+
+  const frequent = allGroups
+    .filter((group) => group.conversationIds.size >= MIN_FREQUENCY)
+    .sort(byFrequencyThenScore);
+
+  // First run / few repeats: top up with the best-scoring singletons so the
+  // auto-built library is immediately useful (user can prune).
+  let selected = frequent;
+  if (selected.length < MIN_RESULTS) {
+    const singletons = allGroups
+      .filter((group) => group.conversationIds.size < MIN_FREQUENCY)
+      .sort((a, b) => b.candidate.heuristicScore - a.candidate.heuristicScore)
+      .slice(0, MIN_RESULTS - selected.length);
+    selected = [...selected, ...singletons];
   }
 
   let created = 0;
   let skipped = 0;
-
-  for (let index = 0; index < allCandidates.length; index += 1) {
-    const candidate = allCandidates[index];
-    const enrichment = enrichments?.[index] ?? null;
-
+  for (const group of selected) {
+    const candidate = group.candidate;
     const result = await createPrompt({
-      title: enrichment?.title ?? candidate.title,
+      // Concise trigger (唤醒词); body is the original prompt. No enrichment.
+      title: deriveTitle(candidate.body, 28),
       body: candidate.body,
-      category: enrichment?.category ?? candidate.category,
-      tags: enrichment?.tags ?? candidate.tags,
       source: "extracted",
       source_platform: candidate.platform,
       source_conversation_id: candidate.conversationId,
       source_message_id: candidate.messageId,
-      summary: enrichment?.summary ?? null,
-      quality_score: enrichment?.score ?? candidate.heuristicScore,
+      quality_score: candidate.heuristicScore,
     });
-
     if (result.created) created += 1;
     else skipped += 1;
   }
 
   logger.info("service", "Prompt extraction complete", {
     scope,
-    candidates: allCandidates.length,
+    groups: allGroups.length,
+    frequent: frequent.length,
     created,
     skipped,
-    usedLlm,
   });
 
-  return { created, skipped, candidates: allCandidates.length, usedLlm };
+  return { created, skipped, candidates: allGroups.length, usedLlm: false };
 }

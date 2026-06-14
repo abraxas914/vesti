@@ -442,16 +442,10 @@ async function handleRequest(
         return { ok: true, type: messageType, data: { prompt } }
       }
       case "EXTRACT_PROMPTS_FROM_LIBRARY": {
-        // Use the LLM enricher when configured; otherwise heuristic-only.
-        const config = await resolveUsableLlmConfig()
-        const enrich = config
-          ? (candidates: Parameters<typeof enrichPromptCandidates>[0]) =>
-              enrichPromptCandidates(candidates, config)
-          : undefined
-        const data = await extractPromptsFromLibrary(
-          { scope: message.payload?.scope, limit: message.payload?.limit },
-          enrich
-        )
+        const data = await extractPromptsFromLibrary({
+          scope: message.payload?.scope,
+          limit: message.payload?.limit
+        })
         return { ok: true, type: messageType, data }
       }
       case "COMPLETE_PROMPT": {

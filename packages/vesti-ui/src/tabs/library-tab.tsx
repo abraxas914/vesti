@@ -2853,7 +2853,7 @@ export function LibraryTab({
         <div className="border-b border-border-subtle px-4 py-4">
           <div className="text-[11px] font-sans uppercase tracking-[0.16em] text-text-tertiary">
             {activeAnnotationMessage.role === "user"
-              ? "You"
+              ? (labels.you ?? "You")
               : selectedConversation.platform}
           </div>
           <p className="mt-1 text-[13px] font-sans leading-relaxed text-text-secondary">

@@ -109,13 +109,24 @@ function buildLimitLabel(limit: number): string {
   return formatBytes(limit)
 }
 
-function formatImportSummary(result: ImportDataResult): string {
+function formatImportSummary(
+  result: ImportDataResult,
+  labels: {
+    threads: string
+    messages: string
+    summaries: string
+    weeklyReports: string
+    annotations: string
+  }
+): string {
+  const fill = (tpl: string, count: number) =>
+    tpl.replace("{count}", String(count))
   return [
-    `${result.conversations} threads`,
-    `${result.messages} messages`,
-    `${result.summaries} summaries`,
-    `${result.weeklyReports} weekly reports`,
-    `${result.annotations} annotations`
+    fill(labels.threads, result.conversations),
+    fill(labels.messages, result.messages),
+    fill(labels.summaries, result.summaries),
+    fill(labels.weeklyReports, result.weeklyReports),
+    fill(labels.annotations, result.annotations)
   ].join(", ")
 }
 
@@ -304,7 +315,7 @@ export function DataManagementPanel() {
       const file = await exportData(format)
       triggerDownload(file.blob, file.filename)
       setStatus("ready")
-      setMessage(`Exported ${file.filename}`)
+      setMessage(fmt(t.data.exportedMessage, { filename: file.filename }))
     } catch (error) {
       setStatus("error")
       setMessage(getErrorMessage(error))
@@ -328,11 +339,11 @@ export function DataManagementPanel() {
     if (!file) return
 
     const confirmed = window.confirm(
-      `Import ${file.name}?\n\nThis will replace local conversations, messages, summaries, weekly reports, annotations, and search vectors with the JSON backup.\nLLM settings, notes, topics, and Explore sessions stay unchanged.`
+      fmt(t.data.importConfirm, { filename: file.name })
     )
     if (!confirmed) {
       setStatus("idle")
-      setMessage("Import cancelled.")
+      setMessage(t.data.importCancelled)
       return
     }
 
@@ -344,30 +355,11 @@ export function DataManagementPanel() {
       const content = await file.text()
       const result = await importData(content)
       setStatus("ready")
-      setMessage(`Imported ${formatImportSummary(result)} from ${file.name}`)
-    } catch (error) {
-      setStatus("error")
-      setMessage(getErrorMessage(error))
-    } finally {
-      setActionKey(null)
-      await refreshOverview()
-    }
-  }
-
-  const handleClearInsightsCache = async () => {
-    const confirmed = window.confirm(
-      "Clear cached summaries and weekly reports only?\nConversations and messages will be kept."
-    )
-    if (!confirmed) return
-
-    setActionKey("clear-insights-cache")
-    setStatus("loading")
-    setMessage(null)
-    try {
-      await clearInsightsCache()
-      setStatus("ready")
       setMessage(
-        "Insights cache cleared. Conversations and messages were kept."
+        fmt(t.data.importedMessage, {
+          summary: formatImportSummary(result, t.data.importSummary),
+          filename: file.name
+        })
       )
     } catch (error) {
       setStatus("error")
@@ -378,13 +370,31 @@ export function DataManagementPanel() {
     }
   }
 
+  const handleClearInsightsCache = async () => {
+    const confirmed = window.confirm(t.data.clearCacheConfirm)
+    if (!confirmed) return
+
+    setActionKey("clear-insights-cache")
+    setStatus("loading")
+    setMessage(null)
+    try {
+      await clearInsightsCache()
+      setStatus("ready")
+      setMessage(t.data.cacheClearedMessage)
+    } catch (error) {
+      setStatus("error")
+      setMessage(getErrorMessage(error))
+    } finally {
+      setActionKey(null)
+      await refreshOverview()
+    }
+  }
+
   const handleClearAllData = async () => {
-    const input = window.prompt(
-      "This will clear all local conversations, messages, summaries, and weekly reports.\nType DELETE to continue:"
-    )
+    const input = window.prompt(t.data.clearAllConfirm)
     if (input !== "DELETE") {
       setStatus("idle")
-      setMessage("Clear cancelled.")
+      setMessage(t.data.clearCancelled)
       return
     }
 
@@ -394,7 +404,7 @@ export function DataManagementPanel() {
     try {
       await clearAllData()
       setStatus("ready")
-      setMessage("Local data cleared. LLM configuration is kept.")
+      setMessage(t.data.dataCleared)
     } catch (error) {
       setStatus("error")
       setMessage(getErrorMessage(error))
@@ -610,7 +620,7 @@ export function DataManagementPanel() {
         subtitle={t.data.exportDesc}
         open={openMap.export}
         onToggle={() => toggleAccordion("export")}>
-        <p className="data-subgroup-label">Export format</p>
+        <p className="data-subgroup-label">{t.data.exportFormatLabel}</p>
         <div className="data-export-list">
           {exportOptions.map((item) => {
             const busy = actionKey === `export-${item.format}`

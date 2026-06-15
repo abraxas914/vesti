@@ -510,7 +510,7 @@ export function ConversationCard({
             value={draftTitle}
             maxLength={MAX_TITLE_LENGTH}
             disabled={isSavingTitle}
-            aria-label="Edit conversation title"
+            aria-label={t.timeline.editTitle}
             onChange={(event) => {
               setDraftTitle(event.target.value);
             }}
@@ -550,7 +550,7 @@ export function ConversationCard({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label="More actions"
+                  aria-label={t.timeline.moreActions}
                   onPointerDown={(event) => {
                     armSuppressCardActivation();
                     event.stopPropagation();

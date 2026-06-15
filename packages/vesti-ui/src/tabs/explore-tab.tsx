@@ -1126,7 +1126,7 @@ export function ExploreTab({
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="mb-1 text-xs font-sans text-text-tertiary">{isUser ? "You" : "Vesti"}</p>
+                <p className="mb-1 text-xs font-sans text-text-tertiary">{isUser ? (labels.you ?? "You") : "Vesti"}</p>
 
                 {isUser ? (
                   <p className="whitespace-pre-wrap text-base font-sans text-text-primary">

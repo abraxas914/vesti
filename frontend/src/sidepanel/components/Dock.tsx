@@ -56,7 +56,7 @@ export function Dock({
   const { t } = useI18n();
   return (
     <nav
-      aria-label="Vesti navigation"
+      aria-label={t.dock.navigation}
       className="flex w-[52px] flex-col items-center justify-between border-l border-border-subtle bg-bg-sidebar px-1 py-4"
     >
       <div className="flex flex-col items-center gap-2">

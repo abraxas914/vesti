@@ -47,3 +47,24 @@ fast, high-confidence fixes first (unblock device testing), then the large featu
   progress UI). May need a follow-up on platform priority.
 
 Each phase: typecheck + build + device-test checkpoint.
+
+---
+
+## STATUS (work-state)
+
+All 8 items implemented; each commit typechecks (30 pre-existing team tsc errors,
+none new) and builds clean (`pnpm build`, exit 0).
+
+- **#1 Doubao** — staggered initial captures + diagnostic; isGenerating scoped. ✅ (Phase A commit) — device re-test pending.
+- **#2 persistence/backup** — prompts export/import backup in the prompt tab; IndexedDB survives upgrades. ✅
+- **#3 historical import** — provider framework + ChatGPT + Claude + dock-relay + sidepanel UI. ✅ (commit `8c4f102`) — implemented; **needs device verification** (live login per platform; not CI-testable). Design: `history_import_design.md`.
+- **#4 prompt library** — favorites removed, Title→唤醒词. ✅
+- **#5 dock merge** — prompt manager merged into the owl/dock (optimize/续写/常用提示词 + smart 唤醒); 消息/轮次 metrics removed; standalone prompt-assist deleted; COMPLETE_PROMPT gained `mode`. ✅ (commit `aaa9d08`)
+- **#6 extraction** — relaxed thresholds. ✅ (Phase A)
+- **#7 i18n** — localized the frontend-direct surfaces (Dock nav, ConversationCard aria, DataManagementPanel dialogs/messages, ExportDialog, AstMessageRenderer copy) + filled all genuinely-missing `labels.*` keys in explore/library tabs + explore/library "You". en+zh parity enforced by `TranslationsType`. ✅
+  - **Remaining low-priority literals (follow-up):** explore-tab agent-trace `MODE_STAGES`/`TOOL_LABELS`/`TOOL_EXPLANATIONS` (debug-ish), `library-tab` new-note default title "New Note" (seeded data), AST table "Column 1" fallback. These are low-traffic; localizing the trace maps needs new label keys + read sites in vesti-ui.
+
+## Pre-existing tsc debt (not from this round)
+19 in vesti-ui `library-tab.tsx` + ~11 across dashboard/InsightsPage/MessageBubble/
+obsidianVaultService/repository — `labels`/DEFAULT_LABELS scoping gaps. esbuild does
+not typecheck so these don't block builds. Candidate cleanup for #9.

@@ -11,6 +11,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 ## [Unreleased]
 
 ### Added
+- **Bulk-import historical conversations** (ChatGPT, Claude): a new "Import
+  platform history" panel in the Data page reads your existing threads through
+  each platform's own API (using your current login) and saves them locally via
+  the normal capture pipeline (dedup keeps re-runs idempotent). Read-only,
+  throttled, cancellable, with live progress; other platforms slot into a
+  provider registry. Fully localized (en/zh).
+- **One-click prompt backup**: export/import the prompt library as a JSON file
+  from the Prompts tab, so prompts survive reinstalls (IndexedDB already survives
+  version upgrades).
+- **In-dock prompt manager**: the owl/dock now hosts a unified prompt feature —
+  提示词优化 (optimize), 提示词续写 (continue, a new `mode` on `COMPLETE_PROMPT`),
+  and 常用提示词 input (search by 唤醒词, click to fill, or Enter to one-click fill
+  the top match).
 - Auto-built prompt library: the dashboard Prompts tab now extracts reusable
   prompts from captured conversations automatically when opened (empty or stale),
   not just via the manual button.
@@ -31,6 +44,16 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Localized in English and Chinese.
 
 ### Changed
+- Merged the standalone in-page prompt assistant into the owl/dock as one
+  feature with a single open/close toggle; the lower dock holds a clean
+  prompt-manager panel. The existing per-host "real-time assistant" setting now
+  gates the in-dock panel.
+- Prompt library is now lightweight: the editor's "Title" field is relabeled
+  **唤醒词** (Trigger), the favorites control is gone, and extraction surfaces the
+  most frequent reusable prompts.
+- Extended i18n coverage (en/zh) across the sidepanel (data management dialogs,
+  export dialog, reader copy buttons, dock/card aria) and filled missing
+  explore/library tab label keys.
 - Renamed the conversation library to **对话知识库** (zh) and fully internationalized
   the Prompts tab (~59 strings, en/zh) so it follows the app/browser language.
 - The in-page real-time assistant now follows Vesti's design tokens (monochrome
@@ -50,6 +73,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Errors panel as if the extension were failing.
 
 ### Fixed
+- Fixed Doubao (`www.doubao.com`) "cannot capture": added the staggered initial
+  capture triggers the content script was missing (parity with ChatGPT/Yuanbao)
+  and scoped `DoubaoParser.isGenerating()` to message bubbles so persistent page
+  chrome can't wedge capture. Added a one-time capture-path diagnostic.
+- Fixed prompt-library extraction returning nothing: relaxed the over-aggressive
+  score/length/frequency thresholds that were silently filtering out every
+  candidate, so the library now populates from captured conversations.
 - Fixed "Import to Notes" from a summary card landing on a blank page — it now
   opens the notes view with the imported note shown and the "New Note" button
   available.
@@ -67,7 +97,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Added a one-time capture-path diagnostic and a `no_messages` skip log to make
   future "cannot capture" reports self-diagnosing.
 
+### Removed
+- Removed the standalone in-page prompt-assist floating window (its capabilities
+  now live in the dock prompt manager) and the dock's 消息/轮次 metric cards.
+- Removed the dead/duplicate `src/offscreen/index.ts` request handler (no
+  offscreen document exists; the live dispatchers are `handleOffscreenRequest` /
+  `handleBackgroundRequest` in `background/index.ts`). It was a known footgun —
+  routes added there silently never ran.
+
 ### Docs
+- Added `documents/DEVELOPMENT_GUIDELINES.md` (architecture map, message-routing
+  rules, the three i18n surfaces, build/verify checklist, known debt).
+- Added the historical-import design under `documents/prompt_management/`.
 - Added DOM sampling bootstrap and platform handoff notes for thinking-boundary repair, citation governance, and five-platform parser sampling.
 - Added the Prompt Management engineering spec, README, and manual acceptance
   checklist under `documents/prompt_management/`.

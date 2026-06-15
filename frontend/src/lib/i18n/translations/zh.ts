@@ -294,6 +294,27 @@ export const zhTranslations: TranslationsType = {
     exportAction: "导出",
     importJson: "导入 JSON",
     importJsonDesc: "恢复可逆备份并替换捕获的数据表",
+    history: {
+      title: "导入平台历史对话",
+      subtitle: "把该 AI 平台上以往的对话一键纳入",
+      description:
+        "Vesti 通过平台自身的接口（使用你当前的登录态）读取你已有的对话并保存到本地。只读——不会发送或提交任何内容。",
+      supportedNote: "当前支持：ChatGPT 和 Claude，更多平台陆续接入。",
+      unsupportedTab: "请在当前标签页打开 ChatGPT 或 Claude，再回来导入其历史对话。",
+      notLoggedIn: "请先在当前标签页登录 {platform}，然后重试。",
+      ready: "可从 {platform} 导入。",
+      start: "导入 {platform} 历史对话",
+      starting: "正在启动…",
+      cancel: "取消",
+      listing: "正在查找对话…",
+      running: "正在导入… {processed}/{discovered}",
+      doneSummary:
+        "完成。已导入 {saved} 条 · 新增消息 {newMessages} · 跳过 {skipped} · 失败 {failed}。",
+      cancelledSummary: "已取消。目前已导入 {saved} 条。",
+      errorSummary: "导入失败：{error}",
+      confirm:
+        "确认从 {platform} 导入历史对话？Vesti 会通过平台自身的接口读取你的对话并保存到本地，不会发送或提交任何内容。",
+    },
     cleanup: "清理",
     cleanupDesc: "删除摘要缓存或清除所有本地数据",
     dashboard: "仪表板",

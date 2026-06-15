@@ -292,6 +292,28 @@ export const enTranslations = {
     exportAction: "Export",
     importJson: "Import JSON",
     importJsonDesc: "Restore a reversible backup and replace captured data tables",
+    history: {
+      title: "Import platform history",
+      subtitle: "Bring in past conversations from this AI platform",
+      description:
+        "Vesti reads your existing threads through the platform's own API (using your current login) and saves them locally. Read-only — nothing is sent or submitted.",
+      supportedNote: "Supported here: ChatGPT and Claude. More platforms coming.",
+      unsupportedTab:
+        "Open ChatGPT or Claude in the active tab, then come back to import its history.",
+      notLoggedIn: "Sign in to {platform} in the active tab first, then retry.",
+      ready: "Ready to import from {platform}.",
+      start: "Import {platform} history",
+      starting: "Starting…",
+      cancel: "Cancel",
+      listing: "Finding conversations…",
+      running: "Importing… {processed}/{discovered}",
+      doneSummary:
+        "Done. {saved} imported · {newMessages} new messages · {skipped} skipped · {failed} failed.",
+      cancelledSummary: "Cancelled. {saved} imported so far.",
+      errorSummary: "Import failed: {error}",
+      confirm:
+        "Import your conversation history from {platform}? Vesti reads your threads via the platform's own API and saves them locally. Nothing is sent or submitted.",
+    },
     cleanup: "Cleanup",
     cleanupDesc: "Remove summary cache or wipe all local data",
     dashboard: "Dashboard",

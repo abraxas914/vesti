@@ -394,6 +394,74 @@ async function handleBackgroundRequest(
         void runVectorizationTask("message")
         return { ok: true, type: messageType, data: { queued: true } }
       }
+      case "IMPORT_HISTORY_PROBE": {
+        // Forward to the active platform tab; the content script knows whether
+        // a history provider exists for its host and whether it's logged in.
+        const tab = await getActiveTab()
+        if (!tab?.id || !isSupportedCaptureTabUrl(tab.url)) {
+          return { ok: true, type: messageType, data: { supported: false } }
+        }
+        try {
+          const resp = await sendMessageToTab<{
+            supported?: boolean
+            platform?: Platform
+            available?: boolean
+          }>(tab.id, { type: "IMPORT_HISTORY_PROBE" })
+          return {
+            ok: true,
+            type: messageType,
+            data: {
+              supported: !!resp?.supported,
+              platform: resp?.platform,
+              available: !!resp?.available
+            }
+          }
+        } catch {
+          return { ok: true, type: messageType, data: { supported: false } }
+        }
+      }
+      case "IMPORT_HISTORY_START": {
+        const tab = await getActiveTab()
+        if (!tab?.id) {
+          return { ok: true, type: messageType, data: { started: false, reason: "no_active_tab" } }
+        }
+        if (!isSupportedCaptureTabUrl(tab.url)) {
+          return { ok: true, type: messageType, data: { started: false, reason: "unsupported_tab" } }
+        }
+        try {
+          const resp = await sendMessageToTab<{
+            started?: boolean
+            platform?: Platform
+            reason?: string
+          }>(tab.id, { type: "IMPORT_HISTORY_RUN" })
+          return {
+            ok: true,
+            type: messageType,
+            data: {
+              started: !!resp?.started,
+              platform: resp?.platform,
+              reason: resp?.reason
+            }
+          }
+        } catch (error) {
+          return {
+            ok: true,
+            type: messageType,
+            data: { started: false, reason: (error as Error).message || "tab_unreachable" }
+          }
+        }
+      }
+      case "IMPORT_HISTORY_CANCEL": {
+        const tab = await getActiveTab()
+        if (tab?.id) {
+          try {
+            await sendMessageToTab(tab.id, { type: "IMPORT_HISTORY_CANCEL" })
+          } catch {
+            // tab may have navigated away; cancel is best-effort
+          }
+        }
+        return { ok: true, type: messageType, data: { ok: true } }
+      }
       default:
         return {
           ok: false,

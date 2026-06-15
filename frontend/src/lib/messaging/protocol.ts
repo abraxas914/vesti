@@ -514,6 +514,21 @@ export type RequestMessage =
       requestId?: string
     }
   | {
+      type: "IMPORT_HISTORY_PROBE"
+      target?: "background"
+      requestId?: string
+    }
+  | {
+      type: "IMPORT_HISTORY_START"
+      target?: "background"
+      requestId?: string
+    }
+  | {
+      type: "IMPORT_HISTORY_CANCEL"
+      target?: "background"
+      requestId?: string
+    }
+  | {
       type: "LIST_PROMPTS"
       target?: "offscreen"
       via?: "background"
@@ -658,6 +673,9 @@ export type ResponseDataMap = {
   GET_ACTIVE_CAPTURE_STATUS: ActiveCaptureStatus
   FORCE_ARCHIVE_TRANSIENT: ForceArchiveTransientResult
   RUN_VECTORIZATION: { queued: boolean }
+  IMPORT_HISTORY_PROBE: { supported: boolean; platform?: Platform; available?: boolean }
+  IMPORT_HISTORY_START: { started: boolean; platform?: Platform; reason?: string }
+  IMPORT_HISTORY_CANCEL: { ok: boolean }
   LIST_PROMPTS: Prompt[]
   SEARCH_PROMPTS: Prompt[]
   CREATE_PROMPT: { prompt: Prompt; created: boolean }

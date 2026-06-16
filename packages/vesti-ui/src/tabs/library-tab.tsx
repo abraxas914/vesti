@@ -4255,7 +4255,7 @@ export function LibraryTab({
                           </div>
                         )}
                         <div>
-                          <div className="prose prose-slate max-w-none min-w-0">
+                          <div className="prose prose-slate dark:prose-invert max-w-none min-w-0 prose-headings:text-text-primary prose-p:text-text-primary prose-li:text-text-primary prose-strong:text-text-primary prose-em:text-text-primary prose-code:text-text-primary prose-a:text-accent-primary prose-blockquote:text-text-secondary">
                             {messagesLoading && (
                               <div className="text-[13px] font-sans text-text-tertiary">
                                 {labels.loadingMessages ?? "Loading messages..."}

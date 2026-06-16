@@ -4,6 +4,7 @@ import type { SupportedLocale } from "./locales";
 import { enTranslations } from "./translations/en";
 import { zhTranslations } from "./translations/zh";
 import { jaTranslations } from "./translations/ja";
+import { koTranslations } from "./translations/ko";
 import { detectAndSetLanguage, setLanguage, subscribeLanguageSettings } from "../services/languageSettingsService";
 
 // Translation registration point. To add a language: create translations/<code>.ts
@@ -13,6 +14,7 @@ const translationsByLocale: Record<SupportedLocale, Translations> = {
   en: enTranslations,
   zh: zhTranslations as unknown as Translations,
   ja: jaTranslations as unknown as Translations,
+  ko: koTranslations as unknown as Translations,
 };
 
 export type Translations = typeof enTranslations;

@@ -12,7 +12,7 @@
 // language the LLM writes summaries/weekly/answers in — derives automatically from here.
 // ──────────────────────────────────────────────────────────────────────────
 
-export const SUPPORTED_LOCALES = ["en", "zh", "ja"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh", "ja", "ko"] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 export const DEFAULT_LOCALE: SupportedLocale = "en";
 
@@ -45,6 +45,12 @@ export const LOCALE_META: Record<SupportedLocale, LocaleMeta> = {
     dateTag: "ja-JP",
     llmLanguage: "natural Japanese (自然な日本語)",
     aliases: ["ja", "ja-JP"],
+  },
+  ko: {
+    nativeName: "한국어",
+    dateTag: "ko-KR",
+    llmLanguage: "natural Korean (자연스러운 한국어)",
+    aliases: ["ko", "ko-KR"],
   },
 };
 

@@ -303,7 +303,13 @@ function renderSummaryTextV1(
   const lines = [summary.topic_title, ...summary.key_takeaways];
   if (summary.action_items?.length) {
     lines.push(
-      locale === "ja" ? "アクション項目：" : locale === "zh" ? "行动项：" : "Action Items:",
+      locale === "ko"
+        ? "실행 항목:"
+        : locale === "ja"
+          ? "アクション項目："
+          : locale === "zh"
+            ? "行动项："
+            : "Action Items:",
       ...summary.action_items
     );
   }
@@ -315,7 +321,22 @@ function renderSummaryTextV2(
   locale: SupportedLocale
 ): string {
   const labels =
-    locale === "ja"
+    locale === "ko"
+      ? {
+          deep: "깊이 있는 탐구",
+          moderate: "단계적 분석",
+          light: "가벼운 확인",
+          coreQuestion: "핵심 질문",
+          thinkingJourney: "사고의 흐름:",
+          realWorldAnchor: "현실의 단서",
+          keyInsights: "핵심 인사이트:",
+          unresolved: "미해결 논점:",
+          nextSteps: "다음 단계:",
+          thinkingStyle: "사고 방식",
+          emotionalTone: "감정의 톤",
+          depthLevel: "깊이 수준",
+        }
+      : locale === "ja"
       ? {
           deep: "深い掘り下げ",
           moderate: "段階的な分析",
@@ -422,7 +443,13 @@ function renderWeeklyTextV1(
   const lines = [report.period_title, ...report.main_themes, ...report.key_takeaways];
   if (report.action_items?.length) {
     lines.push(
-      locale === "ja" ? "アクション項目：" : locale === "zh" ? "行动项：" : "Action Items:",
+      locale === "ko"
+        ? "실행 항목:"
+        : locale === "ja"
+          ? "アクション項目："
+          : locale === "zh"
+            ? "行动项："
+            : "Action Items:",
       ...report.action_items
     );
   }
@@ -434,7 +461,18 @@ function renderWeeklyTextLite(
   locale: SupportedLocale
 ): string {
   const labels =
-    locale === "ja"
+    locale === "ko"
+      ? {
+          timeRange: "기간",
+          sampledThreads: "표본 대화 수",
+          highlight: "하이라이트",
+          recurring: "반복해서 나타난 질문:",
+          crossDomain: "영역을 넘나든 공통점:",
+          unresolved: "미해결 논점:",
+          suggestedFocus: "추천 집중 포인트:",
+          note: "참고: 이번 주는 표본이 제한적이라 다이제스트를 가볍게 정리했습니다.",
+        }
+      : locale === "ja"
       ? {
           timeRange: "対象期間",
           sampledThreads: "サンプル対話数",
@@ -1399,17 +1437,21 @@ function buildWeeklySparseHighlight(
   locale: SupportedLocale
 ): string {
   if (substantiveCount <= 0) {
-    return locale === "ja"
-      ? "今週は週次集約に使える有効な構造化対話がありませんでした。"
-      : locale === "zh"
-        ? "本周没有可用于周报聚合的有效结构化对话。"
-        : "No valid structured conversations are available for weekly aggregation.";
+    return locale === "ko"
+      ? "이번 주에는 주간 집계에 사용할 수 있는 유효한 구조화 대화가 없었습니다."
+      : locale === "ja"
+        ? "今週は週次集約に使える有効な構造化対話がありませんでした。"
+        : locale === "zh"
+          ? "本周没有可用于周报聚合的有效结构化对话。"
+          : "No valid structured conversations are available for weekly aggregation.";
   }
-  return locale === "ja"
-    ? `今週は有効な構造化対話が ${substantiveCount} 件しかないため、テーマ横断の集約はスキップしました。`
-    : locale === "zh"
-      ? `本周只有 ${substantiveCount} 条有效结构化对话，因此跳过了跨主题聚合。`
-      : `Only ${substantiveCount} valid structured conversations are available this week, so cross-topic aggregation is skipped.`;
+  return locale === "ko"
+    ? `이번 주에는 유효한 구조화 대화가 ${substantiveCount}건뿐이라 주제 간 집계는 건너뛰었습니다.`
+    : locale === "ja"
+      ? `今週は有効な構造化対話が ${substantiveCount} 件しかないため、テーマ横断の集約はスキップしました。`
+      : locale === "zh"
+        ? `本周只有 ${substantiveCount} 条有效结构化对话，因此跳过了跨主题聚合。`
+        : `Only ${substantiveCount} valid structured conversations are available this week, so cross-topic aggregation is skipped.`;
 }
 
 function dedupeNarrativeItems(values: string[]): string[] {
@@ -1472,7 +1514,16 @@ function synthesizeDegradedSummaryV2FromRaw(params: {
 }): ConversationSummaryV2 | null {
   const locale = params.locale;
   const synthLabels =
-    locale === "ja"
+    locale === "ko"
+      ? {
+          insight: (index: number) => `인사이트 ${index}`,
+          coreQuestionFallback: "당신이 답을 찾고자 하는 핵심 질문은 무엇인가요?",
+          stillUnresolved: (item: string) => `미해결: ${item}`,
+          validateAndClose: (item: string) => `검증하고 마무리하기: ${item}`,
+          thinkingStyle: "가설을 조금씩 좁혀 가며, 전제를 하나씩 검증하고 있습니다.",
+          emotionalTone: "여러 제약을 살피면서 분석적이고 신중한 톤을 유지하고 있습니다.",
+        }
+      : locale === "ja"
       ? {
           insight: (index: number) => `インサイト ${index}`,
           coreQuestionFallback: "あなたが答えを出したい核心的な問いは何ですか？",
@@ -2887,7 +2938,17 @@ function renderWeeklyRecapText(
   locale: SupportedLocale
 ): string {
   const labels =
-    locale === "ja"
+    locale === "ko"
+      ? {
+          stats: "이번 주 기록",
+          conversations: "대화 수",
+          activeDays: "활동 일수",
+          streak: "연속 주차",
+          platform: "가장 많이 사용한 플랫폼",
+          highlight: "하이라이트",
+          nextWeek: "다음 주를 위해",
+        }
+      : locale === "ja"
       ? {
           stats: "今週の記録",
           conversations: "対話数",
@@ -2947,7 +3008,29 @@ function buildCodeOnlyRecap(
   let persona: string;
   const narrative: string[] = [];
 
-  if (locale === "ja") {
+  if (locale === "ko") {
+    greeting = "이번 주도 꾸준히 대화하셨네요 👏";
+    persona = "꾸준한 탐구가";
+    narrative.push(
+      `이번 주에는 ${stats.conversationCount}건의 대화를 나누고 ${stats.activeDays}일 동안 활동했습니다${
+        hasPlatform ? `(주로 ${topPlatform})` : ""
+      }.`
+    );
+    if (delta !== null && delta > 0) {
+      narrative.push(`지난주보다 ${delta}건 더 많아요. 흐름이 아주 좋습니다 🔥.`);
+    } else if (delta !== null && delta < 0) {
+      narrative.push(`지난주보다 ${Math.abs(delta)}건 적지만, 페이스는 당신이 정하는 거예요.`);
+    } else if (stats.streakWeeks >= 2) {
+      narrative.push(`${stats.streakWeeks}주 연속으로 탐구를 이어 가고 있습니다. 멋진 꾸준함이에요.`);
+    } else {
+      narrative.push("이 호기심을 그대로 간직하며, 조급해하지 말고 천천히 나아가요.");
+    }
+    narrative.push(
+      title
+        ? `특히 "${title}"에 깊이 파고들었어요. 다음 주에는 관심 있는 주제를 하나 골라 더 깊이 탐구해 보세요.`
+        : "다음 주에는 관심 있는 주제를 하나 골라 깊이 탐구해 보세요."
+    );
+  } else if (locale === "ja") {
     greeting = "今週もよく対話しましたね 👏";
     persona = "コツコツ探究家";
     narrative.push(

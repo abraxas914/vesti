@@ -78,6 +78,7 @@ export const jaTranslations = {
       en: "English",
       zh: "中文",
       ja: "日本語",
+      ko: "한국어",
     },
     modelAccess: {
       title: "モデルアクセス",

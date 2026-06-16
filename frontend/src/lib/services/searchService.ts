@@ -877,10 +877,15 @@ function buildLocalFallbackAnswer(
   sources: RelatedConversation[],
   locale: SupportedLocale
 ): string {
-  const pick = <T,>(ja: T, zh: T, en: T): T =>
-    locale === "ja" ? ja : locale === "zh" ? zh : en;
+  const pick = <T,>(ko: T, ja: T, zh: T, en: T): T =>
+    locale === "ko" ? ko : locale === "ja" ? ja : locale === "zh" ? zh : en;
   if (sources.length === 0) {
     return pick(
+      [
+        `"${truncateInline(query, 120)}"와(과) 매우 유사한 대화를 찾지 못했습니다.`,
+        "표현을 바꾸거나 조금 더 넓은 주제를 선택해 보세요.",
+        "팁: 설정에서 LLM을 구성하면 더 풍부한 종합 답변을 받을 수 있습니다.",
+      ],
       [
         `「${truncateInline(query, 120)}」に強く類似する対話は見つかりませんでした。`,
         "言い回しを変えるか、もう少し広いトピックを選んでみてください。",
@@ -899,7 +904,7 @@ function buildLocalFallbackAnswer(
     ).join("\n");
   }
 
-  const matchSuffix = pick(" 一致", " 匹配", " match");
+  const matchSuffix = pick(" 일치", " 一致", " 匹配", " match");
   const lines = sources
     .slice(0, 5)
     .map(
@@ -909,12 +914,14 @@ function buildLocalFallbackAnswer(
 
   return [
     pick(
+      "모델 종합은 현재 사용할 수 없지만, 다음 로컬 대화가 가장 관련성이 높습니다:",
       "モデルによる統合は現在利用できませんが、以下のローカル対話が最も関連しています：",
       "模型综合暂时不可用，但以下本地对话最相关：",
       "Model synthesis is unavailable, but these local conversations are most relevant:"
     ),
     ...lines,
     pick(
+      "관심 있는 출처를 열어 자세히 확인한 뒤, 더 좁혀진 후속 질문을 해 보세요.",
       "気になる出典を開いて詳細を確認し、より絞り込んだ追加質問をしてみてください。",
       "打开来源查看详情，再提出更聚焦的追问。",
       "Open a source to inspect details, then ask a narrower follow-up."
@@ -1165,19 +1172,27 @@ function buildWeeklyLocalFallbackAnswer(params: {
   scoped: boolean;
   locale: SupportedLocale;
 }): string {
-  const pick = <T,>(ja: T, zh: T, en: T): T =>
-    params.locale === "ja" ? ja : params.locale === "zh" ? zh : en;
+  const pick = <T,>(ko: T, ja: T, zh: T, en: T): T =>
+    params.locale === "ko"
+      ? ko
+      : params.locale === "ja"
+        ? ja
+        : params.locale === "zh"
+          ? zh
+          : en;
   const lines: string[] = [];
   if (params.summaryText?.trim()) {
     lines.push(params.summaryText.trim(), "");
   } else {
     lines.push(
       pick(
+        `모델의 도움 없이는 "${truncateInline(params.query, 120)}"에 대한 완전한 답변을 종합하지 못했습니다.`,
         `モデルの支援がない状態では、「${truncateInline(params.query, 120)}」に対する完全な答えをまとめることができませんでした。`,
         `在没有模型协助的情况下，无法为"${truncateInline(params.query, 120)}"综合出完整的答案。`,
         `I could not synthesize a full answer for "${truncateInline(params.query, 120)}" without model assistance.`
       ),
       pick(
+        `해당 기간은 ${params.timeScope.label}(${params.timeScope.startDate} ~ ${params.timeScope.endDate})입니다.`,
         `対象となる期間は ${params.timeScope.label}（${params.timeScope.startDate} 〜 ${params.timeScope.endDate}）です。`,
         `相关时间窗为 ${params.timeScope.label}（${params.timeScope.startDate} 至 ${params.timeScope.endDate}）。`,
         `The relevant window is ${params.timeScope.label} (${params.timeScope.startDate} to ${params.timeScope.endDate}).`
@@ -1190,16 +1205,19 @@ function buildWeeklyLocalFallbackAnswer(params: {
     lines.push(
       params.scoped
         ? pick(
+            "선택한 범위에서는 해당 기간 내에 대화를 찾지 못했습니다.",
             "選択した範囲のその期間内には対話が見つかりませんでした。",
             "在所选范围的该时间窗内没有找到任何对话。",
             "No conversations were found in that time window within the selected scope."
           )
         : pick(
+            "해당 기간 내에 대화를 찾지 못했습니다.",
             "その期間内には対話が見つかりませんでした。",
             "在该时间窗内没有找到任何对话。",
             "No conversations were found in that time window."
           ),
       pick(
+        "범위를 넓히거나 다른 기간으로 다시 질문해 보세요.",
         "範囲を広げるか、別の期間で聞き直してみてください。",
         "可以扩大范围，或换一个时间段再问。",
         "Try broadening the scope or asking for a different period."
@@ -1210,6 +1228,7 @@ function buildWeeklyLocalFallbackAnswer(params: {
 
   lines.push(
     pick(
+      "다음 대화를 확인하면 답변의 근거를 확인할 수 있습니다:",
       "以下の対話を確認すると、答えの裏付けが取れます：",
       "你可以查看以下对话来核实答案：",
       "You can inspect these conversations to verify the answer:"
@@ -1220,6 +1239,7 @@ function buildWeeklyLocalFallbackAnswer(params: {
   });
   lines.push(
     pick(
+      "출처 칩을 클릭하거나 라이브러리로 전환해 직접 확인해 보세요.",
       "出典のタグをクリックするか、ライブラリに切り替えて直接確認してください。",
       "点击来源标签，或切换到资料库直接查看。",
       "Open the source chips or switch to Library to inspect them directly."
@@ -1684,11 +1704,13 @@ async function runAgentKnowledgeBase(
       return {
         answer:
           plan.clarifyingQuestion ||
-          (locale === "ja"
-            ? "確実にお答えするために、もう一つだけ条件を補足していただけますか。"
-            : locale === "zh"
-              ? "在可靠作答前，我还需要你再补充一个限定条件。"
-              : "I need one more constraint before I can answer this reliably."),
+          (locale === "ko"
+            ? "정확하게 답변드리기 위해, 조건을 하나만 더 알려 주시겠어요?"
+            : locale === "ja"
+              ? "確実にお答えするために、もう一つだけ条件を補足していただけますか。"
+              : locale === "zh"
+                ? "在可靠作答前，我还需要你再补充一个限定条件。"
+                : "I need one more constraint before I can answer this reliably."),
         sources: [],
         agent: agentMeta,
       };

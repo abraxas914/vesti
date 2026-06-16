@@ -38,19 +38,23 @@ const TECH_KEYWORDS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /prompt|schema/i, label: "Prompt Engineering" },
 ];
 function defaultWeeklySuggestedFocus(locale: SupportedLocale): string {
-  return locale === "ja"
-    ? "来週は価値の高い問いを一つに絞って前に進め、検証結果を記録しましょう。"
-    : locale === "zh"
-      ? "下周优先推进一个高价值问题，并记录验证结果。"
-      : "Next week, prioritize one high-value question and record the validation result.";
+  return locale === "ko"
+    ? "다음 주에는 가치가 높은 질문 하나에 집중해 진전을 만들고, 검증 결과를 기록해 보세요."
+    : locale === "ja"
+      ? "来週は価値の高い問いを一つに絞って前に進め、検証結果を記録しましょう。"
+      : locale === "zh"
+        ? "下周优先推进一个高价值问题，并记录验证结果。"
+        : "Next week, prioritize one high-value question and record the validation result.";
 }
 
 function insightTermLabel(locale: SupportedLocale, index: number): string {
-  return locale === "ja"
-    ? `インサイト${index}`
-    : locale === "zh"
-      ? `洞察${index}`
-      : `Insight ${index}`;
+  return locale === "ko"
+    ? `인사이트${index}`
+    : locale === "ja"
+      ? `インサイト${index}`
+      : locale === "zh"
+        ? `洞察${index}`
+        : `Insight ${index}`;
 }
 
 interface AdapterDefaults {
@@ -69,6 +73,22 @@ interface AdapterDefaults {
 }
 
 function getAdapterDefaults(locale: SupportedLocale): AdapterDefaults {
+  if (locale === "ko") {
+    return {
+      generalTag: "종합",
+      thinkingStyle: "한 걸음씩 깊이 파고들며, 질문을 거듭할 때마다 범위를 좁혀 나가고 있습니다.",
+      emotionalTone: "신중하면서도 호기심을 잃지 않고, 핵심 가설을 꾸준히 검증하고 있습니다.",
+      v1ThinkingStyle: "문제를 단계적으로 분해하며, 범위를 점점 좁혀 나가고 있습니다.",
+      v1EmotionalTone: "이성적이고 신중한 어조를 유지하며, 가설을 지속적으로 검증하고 있습니다.",
+      v1OpeningAssertion: "방향을 정하기 전에 먼저 정리해 두어야 할 질문을 던지고 있습니다.",
+      sparseThinkingStyle: "표본이 적어 사고 방식을 안정적으로 추정하기 어렵습니다.",
+      sparseEmotionalTone: "표본이 적어 감정의 톤은 중립으로 처리합니다.",
+      conversationSummaryTitle: "대화 요약",
+      noStableConclusion: "아직 안정적인 결론은 없습니다.",
+      coreQuestionPrefix: (title: string) => `이번 대화의 핵심 질문: ${title}`,
+      weeklyFallbackHighlight: "이번 주에는 다시 활용할 수 있는 단계적 결론이 정리되었습니다.",
+    };
+  }
   if (locale === "ja") {
     return {
       generalTag: "総合",

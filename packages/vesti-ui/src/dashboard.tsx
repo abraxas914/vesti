@@ -971,7 +971,7 @@ export function VestiDashboard({
         onClick={() => setSettingsOpen((open) => !open)}
         className="inline-flex items-center gap-1 rounded-lg p-1.5 transition-colors hover:bg-bg-surface-card"
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary text-sm font-sans text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-primary text-sm font-sans text-text-inverse">
           U
         </div>
         <ChevronDown strokeWidth={1.75} className="h-4 w-4 text-text-secondary" />
@@ -1152,7 +1152,7 @@ export function VestiDashboard({
                         <button
                           type="button"
                           onClick={handleSaveModelscopeKey}
-                          className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-primary-hover"
+                          className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-medium text-text-inverse transition-colors hover:bg-accent-primary-hover"
                         >
                           {labels.settings.save}
                         </button>
@@ -1202,7 +1202,7 @@ export function VestiDashboard({
                                 type="button"
                                 onClick={() => void handleConnectNotion()}
                                 disabled={!notionAvailable || notionStatus === "loading"}
-                                className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-sans font-medium text-white transition-colors hover:bg-accent-primary-hover disabled:opacity-60"
+                                className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-sans font-medium text-text-inverse transition-colors hover:bg-accent-primary-hover disabled:opacity-60"
                               >
                                 {notionStatus === "loading"
                                   ? labels.settings.connecting

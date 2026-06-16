@@ -648,7 +648,7 @@ export function NetworkTab({
                 <button
                   type="button"
                   onClick={handleViewInLibrary}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-primary px-4 py-2.5 text-sm font-sans font-medium text-white transition-all hover:bg-accent-primary/90"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent-primary px-4 py-2.5 text-sm font-sans font-medium text-text-inverse transition-all hover:bg-accent-primary/90"
                 >
                   <span>{labels.viewInLibrary ?? "View in Library"}</span>
                   <ArrowRight strokeWidth={1.5} className="h-4 w-4" />

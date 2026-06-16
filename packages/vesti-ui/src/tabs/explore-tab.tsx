@@ -956,7 +956,7 @@ export function ExploreTab({
               <div
                 className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
                   isUser
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "border border-border-subtle bg-bg-surface-card"
                 }`}
               >
@@ -1131,7 +1131,7 @@ export function ExploreTab({
                       <button
                         onClick={handleSubmit}
                         disabled={!inputValue.trim() || isSubmitting}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-accent-primary px-4 py-2 text-xs font-sans font-medium text-white transition-colors hover:bg-accent-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-accent-primary px-4 py-2 text-xs font-sans font-medium text-text-inverse transition-colors hover:bg-accent-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isSubmitting ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1226,7 +1226,7 @@ export function ExploreTab({
                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
                     themeMode === "dark"
                       ? "bg-bg-secondary text-text-primary hover:bg-bg-surface-card-hover"
-                      : "bg-accent-primary text-white hover:bg-accent-primary/90"
+                      : "bg-accent-primary text-text-inverse hover:bg-accent-primary/90"
                   }`}
                 >
                   <MessageSquarePlus className="h-4 w-4" strokeWidth={1.5} />
@@ -1313,7 +1313,7 @@ export function ExploreTab({
                 onClick={() => setMode("agent")}
                 className={`rounded px-2.5 py-1 text-xs font-sans transition-colors ${
                   mode === "agent"
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
@@ -1323,7 +1323,7 @@ export function ExploreTab({
                 onClick={() => setMode("classic")}
                 className={`rounded px-2.5 py-1 text-xs font-sans transition-colors ${
                   mode === "classic"
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
@@ -1335,7 +1335,7 @@ export function ExploreTab({
                 onClick={() => setSearchScopeMode("all")}
                 className={`rounded px-2.5 py-1 text-xs font-sans transition-colors ${
                   activeSearchScope.mode === "all"
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
@@ -1351,7 +1351,7 @@ export function ExploreTab({
                 }}
                 className={`rounded px-2.5 py-1 text-xs font-sans transition-colors ${
                   activeSearchScope.mode === "selected"
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
@@ -1450,7 +1450,7 @@ export function ExploreTab({
                   <button
                     onClick={handleSubmit}
                     disabled={!inputValue.trim() || isSubmitting}
-                    className="rounded-md bg-accent-primary p-2 text-white transition-all hover:bg-accent-primary/90 disabled:cursor-not-allowed disabled:opacity-30"
+                    className="rounded-md bg-accent-primary p-2 text-text-inverse transition-all hover:bg-accent-primary/90 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     {isSubmitting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -1506,7 +1506,7 @@ export function ExploreTab({
                 onClick={() => setDrawerTab("plan")}
                 className={`rounded px-2.5 py-1 text-xs font-sans transition-colors ${
                   drawerTab === "plan"
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
@@ -1516,7 +1516,7 @@ export function ExploreTab({
                 onClick={() => setDrawerTab("tool_calls")}
                 className={`rounded px-2.5 py-1 text-xs font-sans transition-colors ${
                   drawerTab === "tool_calls"
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
@@ -1526,7 +1526,7 @@ export function ExploreTab({
                 onClick={() => setDrawerTab("sources")}
                 className={`rounded px-2.5 py-1 text-xs font-sans transition-colors ${
                   drawerTab === "sources"
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
@@ -1536,7 +1536,7 @@ export function ExploreTab({
                 onClick={() => setDrawerTab("context_draft")}
                 className={`rounded px-2.5 py-1 text-xs font-sans transition-colors ${
                   drawerTab === "context_draft"
-                    ? "bg-accent-primary text-white"
+                    ? "bg-accent-primary text-text-inverse"
                     : "text-text-secondary hover:text-text-primary"
                 }`}
               >
@@ -1723,7 +1723,7 @@ export function ExploreTab({
                   <button
                     onClick={handleSaveContextDraft}
                     disabled={contextSaveStatus === "saving"}
-                    className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-sans text-white transition-colors hover:bg-accent-primary/90 disabled:opacity-50"
+                    className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-sans text-text-inverse transition-colors hover:bg-accent-primary/90 disabled:opacity-50"
                   >
                     {contextSaveStatus === "saving" ? labels.saving : labels.saveSelection}
                   </button>
@@ -1783,7 +1783,7 @@ export function ExploreTab({
                   <button
                     onClick={handleSaveContextDraft}
                     disabled={contextSaveStatus === "saving"}
-                    className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-sans text-white transition-colors hover:bg-accent-primary/90 disabled:opacity-50"
+                    className="rounded-md bg-accent-primary px-3 py-1.5 text-xs font-sans text-text-inverse transition-colors hover:bg-accent-primary/90 disabled:opacity-50"
                   >
                     {contextSaveStatus === "saving" ? labels.saving : labels.save}
                   </button>
@@ -1852,7 +1852,7 @@ export function ExploreTab({
                     setSearchScopeMode("selected");
                     applySelectedScope();
                   }}
-                  className="rounded-md bg-accent-primary px-3 py-2 text-xs font-sans text-white transition-colors hover:bg-accent-primary/90"
+                  className="rounded-md bg-accent-primary px-3 py-2 text-xs font-sans text-text-inverse transition-colors hover:bg-accent-primary/90"
                 >
                   {labels.applySelected ?? "Apply Selected"}
                 </button>

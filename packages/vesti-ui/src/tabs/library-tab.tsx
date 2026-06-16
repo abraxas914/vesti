@@ -4961,7 +4961,7 @@ export function LibraryTab({
                       void submitNoteRename();
                     }}
                     disabled={!canSaveRenamedNote}
-                    className="px-3 py-1.5 rounded-md text-[13px] font-sans bg-accent-primary text-white hover:bg-accent-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 rounded-md text-[13px] font-sans bg-accent-primary text-text-inverse hover:bg-accent-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Save
                   </button>

@@ -628,14 +628,15 @@ export function InsightsPage({
       summary
         ? toChatSummaryData(summary, {
             conversationTitle: conversation?.title,
+            locale,
           })
         : null,
-    [summary, conversation?.title]
+    [summary, conversation?.title, locale]
   );
 
   const weeklyData = useMemo(
-    () => (weeklyReport ? toWeeklySummaryData(weeklyReport) : null),
-    [weeklyReport]
+    () => (weeklyReport ? toWeeklySummaryData(weeklyReport, locale) : null),
+    [weeklyReport, locale]
   );
   const activeThreadPipelineEvent = useMemo(() => {
     if (!pipelineProgressEvent || !conversation) return null;
@@ -1032,7 +1033,7 @@ export function InsightsPage({
       .then((data) => {
         if (!active) return;
         setWeeklyReport(data);
-        const nextData = data ? toWeeklySummaryData(data) : null;
+        const nextData = data ? toWeeklySummaryData(data, locale) : null;
         const nextStableState = toWeeklyStableState(nextData);
         setWeeklyStableState(nextStableState);
         setWeeklyUiState(nextStableState);
@@ -1102,7 +1103,7 @@ export function InsightsPage({
 
     if (result.ok === true) {
       setWeeklyReport(result.data);
-      const nextData = toWeeklySummaryData(result.data);
+      const nextData = toWeeklySummaryData(result.data, locale);
       const nextStableState = toWeeklyStableState(nextData);
       setWeeklyStableState(nextStableState);
       setWeeklyUiState(nextStableState);

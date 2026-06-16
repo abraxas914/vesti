@@ -40,7 +40,7 @@ Hard rules:
 4) real_world_anchor: use null (not "" empty string) when no anchor exists. Must be plain-language.
 5) speaker: must be exactly "User" or "AI" (capital-sensitive).
 6) meta_observations must use natural user-facing phrases, not technical labels like "deductive" or "precise".
-7) If locale is zh, write user-facing text in natural Chinese.
+7) Write all user-facing text (assertions, definitions, observations, threads, steps) in the language named by the locale field in the user prompt: natural English when locale is en, natural Chinese when locale is zh. Keep all JSON keys and enum values (speaker, depth_level) in English.
 8) key_insights can be [] when evidence is sparse.
 9) Optional <think>...</think> is allowed before JSON; it will be stripped by runtime.
 10) unresolved_threads and actionable_next_steps must be complete phrases, not 1-3 character fragments.
@@ -57,8 +57,8 @@ const LEGACY_SUMMARY_JSON_SCHEMA_HINT = {
   tech_stack_detected: ["string"],
 };
 
-function formatDateTime(value: number): string {
-  return new Date(value).toLocaleString("zh-CN", {
+function formatDateTime(value: number, locale: "zh" | "en"): string {
+  return new Date(value).toLocaleString(locale === "en" ? "en-US" : "zh-CN", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -67,8 +67,8 @@ function formatDateTime(value: number): string {
   });
 }
 
-function formatTime(value: number): string {
-  return new Date(value).toLocaleTimeString("zh-CN", {
+function formatTime(value: number, locale: "zh" | "en"): string {
+  return new Date(value).toLocaleTimeString(locale === "en" ? "en-US" : "zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -76,6 +76,7 @@ function formatTime(value: number): string {
 
 function toNarrativeTranscript(
   messages: Message[],
+  locale: "zh" | "en",
   transcriptOverride?: string
 ): string {
   if (transcriptOverride?.trim()) {
@@ -83,13 +84,14 @@ function toNarrativeTranscript(
   }
 
   if (!messages.length) {
-    return "[无可用消息]";
+    return locale === "en" ? "[No messages available]" : "[无可用消息]";
   }
 
+  const userRole = locale === "en" ? "User" : "用户";
   return messages
     .map((message) => {
-      const role = message.role === "user" ? "用户" : "AI";
-      return `[${formatTime(message.created_at)}] ${role}:\n${buildMessageFallbackDisplayText(message)}\n`;
+      const role = message.role === "user" ? userRole : "AI";
+      return `[${formatTime(message.created_at, locale)}] ${role}:\n${buildMessageFallbackDisplayText(message)}\n`;
     })
     .join("\n---\n\n");
 }
@@ -97,18 +99,50 @@ function toNarrativeTranscript(
 function buildConversationSummaryPrompt(
   payload: ConversationSummaryPromptPayload
 ): string {
+  const locale = payload.locale ?? "en";
   const originAt = payload.conversationOriginAt ?? Date.now();
   const platform = payload.conversationPlatform ?? "unknown";
-  const transcript = toNarrativeTranscript(payload.messages, payload.transcriptOverride);
-  const conversationTitle = payload.conversationTitle ?? "(未命名对话)";
-  const locale = payload.locale ?? "zh";
+  const transcript = toNarrativeTranscript(
+    payload.messages,
+    locale,
+    payload.transcriptOverride
+  );
 
+  if (locale === "en") {
+    const conversationTitle = payload.conversationTitle ?? "(untitled conversation)";
+    return `Analyze the conversation below and output conversation_summary.v2 JSON:
+
+Conversation metadata:
+- Title: ${conversationTitle}
+- Platform: ${platform}
+- StartedAt: ${formatDateTime(originAt, locale)}
+- MessageCount: ${payload.messages.length}
+- locale: ${locale}
+
+Full conversation:
+${transcript}
+
+Additional constraints:
+- Each thinking_journey assertion must be 2-3 sentences.
+- An assertion must not merely restate a conclusion; it must convey "why this step appears now + what next question it opens".
+- Write real_world_anchor as a plain-language "real-world grounding / empirical case" a general reader can understand; use null (not an empty string "") when no anchor exists.
+- speaker must be exactly "User" or "AI" (case-sensitive).
+- meta_observations must be natural phrases (e.g. "drills down step by step, tightening scope with each question"), not technical labels.
+- depth_level must be one of "superficial", "moderate", "deep".
+- Each unresolved_threads / actionable_next_steps entry must be a complete phrase, not a 1-3 character fragment.
+- When evidence is sufficient, give 2-4 items each for unresolved_threads / actionable_next_steps; when sparse, drop to 1 item or an empty array.
+- Map strictly from available evidence; do not add facts that did not appear.
+- Write all user-facing text in natural English. Keep JSON keys and enum values in English.
+- Output the JSON object only, no markdown or extra explanation. Do not wrap it in \`\`\`json.`;
+  }
+
+  const conversationTitle = payload.conversationTitle ?? "(未命名对话)";
   return `请分析以下对话并输出 conversation_summary.v2 JSON：
 
 对话元信息：
 - 标题：${conversationTitle}
 - 平台：${platform}
-- 起始时间：${formatDateTime(originAt)}
+- 起始时间：${formatDateTime(originAt, locale)}
 - 消息数：${payload.messages.length}
 - locale：${locale}
 
@@ -125,13 +159,31 @@ ${transcript}
 - unresolved_threads / actionable_next_steps 每条都必须是完整短句，不要输出 1-3 个字的残片。
 - 证据充足时 unresolved_threads / actionable_next_steps 各给 2-4 条；证据不足可降到 1 条或空。
 - 严格从已有证据映射，不得补充未出现的新事实。
+- 所有面向用户的文本用自然中文书写；JSON 字段名与枚举值保持英文。
 - 仅输出 JSON 对象，不要输出 markdown 或额外说明。不要用 \`\`\`json 包裹。`;
 }
 
 function buildConversationFallbackPrompt(
   payload: ConversationSummaryPromptPayload
 ): string {
-  const transcript = toNarrativeTranscript(payload.messages, payload.transcriptOverride);
+  const locale = payload.locale ?? "en";
+  const transcript = toNarrativeTranscript(
+    payload.messages,
+    locale,
+    payload.transcriptOverride
+  );
+
+  if (locale === "en") {
+    return `Write a plain-text recap of this conversation (no JSON, no markdown symbols):
+
+${transcript}
+
+Requirements:
+1) 4-6 lines, one sentence per line.
+2) Prioritize the core question of this conversation, key progress, and next actions.
+3) Avoid empty filler phrases.`;
+  }
+
   return `请基于这段对话写一段纯文本回顾（不要输出JSON，不要markdown符号）：
 
 ${transcript}
@@ -157,7 +209,7 @@ function toLegacyTranscript(
   return messages
     .map((message) => {
       const role = message.role === "user" ? "User" : "AI";
-      return `[${formatTime(message.created_at)}] ${role}: ${buildMessageFallbackDisplayText(message)}`;
+      return `[${formatTime(message.created_at, "en")}] ${role}: ${buildMessageFallbackDisplayText(message)}`;
     })
     .join("\n");
 }
@@ -189,7 +241,8 @@ export const CURRENT_CONVERSATION_SUMMARY_PROMPT: PromptVersion<ConversationSumm
     description:
       "Thread Summary prompt aligned to latest thread-summary-skill contract (journey steps + real-world anchor + glossary insights).",
     system: CONVERSATION_SUMMARY_SYSTEM,
-    fallbackSystem: "你是一位清晰、克制的对话记录整理助手。输出纯文本，不使用 markdown。",
+    fallbackSystem:
+      "You are a clear, restrained conversation-record organizer. Output plain text only, no markdown. Write in the language requested by the user prompt (English or Chinese).",
     userTemplate: buildConversationSummaryPrompt,
     fallbackTemplate: buildConversationFallbackPrompt,
   };

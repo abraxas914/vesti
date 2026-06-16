@@ -48,6 +48,8 @@ import {
 } from "./insightSchemas";
 import type { WeeklySemanticIssueCode } from "./insightSchemas";
 import { logger } from "../utils/logger";
+import { getLanguageSettings } from "./languageSettingsService";
+import type { SupportedLocale } from "../i18n/locales";
 import { getEffectiveModelId, getLlmAccessMode } from "./llmConfig";
 import {
   getConversationCaptureFreshnessAt,
@@ -284,54 +286,91 @@ function logPromptUsage(entry: PromptUsageLog): void {
   logger.warn("service", message, entry);
 }
 
-function renderSummaryTextV1(summary: ConversationSummaryV1): string {
+function renderSummaryTextV1(
+  summary: ConversationSummaryV1,
+  locale: SupportedLocale
+): string {
   const lines = [summary.topic_title, ...summary.key_takeaways];
   if (summary.action_items?.length) {
-    lines.push("Action Items:", ...summary.action_items);
+    lines.push(locale === "zh" ? "行动项：" : "Action Items:", ...summary.action_items);
   }
   return sanitizeSummaryText(lines.join("\n"));
 }
 
-function renderSummaryTextV2(summary: ConversationSummaryV2): string {
+function renderSummaryTextV2(
+  summary: ConversationSummaryV2,
+  locale: SupportedLocale
+): string {
+  const labels =
+    locale === "zh"
+      ? {
+          deep: "深度探讨",
+          moderate: "逐步分析",
+          light: "轻量浏览",
+          coreQuestion: "核心问题",
+          thinkingJourney: "思考历程：",
+          realWorldAnchor: "现实锚点",
+          keyInsights: "关键洞察：",
+          unresolved: "未决议题：",
+          nextSteps: "下一步：",
+          thinkingStyle: "思考风格",
+          emotionalTone: "情绪基调",
+          depthLevel: "深度级别",
+        }
+      : {
+          deep: "Deep dive",
+          moderate: "Stepwise analysis",
+          light: "Light scan",
+          coreQuestion: "Core question",
+          thinkingJourney: "Thinking journey:",
+          realWorldAnchor: "Real-world anchor",
+          keyInsights: "Key insights:",
+          unresolved: "Unresolved threads:",
+          nextSteps: "Next steps:",
+          thinkingStyle: "Thinking style",
+          emotionalTone: "Emotional tone",
+          depthLevel: "Depth level",
+        };
+
   const depthLabel =
     summary.meta_observations.depth_level === "deep"
-      ? "Deep dive"
+      ? labels.deep
       : summary.meta_observations.depth_level === "moderate"
-        ? "Stepwise analysis"
-        : "Light scan";
+        ? labels.moderate
+        : labels.light;
 
-  const lines = [`Core question: ${summary.core_question}`, "Thinking journey:"];
+  const lines = [`${labels.coreQuestion}: ${summary.core_question}`, labels.thinkingJourney];
 
   for (const step of summary.thinking_journey) {
     lines.push(`${step.step}. [${step.speaker}] ${step.assertion}`);
     if (step.real_world_anchor) {
-      lines.push(`   Real-world anchor: ${step.real_world_anchor}`);
+      lines.push(`   ${labels.realWorldAnchor}: ${step.real_world_anchor}`);
     }
   }
 
-  lines.push("Key insights:");
+  lines.push(labels.keyInsights);
   for (const [index, insight] of summary.key_insights.entries()) {
     lines.push(`${index + 1}. ${insight.term}: ${insight.definition}`);
   }
 
   if (summary.unresolved_threads.length) {
     lines.push(
-      "Unresolved threads:",
+      labels.unresolved,
       ...summary.unresolved_threads.map((item, index) => `${index + 1}. ${item}`)
     );
   }
 
   if (summary.actionable_next_steps.length) {
     lines.push(
-      "Next steps:",
+      labels.nextSteps,
       ...summary.actionable_next_steps.map((item, index) => `${index + 1}. ${item}`)
     );
   }
 
   lines.push(
-    `Thinking style: ${summary.meta_observations.thinking_style}`,
-    `Emotional tone: ${summary.meta_observations.emotional_tone}`,
-    `Depth level: ${depthLabel}`
+    `${labels.thinkingStyle}: ${summary.meta_observations.thinking_style}`,
+    `${labels.emotionalTone}: ${summary.meta_observations.emotional_tone}`,
+    `${labels.depthLevel}: ${depthLabel}`
   );
 
   return sanitizeSummaryText(lines.join("\n"));
@@ -339,38 +378,68 @@ function renderSummaryTextV2(summary: ConversationSummaryV2): string {
 
 function renderSummaryText(
   summary: SummaryStructured,
-  schemaVersion: SummarySchemaVersion
+  schemaVersion: SummarySchemaVersion,
+  locale: SupportedLocale
 ): string {
   if (schemaVersion === "conversation_summary.v2") {
-    return renderSummaryTextV2(summary as ConversationSummaryV2);
+    return renderSummaryTextV2(summary as ConversationSummaryV2, locale);
   }
-  return renderSummaryTextV1(summary as ConversationSummaryV1);
+  return renderSummaryTextV1(summary as ConversationSummaryV1, locale);
 }
 
-function renderWeeklyTextV1(report: WeeklyReportV1): string {
+function renderWeeklyTextV1(
+  report: WeeklyReportV1,
+  locale: SupportedLocale
+): string {
   const lines = [report.period_title, ...report.main_themes, ...report.key_takeaways];
   if (report.action_items?.length) {
-    lines.push("Action Items:", ...report.action_items);
+    lines.push(locale === "zh" ? "行动项：" : "Action Items:", ...report.action_items);
   }
   return sanitizeSummaryText(lines.join("\n"));
 }
 
-function renderWeeklyTextLite(report: WeeklyLiteReportV1): string {
+function renderWeeklyTextLite(
+  report: WeeklyLiteReportV1,
+  locale: SupportedLocale
+): string {
+  const labels =
+    locale === "zh"
+      ? {
+          timeRange: "时间范围",
+          sampledThreads: "采样对话数",
+          highlight: "亮点",
+          recurring: "重复出现的问题：",
+          crossDomain: "跨领域呼应：",
+          unresolved: "未决议题：",
+          suggestedFocus: "建议聚焦：",
+          note: "说明：本周样本有限，因此周报保持轻量。",
+        }
+      : {
+          timeRange: "Time range",
+          sampledThreads: "Sampled threads",
+          highlight: "Highlight",
+          recurring: "Recurring questions:",
+          crossDomain: "Cross-domain echoes:",
+          unresolved: "Unresolved threads:",
+          suggestedFocus: "Suggested focus:",
+          note: "Note: this week has limited samples, so the digest stays lightweight.",
+        };
+
   const lines = [
-    `Time range: ${report.time_range.start} ~ ${report.time_range.end}`,
-    `Sampled threads: ${report.time_range.total_conversations}`,
-    ...report.highlights.map((item, index) => `Highlight ${index + 1}: ${item}`),
+    `${labels.timeRange}: ${report.time_range.start} ~ ${report.time_range.end}`,
+    `${labels.sampledThreads}: ${report.time_range.total_conversations}`,
+    ...report.highlights.map((item, index) => `${labels.highlight} ${index + 1}: ${item}`),
   ];
 
   if (report.recurring_questions.length) {
     lines.push(
-      "Recurring questions:",
+      labels.recurring,
       ...report.recurring_questions.map((item, index) => `${index + 1}. ${item}`)
     );
   }
 
   if (report.cross_domain_echoes.length) {
-    lines.push("Cross-domain echoes:");
+    lines.push(labels.crossDomain);
     report.cross_domain_echoes.forEach((echo, index) => {
       lines.push(
         `${index + 1}. ${echo.domain_a} <-> ${echo.domain_b}: ${echo.shared_logic}`
@@ -380,22 +449,20 @@ function renderWeeklyTextLite(report: WeeklyLiteReportV1): string {
 
   if (report.unresolved_threads.length) {
     lines.push(
-      "Unresolved threads:",
+      labels.unresolved,
       ...report.unresolved_threads.map((item, index) => `${index + 1}. ${item}`)
     );
   }
 
   if (report.suggested_focus.length) {
     lines.push(
-      "Suggested focus:",
+      labels.suggestedFocus,
       ...report.suggested_focus.map((item, index) => `${index + 1}. ${item}`)
     );
   }
 
   if (report.insufficient_data) {
-    lines.push(
-      "Note: this week has limited samples, so the digest stays lightweight."
-    );
+    lines.push(labels.note);
   }
 
   return sanitizeSummaryText(lines.join("\n"));
@@ -403,20 +470,26 @@ function renderWeeklyTextLite(report: WeeklyLiteReportV1): string {
 
 function renderWeeklyText(
   report: WeeklyStructured,
-  schemaVersion: WeeklySchemaVersion
+  schemaVersion: WeeklySchemaVersion,
+  locale: SupportedLocale
 ): string {
   if (schemaVersion === "weekly_lite.v1") {
-    return renderWeeklyTextLite(report as WeeklyLiteReportV1);
+    return renderWeeklyTextLite(report as WeeklyLiteReportV1, locale);
   }
-  return renderWeeklyTextV1(report as WeeklyReportV1);
+  return renderWeeklyTextV1(report as WeeklyReportV1, locale);
 }
 
-function formatRangeLabel(rangeStart: number, rangeEnd: number): string {
-  const start = new Date(rangeStart).toLocaleDateString("zh-CN", {
+function formatRangeLabel(
+  rangeStart: number,
+  rangeEnd: number,
+  locale: SupportedLocale
+): string {
+  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
+  const start = new Date(rangeStart).toLocaleDateString(dateLocale, {
     month: "2-digit",
     day: "2-digit",
   });
-  const end = new Date(rangeEnd).toLocaleDateString("zh-CN", {
+  const end = new Date(rangeEnd).toLocaleDateString(dateLocale, {
     month: "2-digit",
     day: "2-digit",
   });
@@ -890,13 +963,15 @@ function shouldSkipSummaryCompaction(
 
 function buildSummaryPromptFromCompaction(
   conversation: Conversation,
-  compactedContext: string
+  compactedContext: string,
+  locale: SupportedLocale
 ): string {
   return `Generate conversation_summary.v2 JSON from the compacted skeleton below.
 
 Conversation title: ${conversation.title}
 Platform: ${conversation.platform}
 Message count: ${conversation.message_count}
+Locale: ${locale}
 
 Compacted skeleton:
 ${compactedContext}
@@ -913,14 +988,18 @@ Constraints:
 9) meta_observations should use natural user-facing phrases, not technical labels.
 10) depth_level must be one of: "superficial", "moderate", "deep" (lowercase only).
 11) unresolved_threads and actionable_next_steps must be complete phrases, not fragments.
-12) When evidence is sufficient, target 2-4 items for unresolved_threads and actionable_next_steps; when sparse, 1 item or [] is acceptable.`;
+12) When evidence is sufficient, target 2-4 items for unresolved_threads and actionable_next_steps; when sparse, 1 item or [] is acceptable.
+13) Write all user-facing text values in ${
+    locale === "zh" ? "natural Chinese" : "natural English"
+  }. Keep JSON keys and enum values (speaker, depth_level) in English.`;
 }
 
 async function runCompaction(
   settings: LlmConfig,
   conversation: Conversation,
   messages: PromptReadyMessage[],
-  transcriptOverride: string
+  transcriptOverride: string,
+  locale: SupportedLocale
 ): Promise<CompactionExecution> {
   const prompt = getPrompt("compaction", { variant: "current" });
   const charsIn = countInputChars(messages);
@@ -930,7 +1009,7 @@ async function runCompaction(
     conversationOriginAt: getConversationOriginAt(conversation),
     messages,
     transcriptOverride,
-    locale: "zh" as const,
+    locale,
   };
 
   const startedAt = Date.now();
@@ -1273,11 +1352,18 @@ async function buildWeeklyLiteInput(
   };
 }
 
-function buildWeeklySparseHighlight(substantiveCount: number): string {
+function buildWeeklySparseHighlight(
+  substantiveCount: number,
+  locale: SupportedLocale
+): string {
   if (substantiveCount <= 0) {
-    return "No valid structured conversations are available for weekly aggregation.";
+    return locale === "zh"
+      ? "本周没有可用于周报聚合的有效结构化对话。"
+      : "No valid structured conversations are available for weekly aggregation.";
   }
-  return `Only ${substantiveCount} valid structured conversations are available this week, so cross-topic aggregation is skipped.`;
+  return locale === "zh"
+    ? `本周仅有 ${substantiveCount} 条有效结构化对话，因此跳过跨主题聚合。`
+    : `Only ${substantiveCount} valid structured conversations are available this week, so cross-topic aggregation is skipped.`;
 }
 
 function dedupeNarrativeItems(values: string[]): string[] {
@@ -1336,7 +1422,29 @@ function synthesizeDegradedSummaryV2FromRaw(params: {
   conversation: Conversation;
   messages: PromptReadyMessage[];
   rawCandidates: string[];
+  locale: SupportedLocale;
 }): ConversationSummaryV2 | null {
+  const locale = params.locale;
+  const synthLabels =
+    locale === "zh"
+      ? {
+          insight: (index: number) => `洞察 ${index}`,
+          coreQuestionFallback: "你想回答的核心问题是什么？",
+          stillUnresolved: (item: string) => `仍未解决：${item}`,
+          validateAndClose: (item: string) => `验证并收尾：${item}`,
+          thinkingStyle: "你在逐步收紧假设，并一步步验证设想。",
+          emotionalTone: "在探究约束时，语气保持分析性与审慎。",
+        }
+      : {
+          insight: (index: number) => `Insight ${index}`,
+          coreQuestionFallback: "What is the core question you are trying to answer?",
+          stillUnresolved: (item: string) => `Still unresolved: ${item}`,
+          validateAndClose: (item: string) => `Validate and close: ${item}`,
+          thinkingStyle:
+            "You iteratively narrow hypotheses and test assumptions step by step.",
+          emotionalTone:
+            "The tone stays analytical and cautious while probing constraints.",
+        };
   const rawLines = dedupeNarrativeItems(
     params.rawCandidates.flatMap((raw) => splitSynthesisLines(raw))
   );
@@ -1403,12 +1511,12 @@ function synthesizeDegradedSummaryV2FromRaw(params: {
       const split = line.match(/^(.*?)\s*:\s*(.+)$/);
       if (split) {
         return {
-          term: normalizeSynthesisLine(split[1], 120) || `Insight ${index + 1}`,
+          term: normalizeSynthesisLine(split[1], 120) || synthLabels.insight(index + 1),
           definition: normalizeSynthesisLine(split[2], 320) || line,
         };
       }
       return {
-        term: `Insight ${index + 1}`,
+        term: synthLabels.insight(index + 1),
         definition: normalizeSynthesisLine(line, 320),
       };
     })
@@ -1426,7 +1534,7 @@ function synthesizeDegradedSummaryV2FromRaw(params: {
   const unresolvedThreads =
     unresolved.length > 0
       ? unresolved
-      : [normalizeSynthesisLine(`Still unresolved: ${candidateLines[0]}`, 280)];
+      : [normalizeSynthesisLine(synthLabels.stillUnresolved(candidateLines[0]), 280)];
 
   const nextSteps = dedupeNarrativeItems(
     candidateLines.filter((line) =>
@@ -1442,19 +1550,24 @@ function synthesizeDegradedSummaryV2FromRaw(params: {
       ? nextSteps
       : unresolvedThreads
           .slice(0, SUMMARY_LOCAL_SYNTHESIS_MAX_ITEMS)
-          .map((item) => normalizeSynthesisLine(`Validate and close: ${item}`, 280));
+          .map((item) => normalizeSynthesisLine(synthLabels.validateAndClose(item), 280));
 
   const synthesized: ConversationSummaryV2 = {
-    core_question: coreQuestion || "What is the core question you are trying to answer?",
+    core_question: coreQuestion || synthLabels.coreQuestionFallback,
     thinking_journey: journey.slice(0, SUMMARY_LOCAL_SYNTHESIS_MAX_JOURNEY),
     key_insights:
       keyInsights.length > 0
         ? keyInsights
-        : [{ term: "Insight 1", definition: normalizeSynthesisLine(candidateLines[0], 320) }],
+        : [
+            {
+              term: synthLabels.insight(1),
+              definition: normalizeSynthesisLine(candidateLines[0], 320),
+            },
+          ],
     unresolved_threads: unresolvedThreads,
     meta_observations: {
-      thinking_style: "You iteratively narrow hypotheses and test assumptions step by step.",
-      emotional_tone: "The tone stays analytical and cautious while probing constraints.",
+      thinking_style: synthLabels.thinkingStyle,
+      emotional_tone: synthLabels.emotionalTone,
       depth_level: "moderate",
     },
     actionable_next_steps: actionableNextSteps,
@@ -1471,6 +1584,7 @@ async function generateStructuredSummary(
   settings: LlmConfig,
   conversation: Conversation,
   messages: Message[],
+  locale: SupportedLocale,
   hooks?: SummaryGenerationHooks
 ): Promise<
   StructuredGenerationResult<SummaryStructured, SummarySchemaVersion>
@@ -1501,7 +1615,8 @@ async function generateStructuredSummary(
         settings,
         conversation,
         promptMessages,
-        promptContext.transcript
+        promptContext.transcript,
+        locale
       );
   const summaryPath: SummaryPath = compaction.used ? "compacted" : "direct";
   let summaryLlmCallCount = compaction.llmCallCount;
@@ -1513,11 +1628,11 @@ async function generateStructuredSummary(
     conversationOriginAt: getConversationOriginAt(conversation),
     messages: promptMessages,
     transcriptOverride: promptContext.transcript,
-    locale: "zh" as const,
+    locale,
   };
 
   const summaryPromptInput = compaction.used
-    ? buildSummaryPromptFromCompaction(conversation, compaction.content)
+    ? buildSummaryPromptFromCompaction(conversation, compaction.content, locale)
     : prompt.userTemplate(payload);
   hooks?.onStage?.("curating_summary");
 
@@ -1585,7 +1700,7 @@ async function generateStructuredSummary(
       promptType: "conversationSummary",
       promptVersion: prompt.version,
       structured: firstParsed.data,
-      content: renderSummaryText(firstParsed.data, firstParsed.schemaVersion),
+      content: renderSummaryText(firstParsed.data, firstParsed.schemaVersion, locale),
       format: "structured_v1",
       status: "ok",
       schemaVersion: firstParsed.schemaVersion,
@@ -1726,7 +1841,7 @@ async function generateStructuredSummary(
       promptType: "conversationSummary",
       promptVersion: prompt.version,
       structured: secondParsed.data,
-      content: renderSummaryText(secondParsed.data, secondParsed.schemaVersion),
+      content: renderSummaryText(secondParsed.data, secondParsed.schemaVersion, locale),
       format: "structured_v1",
       status: "ok",
       schemaVersion: secondParsed.schemaVersion,
@@ -1801,7 +1916,7 @@ async function generateStructuredSummary(
       promptType: "conversationSummary",
       promptVersion: prompt.version,
       structured: selectedData,
-      content: renderSummaryText(selectedData, selectedSchemaVersion),
+      content: renderSummaryText(selectedData, selectedSchemaVersion, locale),
       format: "structured_v1",
       status: "ok",
       schemaVersion: selectedSchemaVersion,
@@ -1836,6 +1951,7 @@ async function generateStructuredSummary(
       first.content,
       second?.content || "",
     ],
+    locale,
   });
 
   if (synthesized) {
@@ -1885,7 +2001,7 @@ async function generateStructuredSummary(
       promptType: "conversationSummary",
       promptVersion: prompt.version,
       structured: synthesized,
-      content: renderSummaryText(synthesized, "conversation_summary.v2"),
+      content: renderSummaryText(synthesized, "conversation_summary.v2", locale),
       format: "structured_v1",
       status: "ok",
       schemaVersion: "conversation_summary.v2",
@@ -2007,6 +2123,7 @@ async function generateStructuredWeekly(
   conversations: Conversation[],
   rangeStart: number,
   rangeEnd: number,
+  locale: SupportedLocale,
   hooks?: WeeklyGenerationHooks
 ): Promise<StructuredGenerationResult<WeeklyStructured, WeeklySchemaVersion>> {
   hooks?.onStage?.("aggregating_weekly_digest");
@@ -2032,7 +2149,7 @@ async function generateStructuredWeekly(
       promptType: "weeklyDigest",
       promptVersion: prompt.version,
       structured: emptyReport,
-      content: renderWeeklyText(emptyReport, "weekly_lite.v1"),
+      content: renderWeeklyText(emptyReport, "weekly_lite.v1", locale),
       format: "structured_v1",
       status: "ok",
       schemaVersion: "weekly_lite.v1",
@@ -2067,7 +2184,7 @@ async function generateStructuredWeekly(
     rangeStart,
     rangeEnd,
     maxConversations: substantiveEntries.length,
-    locale: "zh" as const,
+    locale,
   };
 
   logger.info("service", "Weekly input assembled", {
@@ -2088,7 +2205,7 @@ async function generateStructuredWeekly(
       rangeStart,
       rangeEnd,
       weeklyInput.substantiveCount,
-      buildWeeklySparseHighlight(weeklyInput.substantiveCount)
+      buildWeeklySparseHighlight(weeklyInput.substantiveCount, locale)
     );
 
     logPromptUsage({
@@ -2120,7 +2237,7 @@ async function generateStructuredWeekly(
       promptType: "weeklyDigest",
       promptVersion: prompt.version,
       structured: sparseReport,
-      content: renderWeeklyText(sparseReport, "weekly_lite.v1"),
+      content: renderWeeklyText(sparseReport, "weekly_lite.v1", locale),
       format: "structured_v1",
       status: "ok",
       schemaVersion: "weekly_lite.v1",
@@ -2227,7 +2344,7 @@ async function generateStructuredWeekly(
       promptType: "weeklyDigest",
       promptVersion: prompt.version,
       structured: firstStage.report,
-      content: renderWeeklyText(firstStage.report, "weekly_lite.v1"),
+      content: renderWeeklyText(firstStage.report, "weekly_lite.v1", locale),
       format: "structured_v1",
       status: "ok",
       schemaVersion: "weekly_lite.v1",
@@ -2328,7 +2445,7 @@ async function generateStructuredWeekly(
         promptType: "weeklyDigest",
         promptVersion: prompt.version,
         structured: repairedStage.report,
-        content: renderWeeklyText(repairedStage.report, "weekly_lite.v1"),
+        content: renderWeeklyText(repairedStage.report, "weekly_lite.v1", locale),
         format: "structured_v1",
         status: "ok",
         schemaVersion: "weekly_lite.v1",
@@ -2356,7 +2473,7 @@ async function generateStructuredWeekly(
   const degradedHighlight =
     bestReport?.highlights[0] && !bestReport.insufficient_data
       ? bestReport.highlights[0]
-      : buildWeeklySparseHighlight(weeklyInput.substantiveCount);
+      : buildWeeklySparseHighlight(weeklyInput.substantiveCount, locale);
   const degradedReport = buildWeeklyInsufficientReport(
     rangeStart,
     rangeEnd,
@@ -2409,7 +2526,7 @@ async function generateStructuredWeekly(
     promptType: "weeklyDigest",
     promptVersion: prompt.version,
     structured: degradedReport,
-    content: renderWeeklyText(degradedReport, "weekly_lite.v1"),
+    content: renderWeeklyText(degradedReport, "weekly_lite.v1", locale),
     format: "structured_v1",
     status: "fallback",
     schemaVersion: "weekly_lite.v1",
@@ -2446,6 +2563,8 @@ export async function generateConversationSummary(
     throw new Error("CONVERSATION_MESSAGES_EMPTY");
   }
 
+  const { locale } = await getLanguageSettings();
+
   const pipelineEmitter = createPipelineProgressEmitter({
     scope: "summary",
     targetId: String(conversationId),
@@ -2457,7 +2576,7 @@ export async function generateConversationSummary(
 
   try {
     const previous = await getSummary(conversationId);
-    const generated = await generateStructuredSummary(settings, conversation, messages, {
+    const generated = await generateStructuredSummary(settings, conversation, messages, locale, {
       onStage: (stage) => {
         pipelineEmitter.emit(stage, "in_progress");
       },
@@ -2560,12 +2679,14 @@ export async function generateWeeklyReport(
     const conversations = await listConversationsByRange(rangeStart, rangeEnd);
     const sourceHash = buildWeeklySourceHash(conversations, rangeStart, rangeEnd);
     const previous = await getWeeklyReport(rangeStart, rangeEnd);
+    const { locale } = await getLanguageSettings();
 
     const generated = await generateStructuredWeekly(
       settings,
       conversations,
       rangeStart,
       rangeEnd,
+      locale,
       {
         onStage: (stage) => {
           pipelineEmitter.emit(stage, "in_progress");

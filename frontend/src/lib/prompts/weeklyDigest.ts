@@ -3,6 +3,7 @@ import { getConversationOriginAt } from "../conversations/timestamps";
 import type { PromptVersion, WeeklyDigestPromptPayload } from "./types";
 
 const WEEKLY_LITE_SYSTEM = `你是 Vesti 的 Agent C（Weekly Digest 策展器）。
+(You are Vesti's Agent C, the Weekly Digest curator.)
 
 任务：仅基于输入的 conversation_summary.v2 数组，生成 weekly_lite.v1 JSON。
 
@@ -16,6 +17,8 @@ const WEEKLY_LITE_SYSTEM = `你是 Vesti 的 Agent C（Weekly Digest 策展器�
 4) 列表项必须是完整可读短句，禁止词桩、单字和碎片。
 5) cross_domain_echoes 字段必须保留；无证据时返回 []。
 6) 不得新增或删除 weekly_lite.v1 字段。
+7) 所有面向用户的文本值，按用户提示中的 locale 书写：locale 为 en 时用自然英文，为 zh 时用自然中文；JSON 字段名保持英文。
+   (Write every user-facing text value in the language named by the locale field in the user prompt: natural English when locale is en, natural Chinese when locale is zh. Keep all JSON field names in English.)
 
 输出 schema（weekly_lite.v1）：
 {
@@ -48,8 +51,8 @@ function formatDate(value: number): string {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-function formatDateTime(value: number): string {
-  return new Date(value).toLocaleString("zh-CN", {
+function formatDateTime(value: number, locale: "zh" | "en"): string {
+  return new Date(value).toLocaleString(locale === "en" ? "en-US" : "zh-CN", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -61,9 +64,26 @@ function sanitizeLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function toWeeklyConversationsText(conversations: Conversation[]): string {
+function toWeeklyConversationsText(
+  conversations: Conversation[],
+  locale: "zh" | "en"
+): string {
   if (!conversations.length) {
-    return "[本周无会话]";
+    return locale === "en" ? "[No conversations this week]" : "[本周无会话]";
+  }
+
+  if (locale === "en") {
+    return conversations
+      .map((conversation) => {
+        return `[Conversation #${conversation.id}] Title: ${sanitizeLine(
+          conversation.title || "(untitled)"
+        )}
+Platform: ${conversation.platform}
+StartedAt: ${formatDateTime(getConversationOriginAt(conversation), locale)}
+MessageCount: ${conversation.message_count}
+Snippet: ${sanitizeLine(conversation.snippet || "(none)")}`;
+      })
+      .join("\n---\n");
   }
 
   return conversations
@@ -72,7 +92,7 @@ function toWeeklyConversationsText(conversations: Conversation[]): string {
         conversation.title || "(untitled)"
       )}
 平台: ${conversation.platform}
-起点时间: ${formatDateTime(getConversationOriginAt(conversation))}
+起点时间: ${formatDateTime(getConversationOriginAt(conversation), locale)}
 消息数: ${conversation.message_count}
 摘要: ${sanitizeLine(conversation.snippet || "(none)")}`;
     })
@@ -80,14 +100,18 @@ function toWeeklyConversationsText(conversations: Conversation[]): string {
 }
 
 function toSummaryReferenceText(
-  selectedSummaries: WeeklyDigestPromptPayload["selectedSummaries"]
+  selectedSummaries: WeeklyDigestPromptPayload["selectedSummaries"],
+  locale: "zh" | "en"
 ): string {
   if (!selectedSummaries?.length) {
-    return "（无可用文本摘要参考）";
+    return locale === "en"
+      ? "(No text summary reference available)"
+      : "（无可用文本摘要参考）";
   }
 
+  const label = locale === "en" ? "Conversation" : "会话";
   return selectedSummaries
-    .map((item) => `- 会话 #${item.conversationId}: ${sanitizeLine(item.summary)}`)
+    .map((item) => `- ${label} #${item.conversationId}: ${sanitizeLine(item.summary)}`)
     .join("\n");
 }
 
@@ -113,10 +137,35 @@ function toSummaryEntriesText(
 function buildWeeklyLitePrompt(payload: WeeklyDigestPromptPayload): string {
   const rangeStartText = formatDate(payload.rangeStart);
   const rangeEndText = formatDate(payload.rangeEnd);
-  const locale = payload.locale || "zh";
+  const locale = payload.locale || "en";
   const structuredEntriesText = toSummaryEntriesText(payload.summaryEntries);
-  const summaryRefText = toSummaryReferenceText(payload.selectedSummaries);
+  const summaryRefText = toSummaryReferenceText(payload.selectedSummaries, locale);
   const totalConversations = payload.summaryEntries?.length ?? 0;
+
+  if (locale === "en") {
+    return `Generate weekly_lite.v1 JSON from the input conversation_summary.v2 entries.
+
+Metadata:
+- range_start: ${rangeStartText}
+- range_end: ${rangeEndText}
+- total_conversations: ${totalConversations}
+- locale: ${locale}
+
+Structured input (primary evidence source):
+${structuredEntriesText}
+
+Text reference (supporting only, must not override structured evidence):
+${summaryRefText}
+
+Output requirements:
+1) Output the JSON object only.
+2) Every non-trivial claim must be backed by evidence.
+3) Keep in recurring_questions only questions that substantively repeat across >=2 conversations.
+4) unresolved_threads and suggested_focus must be complete, actionable phrases, no fragment word-stubs.
+5) Return [] for cross_domain_echoes when there is no real structural isomorphism.
+6) If total_conversations < 3, strictly short-circuit to insufficient_data=true (only 1 highlight, all other arrays empty).
+7) Write all user-facing text values in natural English. Keep JSON field names in English.`;
+  }
 
   return `请基于输入的 conversation_summary.v2 生成 weekly_lite.v1 JSON。
 
@@ -138,12 +187,24 @@ ${summaryRefText}
 3) recurring_questions 仅保留在 >=2 个会话中实质重复的问题。
 4) unresolved_threads 与 suggested_focus 必须是完整可执行短句，禁止碎片词桩。
 5) cross_domain_echoes 若无真实结构同构，返回 []。
-6) 若 total_conversations < 3，严格 short-circuit 到 insufficient_data=true（仅 1 条 highlights，其余数组均为空）。`;
+6) 若 total_conversations < 3，严格 short-circuit 到 insufficient_data=true（仅 1 条 highlights，其余数组均为空）。
+7) 所有面向用户的文本值用自然中文书写；JSON 字段名保持英文。`;
 }
 
 function buildWeeklyLiteFallbackPrompt(payload: WeeklyDigestPromptPayload): string {
-  const conversationsText = toWeeklyConversationsText(payload.conversations);
-  const locale = payload.locale || "zh";
+  const locale = payload.locale || "en";
+  const conversationsText = toWeeklyConversationsText(payload.conversations, locale);
+
+  if (locale === "en") {
+    return `Generate a plain-text Weekly Lite recap for this week (no JSON, no markdown). Language: ${locale}
+
+${conversationsText}
+
+Requirements:
+1) 5-8 short lines.
+2) Recap this week only, no long-term narrative.
+3) Include a clear focus direction for next week.`;
+  }
 
   return `请生成本周 Weekly Lite 纯文本复盘（不要输出 JSON，不要 markdown）。语言: ${locale}
 
@@ -163,7 +224,7 @@ function toLegacyWeeklyTranscript(conversations: Conversation[]): string {
   return conversations
     .map(
       (conversation, index) =>
-        `${index + 1}. [${formatDateTime(getConversationOriginAt(conversation))}] [${
+        `${index + 1}. [${formatDateTime(getConversationOriginAt(conversation), "en")}] [${
           conversation.platform
         }] ${conversation.title}\nSnippet: ${conversation.snippet}`
     )
@@ -198,7 +259,8 @@ export const CURRENT_WEEKLY_DIGEST_PROMPT: PromptVersion<WeeklyDigestPromptPaylo
   description:
     "Weekly digest baseline v2: readable Chinese prompt, strict weekly_lite.v1 contract, evidence-bounded aggregation.",
   system: WEEKLY_LITE_SYSTEM,
-  fallbackSystem: "你是一位清晰克制的周复盘助手，仅输出纯文本。",
+  fallbackSystem:
+    "You are a clear, restrained weekly-review assistant. Output plain text only. Write in the language requested by the user prompt (English or Chinese).",
   userTemplate: buildWeeklyLitePrompt,
   fallbackTemplate: buildWeeklyLiteFallbackPrompt,
 };

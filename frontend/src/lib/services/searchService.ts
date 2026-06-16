@@ -41,6 +41,8 @@ import type {
   InferenceCallResult,
 } from "./llmService";
 import { callInference } from "./llmService";
+import { getLanguageSettings } from "./languageSettingsService";
+import type { SupportedLocale } from "../i18n/locales";
 import { getEffectiveModelId, getLlmAccessMode } from "./llmConfig";
 import { getLlmSettings } from "./llmSettingsService";
 import { logger } from "../utils/logger";
@@ -506,11 +508,18 @@ function normalizeAgentPlan(
   return applyPlannerGuardrails(query, plan);
 }
 
+function localeOutputDirective(locale: SupportedLocale): string {
+  return locale === "zh"
+    ? "请用简体中文撰写面向用户的回答，除非用户明确要求其他语言。"
+    : "Write the user-facing answer in English, unless the user explicitly requests another language.";
+}
+
 function buildPlannerPrompt(params: {
   query: string;
   historyContext: string;
   requestedLimit: number;
   searchScope?: ExploreSearchScope;
+  locale: SupportedLocale;
 }): string {
   const today = formatLocalIsoDate(new Date());
   const history = params.historyContext ? truncateInline(params.historyContext, 700) : "(none)";
@@ -538,6 +547,9 @@ function buildPlannerPrompt(params: {
     "- Never choose weekly_summary for a topic-only query with no explicit time phrase. For example, '数学建模比赛' must stay on the rag path.",
     "- Use clarification_needed only when the request is too ambiguous to answer responsibly.",
     "- Use rag for factual lookup and cross-conversation synthesis that are not primarily time-window based.",
+    `- Write "clarifyingQuestion", "answerGoal", and any other user-facing natural-language text in ${
+      params.locale === "zh" ? "Simplified Chinese" : "English"
+    } (JSON field names stay in English).`,
     "",
     "Return JSON only with this schema:",
     "{",
@@ -564,8 +576,9 @@ async function planAgentIntent(params: {
   requestedLimit: number;
   searchScope?: ExploreSearchScope;
   settings: LlmConfig | null;
+  locale: SupportedLocale;
 }): Promise<ExploreAgentPlan> {
-  const { query, historyContext, requestedLimit, searchScope, settings } = params;
+  const { query, historyContext, requestedLimit, searchScope, settings, locale } = params;
 
   if (!hasUsableLlmSettings(settings)) {
     return buildFallbackPlan(query, requestedLimit, "LLM_PLANNER_UNAVAILABLE");
@@ -577,6 +590,7 @@ async function planAgentIntent(params: {
       historyContext,
       requestedLimit,
       searchScope,
+      locale,
     });
     const result = await callInference(settings, plannerPrompt, {
       responseFormat: "json_object",
@@ -679,6 +693,7 @@ function buildHistoryContext(messages: Array<{ role: string; content: string }>)
 function buildContextualRagPrompt(
   retrievedContext: string,
   historyContext: string,
+  locale: SupportedLocale,
   summaryHints?: string
 ): string {
   const basePrompt =
@@ -698,7 +713,8 @@ Instructions:
 3. If information is insufficient, say so clearly.
 4. Cite specific conversations when possible.
 5. Prefer a complete answer over an ultra-short answer.
-6. Use short sections or bullets when they improve clarity.`;
+6. Use short sections or bullets when they improve clarity.
+7. ${localeOutputDirective(locale)}`;
 }
 
 function normalizeFinishReason(value: string | null | undefined): string {
@@ -858,26 +874,43 @@ function extractExcerpt(messages: SearchableMessage[]): string {
   return truncateInline(text, 260);
 }
 
-function buildLocalFallbackAnswer(query: string, sources: RelatedConversation[]): string {
+function buildLocalFallbackAnswer(
+  query: string,
+  sources: RelatedConversation[],
+  locale: SupportedLocale
+): string {
+  const zh = locale === "zh";
   if (sources.length === 0) {
-    return [
-      `I could not find highly similar conversations for: "${truncateInline(query, 120)}".`,
-      "Try rephrasing the query or selecting a broader topic.",
-      "Tip: configure an LLM in Settings for richer synthesis.",
-    ].join("\n");
+    return zh
+      ? [
+          `未找到与"${truncateInline(query, 120)}"高度相似的对话。`,
+          "可以换个说法，或选择更宽泛的主题。",
+          "提示：在设置中配置 LLM 可获得更丰富的综合回答。",
+        ].join("\n")
+      : [
+          `I could not find highly similar conversations for: "${truncateInline(query, 120)}".`,
+          "Try rephrasing the query or selecting a broader topic.",
+          "Tip: configure an LLM in Settings for richer synthesis.",
+        ].join("\n");
   }
 
   const lines = sources
     .slice(0, 5)
     .map(
       (source, index) =>
-        `${index + 1}. ${source.title} [${source.platform}] (${source.similarity}% match)`
+        `${index + 1}. ${source.title} [${source.platform}] (${source.similarity}%${
+          zh ? " 匹配" : " match"
+        })`
     );
 
   return [
-    "Model synthesis is unavailable, but these local conversations are most relevant:",
+    zh
+      ? "模型综合暂不可用，但以下本地对话最相关："
+      : "Model synthesis is unavailable, but these local conversations are most relevant:",
     ...lines,
-    "Open a source to inspect details, then ask a narrower follow-up.",
+    zh
+      ? "打开来源查看详情，然后提出更聚焦的追问。"
+      : "Open a source to inspect details, then ask a narrower follow-up.",
   ].join("\n");
 }
 
@@ -1093,6 +1126,7 @@ async function buildCustomWeeklySummary(params: {
   query: string;
   timeScope: ExploreResolvedTimeScope;
   conversations: Conversation[];
+  locale: SupportedLocale;
 }): Promise<string> {
   const evidence = await buildWeeklyEvidenceText(params.conversations);
   const systemPrompt = [
@@ -1100,6 +1134,7 @@ async function buildCustomWeeklySummary(params: {
     "Summarize what the user worked on, discussed, decided, or explored during the requested time window.",
     "If evidence is thin, state that clearly and point to the listed conversations for manual inspection.",
     "Keep the answer concise but concrete.",
+    localeOutputDirective(params.locale),
   ].join(" ");
 
   const userPrompt = [
@@ -1120,33 +1155,51 @@ function buildWeeklyLocalFallbackAnswer(params: {
   sources: RelatedConversation[];
   summaryText?: string;
   scoped: boolean;
+  locale: SupportedLocale;
 }): string {
+  const zh = params.locale === "zh";
   const lines: string[] = [];
   if (params.summaryText?.trim()) {
     lines.push(params.summaryText.trim(), "");
   } else {
     lines.push(
-      `I could not synthesize a full answer for "${truncateInline(params.query, 120)}" without model assistance.`,
-      `The relevant window is ${params.timeScope.label} (${params.timeScope.startDate} to ${params.timeScope.endDate}).`,
+      zh
+        ? `在没有模型协助的情况下，无法为"${truncateInline(params.query, 120)}"综合出完整答案。`
+        : `I could not synthesize a full answer for "${truncateInline(params.query, 120)}" without model assistance.`,
+      zh
+        ? `相关时间窗为 ${params.timeScope.label}（${params.timeScope.startDate} 至 ${params.timeScope.endDate}）。`
+        : `The relevant window is ${params.timeScope.label} (${params.timeScope.startDate} to ${params.timeScope.endDate}).`,
       ""
     );
   }
 
   if (params.sources.length === 0) {
     lines.push(
-      params.scoped
-        ? "No conversations were found in that time window within the selected scope."
-        : "No conversations were found in that time window.",
-      "Try broadening the scope or asking for a different period."
+      zh
+        ? params.scoped
+          ? "在所选范围的该时间窗内未找到任何对话。"
+          : "在该时间窗内未找到任何对话。"
+        : params.scoped
+          ? "No conversations were found in that time window within the selected scope."
+          : "No conversations were found in that time window.",
+      zh
+        ? "可以扩大范围，或换一个时间段再问。"
+        : "Try broadening the scope or asking for a different period."
     );
     return lines.join("\n");
   }
 
-  lines.push("You can inspect these conversations to verify the answer:");
+  lines.push(
+    zh ? "你可以查看以下对话来核实答案：" : "You can inspect these conversations to verify the answer:"
+  );
   params.sources.forEach((source, index) => {
     lines.push(`${index + 1}. ${source.title} [${source.platform}]`);
   });
-  lines.push("Open the source chips or switch to Library to inspect them directly.");
+  lines.push(
+    zh
+      ? "点击来源标签，或切换到资料库直接查看。"
+      : "Open the source chips or switch to Library to inspect them directly."
+  );
 
   return lines.join("\n");
 }
@@ -1156,6 +1209,7 @@ async function resolveWeeklySummary(params: {
   timeScope: ExploreResolvedTimeScope;
   searchScope?: ExploreSearchScope;
   settings: LlmConfig | null;
+  locale: SupportedLocale;
 }): Promise<WeeklySummaryToolResult> {
   const allConversations = await listConversationsByRange(
     params.timeScope.rangeStart,
@@ -1220,6 +1274,7 @@ async function resolveWeeklySummary(params: {
     query: params.query,
     timeScope: params.timeScope,
     conversations,
+    locale: params.locale,
   });
 
   return {
@@ -1397,6 +1452,7 @@ async function runClassicKnowledgeBase(
   query: string,
   historyContext: string,
   limit: number,
+  locale: SupportedLocale,
   searchScope?: ExploreSearchScope,
   existingRetrieval?: RagRetrievalResult
 ): Promise<RagResponse> {
@@ -1416,22 +1472,22 @@ async function runClassicKnowledgeBase(
 
   if (!hasUsableLlmSettings(settings)) {
     return {
-      answer: buildLocalFallbackAnswer(query, retrieval.sources),
+      answer: buildLocalFallbackAnswer(query, retrieval.sources, locale),
       sources: retrieval.sources,
     };
   }
 
   try {
-    const systemPrompt = buildContextualRagPrompt(retrieval.context, historyContext);
+    const systemPrompt = buildContextualRagPrompt(retrieval.context, historyContext, locale);
     const result = await callExploreInference(settings, query, { systemPrompt });
     const answer = result.content.trim();
     return {
-      answer: answer || buildLocalFallbackAnswer(query, retrieval.sources),
+      answer: answer || buildLocalFallbackAnswer(query, retrieval.sources, locale),
       sources: retrieval.sources,
     };
   } catch {
     return {
-      answer: buildLocalFallbackAnswer(query, retrieval.sources),
+      answer: buildLocalFallbackAnswer(query, retrieval.sources, locale),
       sources: retrieval.sources,
     };
   }
@@ -1443,15 +1499,17 @@ async function synthesizeAgentAnswer(params: {
   retrieval: RagRetrievalResult;
   summaryHints: string;
   settings: Awaited<ReturnType<typeof getLlmSettings>>;
+  locale: SupportedLocale;
 }): Promise<string> {
-  const { query, historyContext, retrieval, summaryHints, settings } = params;
+  const { query, historyContext, retrieval, summaryHints, settings, locale } = params;
   if (!hasUsableLlmSettings(settings)) {
-    return buildLocalFallbackAnswer(query, retrieval.sources);
+    return buildLocalFallbackAnswer(query, retrieval.sources, locale);
   }
 
   const systemPrompt = buildContextualRagPrompt(
     retrieval.context,
     historyContext,
+    locale,
     summaryHints
   );
 
@@ -1459,11 +1517,11 @@ async function synthesizeAgentAnswer(params: {
     const result = await callExploreInference(settings, query, { systemPrompt });
     const answer = result.content.trim();
     if (!answer) {
-      return buildLocalFallbackAnswer(query, retrieval.sources);
+      return buildLocalFallbackAnswer(query, retrieval.sources, locale);
     }
     return answer;
   } catch {
-    return buildLocalFallbackAnswer(query, retrieval.sources);
+    return buildLocalFallbackAnswer(query, retrieval.sources, locale);
   }
 }
 
@@ -1475,8 +1533,9 @@ async function synthesizeWeeklyAnswer(params: {
   sources: RelatedConversation[];
   settings: Awaited<ReturnType<typeof getLlmSettings>>;
   scoped: boolean;
+  locale: SupportedLocale;
 }): Promise<string> {
-  const { query, historyContext, timeScope, weeklySummaryText, sources, settings, scoped } =
+  const { query, historyContext, timeScope, weeklySummaryText, sources, settings, scoped, locale } =
     params;
 
   if (!hasUsableLlmSettings(settings)) {
@@ -1486,6 +1545,7 @@ async function synthesizeWeeklyAnswer(params: {
       sources,
       summaryText: weeklySummaryText,
       scoped,
+      locale,
     });
   }
 
@@ -1510,6 +1570,7 @@ async function synthesizeWeeklyAnswer(params: {
     "3. Tell the user which source conversations to open when deeper verification is needed.",
     "4. Keep the answer grounded in the selected time window.",
     "5. Prefer a complete answer over an ultra-short one.",
+    `6. ${localeOutputDirective(locale)}`,
   ].join("\n");
 
   try {
@@ -1522,6 +1583,7 @@ async function synthesizeWeeklyAnswer(params: {
         sources,
         summaryText: weeklySummaryText,
         scoped,
+        locale,
       });
     }
     return answer;
@@ -1532,6 +1594,7 @@ async function synthesizeWeeklyAnswer(params: {
       sources,
       summaryText: weeklySummaryText,
       scoped,
+      locale,
     });
   }
 }
@@ -1540,6 +1603,7 @@ async function runAgentKnowledgeBase(
   query: string,
   historyContext: string,
   limit: number,
+  locale: SupportedLocale,
   options?: ExploreAskOptions
 ): Promise<RagResponse> {
   const toolCalls: ExploreToolCall[] = [];
@@ -1565,6 +1629,7 @@ async function runAgentKnowledgeBase(
           requestedLimit: limit,
           searchScope,
           settings,
+          locale,
         }),
       (value) =>
         `intent=${value.intent}, route=${value.preferredPath}, sourceLimit=${value.sourceLimit}, reason=${truncateInline(value.reason, 100)}`
@@ -1594,7 +1659,9 @@ async function runAgentKnowledgeBase(
       return {
         answer:
           plan.clarifyingQuestion ||
-          "I need one more constraint before I can answer this reliably.",
+          (locale === "zh"
+            ? "在可靠作答前，我还需要你再补充一个限定条件。"
+            : "I need one more constraint before I can answer this reliably."),
         sources: [],
         agent: agentMeta,
       };
@@ -1631,6 +1698,7 @@ async function runAgentKnowledgeBase(
             timeScope: resolvedTimeScope,
             searchScope,
             settings,
+            locale,
           }),
         (value) =>
           `sourceOrigin=${value.sourceOrigin}, conversations=${value.conversations.length}, sources=${value.sources.length}`
@@ -1677,6 +1745,7 @@ async function runAgentKnowledgeBase(
             sources: weeklyResult!.sources,
             settings,
             scoped: Boolean(getScopedConversationIds(searchScope)),
+            locale,
           }),
         (value) => `answerChars=${value.length}`
       );
@@ -1753,6 +1822,7 @@ async function runAgentKnowledgeBase(
           retrieval: retrieval!,
           summaryHints,
           settings,
+          locale,
         }),
       (value) => `answerChars=${value.length}`
     );
@@ -1815,6 +1885,7 @@ async function runAgentKnowledgeBase(
           sources: weeklyResult?.sources ?? [],
           summaryText: weeklyResult?.summaryText,
           scoped: Boolean(getScopedConversationIds(searchScope)),
+          locale,
         }),
         sources: weeklyResult?.sources ?? [],
         agent: agentMeta,
@@ -1825,6 +1896,7 @@ async function runAgentKnowledgeBase(
       query,
       historyContext,
       limit,
+      locale,
       searchScope,
       retrieval
     );
@@ -2116,10 +2188,12 @@ export async function askKnowledgeBase(
   const recentMessages = await getExploreMessages(sessionId);
   const historyContext = buildHistoryContext(recentMessages.slice(-6));
 
+  const { locale } = await getLanguageSettings();
+
   const result =
     mode === "classic"
-      ? await runClassicKnowledgeBase(query, historyContext, limit, options?.searchScope)
-      : await runAgentKnowledgeBase(query, historyContext, limit, options);
+      ? await runClassicKnowledgeBase(query, historyContext, limit, locale, options?.searchScope)
+      : await runAgentKnowledgeBase(query, historyContext, limit, locale, options);
 
   await addExploreMessage(sessionId, {
     role: "assistant",

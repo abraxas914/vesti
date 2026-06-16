@@ -75,6 +75,7 @@ export const enTranslations = {
       auto: "Auto (follow browser)",
       en: "English",
       zh: "中文",
+      ja: "日本語",
     },
     modelAccess: {
       title: "Model Access",

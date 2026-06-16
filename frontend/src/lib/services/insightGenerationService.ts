@@ -292,7 +292,10 @@ function renderSummaryTextV1(
 ): string {
   const lines = [summary.topic_title, ...summary.key_takeaways];
   if (summary.action_items?.length) {
-    lines.push(locale === "zh" ? "行动项：" : "Action Items:", ...summary.action_items);
+    lines.push(
+      locale === "ja" ? "アクション項目：" : locale === "zh" ? "行动项：" : "Action Items:",
+      ...summary.action_items
+    );
   }
   return sanitizeSummaryText(lines.join("\n"));
 }
@@ -302,35 +305,50 @@ function renderSummaryTextV2(
   locale: SupportedLocale
 ): string {
   const labels =
-    locale === "zh"
+    locale === "ja"
       ? {
-          deep: "深度探讨",
-          moderate: "逐步分析",
-          light: "轻量浏览",
-          coreQuestion: "核心问题",
-          thinkingJourney: "思考历程：",
-          realWorldAnchor: "现实锚点",
-          keyInsights: "关键洞察：",
-          unresolved: "未决议题：",
-          nextSteps: "下一步：",
-          thinkingStyle: "思考风格",
-          emotionalTone: "情绪基调",
-          depthLevel: "深度级别",
+          deep: "深い掘り下げ",
+          moderate: "段階的な分析",
+          light: "軽い確認",
+          coreQuestion: "核心的な問い",
+          thinkingJourney: "思考の流れ：",
+          realWorldAnchor: "現実の手がかり",
+          keyInsights: "重要なインサイト：",
+          unresolved: "未解決の論点：",
+          nextSteps: "次のステップ：",
+          thinkingStyle: "思考スタイル",
+          emotionalTone: "感情のトーン",
+          depthLevel: "深さのレベル",
         }
-      : {
-          deep: "Deep dive",
-          moderate: "Stepwise analysis",
-          light: "Light scan",
-          coreQuestion: "Core question",
-          thinkingJourney: "Thinking journey:",
-          realWorldAnchor: "Real-world anchor",
-          keyInsights: "Key insights:",
-          unresolved: "Unresolved threads:",
-          nextSteps: "Next steps:",
-          thinkingStyle: "Thinking style",
-          emotionalTone: "Emotional tone",
-          depthLevel: "Depth level",
-        };
+      : locale === "zh"
+        ? {
+            deep: "深度探讨",
+            moderate: "逐步分析",
+            light: "轻量浏览",
+            coreQuestion: "核心问题",
+            thinkingJourney: "思考历程：",
+            realWorldAnchor: "现实锚点",
+            keyInsights: "关键洞察：",
+            unresolved: "未决议题：",
+            nextSteps: "下一步：",
+            thinkingStyle: "思考风格",
+            emotionalTone: "情绪基调",
+            depthLevel: "深度级别",
+          }
+        : {
+            deep: "Deep dive",
+            moderate: "Stepwise analysis",
+            light: "Light scan",
+            coreQuestion: "Core question",
+            thinkingJourney: "Thinking journey:",
+            realWorldAnchor: "Real-world anchor",
+            keyInsights: "Key insights:",
+            unresolved: "Unresolved threads:",
+            nextSteps: "Next steps:",
+            thinkingStyle: "Thinking style",
+            emotionalTone: "Emotional tone",
+            depthLevel: "Depth level",
+          };
 
   const depthLabel =
     summary.meta_observations.depth_level === "deep"
@@ -393,7 +411,10 @@ function renderWeeklyTextV1(
 ): string {
   const lines = [report.period_title, ...report.main_themes, ...report.key_takeaways];
   if (report.action_items?.length) {
-    lines.push(locale === "zh" ? "行动项：" : "Action Items:", ...report.action_items);
+    lines.push(
+      locale === "ja" ? "アクション項目：" : locale === "zh" ? "行动项：" : "Action Items:",
+      ...report.action_items
+    );
   }
   return sanitizeSummaryText(lines.join("\n"));
 }
@@ -403,27 +424,38 @@ function renderWeeklyTextLite(
   locale: SupportedLocale
 ): string {
   const labels =
-    locale === "zh"
+    locale === "ja"
       ? {
-          timeRange: "时间范围",
-          sampledThreads: "采样对话数",
-          highlight: "亮点",
-          recurring: "重复出现的问题：",
-          crossDomain: "跨领域呼应：",
-          unresolved: "未决议题：",
-          suggestedFocus: "建议聚焦：",
-          note: "说明：本周样本有限，因此周报保持轻量。",
+          timeRange: "対象期間",
+          sampledThreads: "サンプル対話数",
+          highlight: "ハイライト",
+          recurring: "繰り返し現れた問い：",
+          crossDomain: "領域をまたぐ共通点：",
+          unresolved: "未解決の論点：",
+          suggestedFocus: "おすすめの注力ポイント：",
+          note: "補足：今週はサンプルが限られているため、ダイジェストは軽めにまとめています。",
         }
-      : {
-          timeRange: "Time range",
-          sampledThreads: "Sampled threads",
-          highlight: "Highlight",
-          recurring: "Recurring questions:",
-          crossDomain: "Cross-domain echoes:",
-          unresolved: "Unresolved threads:",
-          suggestedFocus: "Suggested focus:",
-          note: "Note: this week has limited samples, so the digest stays lightweight.",
-        };
+      : locale === "zh"
+        ? {
+            timeRange: "时间范围",
+            sampledThreads: "采样对话数",
+            highlight: "亮点",
+            recurring: "反复出现的问题：",
+            crossDomain: "跨领域呼应：",
+            unresolved: "未决议题：",
+            suggestedFocus: "建议聚焦：",
+            note: "说明：本周样本有限，因此周报只做了轻量整理。",
+          }
+        : {
+            timeRange: "Time range",
+            sampledThreads: "Sampled threads",
+            highlight: "Highlight",
+            recurring: "Recurring questions:",
+            crossDomain: "Cross-domain echoes:",
+            unresolved: "Unresolved threads:",
+            suggestedFocus: "Suggested focus:",
+            note: "Note: this week has limited samples, so the digest stays lightweight.",
+          };
 
   const lines = [
     `${labels.timeRange}: ${report.time_range.start} ~ ${report.time_range.end}`,
@@ -484,7 +516,8 @@ function formatRangeLabel(
   rangeEnd: number,
   locale: SupportedLocale
 ): string {
-  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
+  const dateLocale =
+    locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
   const start = new Date(rangeStart).toLocaleDateString(dateLocale, {
     month: "2-digit",
     day: "2-digit",
@@ -990,7 +1023,11 @@ Constraints:
 11) unresolved_threads and actionable_next_steps must be complete phrases, not fragments.
 12) When evidence is sufficient, target 2-4 items for unresolved_threads and actionable_next_steps; when sparse, 1 item or [] is acceptable.
 13) Write all user-facing text values in ${
-    locale === "zh" ? "natural Chinese" : "natural English"
+    locale === "ja"
+      ? "natural Japanese (自然な日本語)"
+      : locale === "zh"
+        ? "natural Chinese"
+        : "natural English"
   }. Keep JSON keys and enum values (speaker, depth_level) in English.`;
 }
 
@@ -1357,13 +1394,17 @@ function buildWeeklySparseHighlight(
   locale: SupportedLocale
 ): string {
   if (substantiveCount <= 0) {
-    return locale === "zh"
-      ? "本周没有可用于周报聚合的有效结构化对话。"
-      : "No valid structured conversations are available for weekly aggregation.";
+    return locale === "ja"
+      ? "今週は週次集約に使える有効な構造化対話がありませんでした。"
+      : locale === "zh"
+        ? "本周没有可用于周报聚合的有效结构化对话。"
+        : "No valid structured conversations are available for weekly aggregation.";
   }
-  return locale === "zh"
-    ? `本周仅有 ${substantiveCount} 条有效结构化对话，因此跳过跨主题聚合。`
-    : `Only ${substantiveCount} valid structured conversations are available this week, so cross-topic aggregation is skipped.`;
+  return locale === "ja"
+    ? `今週は有効な構造化対話が ${substantiveCount} 件しかないため、テーマ横断の集約はスキップしました。`
+    : locale === "zh"
+      ? `本周只有 ${substantiveCount} 条有效结构化对话，因此跳过了跨主题聚合。`
+      : `Only ${substantiveCount} valid structured conversations are available this week, so cross-topic aggregation is skipped.`;
 }
 
 function dedupeNarrativeItems(values: string[]): string[] {
@@ -1426,25 +1467,34 @@ function synthesizeDegradedSummaryV2FromRaw(params: {
 }): ConversationSummaryV2 | null {
   const locale = params.locale;
   const synthLabels =
-    locale === "zh"
+    locale === "ja"
       ? {
-          insight: (index: number) => `洞察 ${index}`,
-          coreQuestionFallback: "你想回答的核心问题是什么？",
-          stillUnresolved: (item: string) => `仍未解决：${item}`,
-          validateAndClose: (item: string) => `验证并收尾：${item}`,
-          thinkingStyle: "你在逐步收紧假设，并一步步验证设想。",
-          emotionalTone: "在探究约束时，语气保持分析性与审慎。",
+          insight: (index: number) => `インサイト ${index}`,
+          coreQuestionFallback: "あなたが答えを出したい核心的な問いは何ですか？",
+          stillUnresolved: (item: string) => `未解決：${item}`,
+          validateAndClose: (item: string) => `検証して締めくくる：${item}`,
+          thinkingStyle: "仮説を少しずつ絞り込みながら、一つずつ前提を検証しています。",
+          emotionalTone: "制約を探りながら、分析的で慎重なトーンを保っています。",
         }
-      : {
-          insight: (index: number) => `Insight ${index}`,
-          coreQuestionFallback: "What is the core question you are trying to answer?",
-          stillUnresolved: (item: string) => `Still unresolved: ${item}`,
-          validateAndClose: (item: string) => `Validate and close: ${item}`,
-          thinkingStyle:
-            "You iteratively narrow hypotheses and test assumptions step by step.",
-          emotionalTone:
-            "The tone stays analytical and cautious while probing constraints.",
-        };
+      : locale === "zh"
+        ? {
+            insight: (index: number) => `洞察 ${index}`,
+            coreQuestionFallback: "你最想弄清楚的核心问题是什么？",
+            stillUnresolved: (item: string) => `仍未解决：${item}`,
+            validateAndClose: (item: string) => `验证并收尾：${item}`,
+            thinkingStyle: "你在一步步收紧假设，并逐一验证自己的设想。",
+            emotionalTone: "在厘清各种约束时，语气保持分析性而审慎。",
+          }
+        : {
+            insight: (index: number) => `Insight ${index}`,
+            coreQuestionFallback: "What is the core question you are trying to answer?",
+            stillUnresolved: (item: string) => `Still unresolved: ${item}`,
+            validateAndClose: (item: string) => `Validate and close: ${item}`,
+            thinkingStyle:
+              "You iteratively narrow hypotheses and test assumptions step by step.",
+            emotionalTone:
+              "The tone stays analytical and cautious while probing constraints.",
+          };
   const rawLines = dedupeNarrativeItems(
     params.rawCandidates.flatMap((raw) => splitSynthesisLines(raw))
   );

@@ -1,9 +1,14 @@
 ﻿import type { Message } from "../types";
+import type { SupportedLocale } from "../i18n/locales";
 import type {
   ConversationSummaryPromptPayload,
   PromptVersion,
 } from "./types";
 import { buildMessageFallbackDisplayText } from "../utils/messageContentPackage";
+
+function dateLocaleTag(locale: SupportedLocale): string {
+  return locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
+}
 
 const CONVERSATION_SUMMARY_SYSTEM = `You are Vesti's thread-summary mapper.
 
@@ -40,7 +45,7 @@ Hard rules:
 4) real_world_anchor: use null (not "" empty string) when no anchor exists. Must be plain-language.
 5) speaker: must be exactly "User" or "AI" (capital-sensitive).
 6) meta_observations must use natural user-facing phrases, not technical labels like "deductive" or "precise".
-7) Write all user-facing text (assertions, definitions, observations, threads, steps) in the language named by the locale field in the user prompt: natural English when locale is en, natural Chinese when locale is zh. Keep all JSON keys and enum values (speaker, depth_level) in English.
+7) Write all user-facing text (assertions, definitions, observations, threads, steps) in the language named by the locale field in the user prompt: natural English when locale is en, natural Chinese when locale is zh, natural Japanese (自然な日本語) when locale is ja. Keep all JSON keys and enum values (speaker, depth_level) in English.
 8) key_insights can be [] when evidence is sparse.
 9) Optional <think>...</think> is allowed before JSON; it will be stripped by runtime.
 10) unresolved_threads and actionable_next_steps must be complete phrases, not 1-3 character fragments.
@@ -57,8 +62,8 @@ const LEGACY_SUMMARY_JSON_SCHEMA_HINT = {
   tech_stack_detected: ["string"],
 };
 
-function formatDateTime(value: number, locale: "zh" | "en"): string {
-  return new Date(value).toLocaleString(locale === "en" ? "en-US" : "zh-CN", {
+function formatDateTime(value: number, locale: SupportedLocale): string {
+  return new Date(value).toLocaleString(dateLocaleTag(locale), {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -67,8 +72,8 @@ function formatDateTime(value: number, locale: "zh" | "en"): string {
   });
 }
 
-function formatTime(value: number, locale: "zh" | "en"): string {
-  return new Date(value).toLocaleTimeString(locale === "en" ? "en-US" : "zh-CN", {
+function formatTime(value: number, locale: SupportedLocale): string {
+  return new Date(value).toLocaleTimeString(dateLocaleTag(locale), {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -76,7 +81,7 @@ function formatTime(value: number, locale: "zh" | "en"): string {
 
 function toNarrativeTranscript(
   messages: Message[],
-  locale: "zh" | "en",
+  locale: SupportedLocale,
   transcriptOverride?: string
 ): string {
   if (transcriptOverride?.trim()) {
@@ -84,10 +89,10 @@ function toNarrativeTranscript(
   }
 
   if (!messages.length) {
-    return locale === "en" ? "[No messages available]" : "[无可用消息]";
+    return locale === "zh" ? "[无可用消息]" : "[No messages available]";
   }
 
-  const userRole = locale === "en" ? "User" : "用户";
+  const userRole = locale === "zh" ? "用户" : "User";
   return messages
     .map((message) => {
       const role = message.role === "user" ? userRole : "AI";
@@ -108,7 +113,11 @@ function buildConversationSummaryPrompt(
     payload.transcriptOverride
   );
 
-  if (locale === "en") {
+  if (locale !== "zh") {
+    const outputLanguageRule =
+      locale === "ja"
+        ? "Write all user-facing text in natural Japanese (自然な日本語). Keep JSON keys and enum values in English."
+        : "Write all user-facing text in natural English. Keep JSON keys and enum values in English.";
     const conversationTitle = payload.conversationTitle ?? "(untitled conversation)";
     return `Analyze the conversation below and output conversation_summary.v2 JSON:
 
@@ -132,7 +141,7 @@ Additional constraints:
 - Each unresolved_threads / actionable_next_steps entry must be a complete phrase, not a 1-3 character fragment.
 - When evidence is sufficient, give 2-4 items each for unresolved_threads / actionable_next_steps; when sparse, drop to 1 item or an empty array.
 - Map strictly from available evidence; do not add facts that did not appear.
-- Write all user-facing text in natural English. Keep JSON keys and enum values in English.
+- ${outputLanguageRule}
 - Output the JSON object only, no markdown or extra explanation. Do not wrap it in \`\`\`json.`;
   }
 
@@ -150,17 +159,17 @@ Additional constraints:
 ${transcript}
 
 补充约束：
-- thinking_journey 每一步 assertion 必须 2-3 句话。
-- assertion 不能只复述结论，必须体现”为何出现 + 推动了下一步什么问题”。
-- real_world_anchor 写成普通读者可懂的”现实落点/实证案例”描述；无锚点时写 null（不是空字符串 “”）。
-- speaker 只能是 “User” 或 “AI”（大小写敏感）。
-- meta_observations 必须写成自然短语（例如”逐步深挖，每一问都在收紧范围”），不要用术语标签。
-- depth_level 只能是 “superficial”、”moderate”、”deep” 之一。
-- unresolved_threads / actionable_next_steps 每条都必须是完整短句，不要输出 1-3 个字的残片。
-- 证据充足时 unresolved_threads / actionable_next_steps 各给 2-4 条；证据不足可降到 1 条或空。
-- 严格从已有证据映射，不得补充未出现的新事实。
-- 所有面向用户的文本用自然中文书写；JSON 字段名与枚举值保持英文。
-- 仅输出 JSON 对象，不要输出 markdown 或额外说明。不要用 \`\`\`json 包裹。`;
+- thinking_journey 中每一步的 assertion 都要写 2-3 句话。
+- assertion 不能只是复述结论，要讲清楚“这一步为何出现，又推动了下一个什么问题”。
+- real_world_anchor 写成普通读者也能看懂的“现实落点 / 实证案例”；没有锚点时填 null（而不是空字符串 ""）。
+- speaker 只能是 "User" 或 "AI"（区分大小写）。
+- meta_observations 要用自然的口语化短语（例如“逐步深挖，每一问都在收紧范围”），不要堆术语标签。
+- depth_level 只能取 "superficial"、"moderate"、"deep" 三者之一。
+- unresolved_threads / actionable_next_steps 中每一条都要是完整短句，不要输出 1-3 个字的残片。
+- 证据充足时，unresolved_threads / actionable_next_steps 各给 2-4 条；证据不足时可减到 1 条或留空。
+- 严格依据已有证据来归纳，不得补充对话中未出现的新事实。
+- 所有面向用户的文本都用自然流畅的中文书写；JSON 字段名与枚举值保持英文。
+- 只输出 JSON 对象，不要附带 markdown 或额外说明，也不要用 \`\`\`json 包裹。`;
 }
 
 function buildConversationFallbackPrompt(
@@ -173,7 +182,11 @@ function buildConversationFallbackPrompt(
     payload.transcriptOverride
   );
 
-  if (locale === "en") {
+  if (locale !== "zh") {
+    const languageDirective =
+      locale === "ja"
+        ? "Write the recap in natural Japanese (自然な日本語)."
+        : "Write the recap in natural English.";
     return `Write a plain-text recap of this conversation (no JSON, no markdown symbols):
 
 ${transcript}
@@ -181,17 +194,18 @@ ${transcript}
 Requirements:
 1) 4-6 lines, one sentence per line.
 2) Prioritize the core question of this conversation, key progress, and next actions.
-3) Avoid empty filler phrases.`;
+3) Avoid empty filler phrases.
+4) ${languageDirective}`;
   }
 
-  return `请基于这段对话写一段纯文本回顾（不要输出JSON，不要markdown符号）：
+  return `请基于这段对话写一段纯文本回顾（不要输出 JSON，不要使用 markdown 符号）：
 
 ${transcript}
 
 要求：
-1) 4-6 行，每行一句。
-2) 优先写明这次对话的核心问题、关键进展、下一步动作。
-3) 避免空泛套话。`;
+1) 写 4-6 行，每行一句。
+2) 优先写清楚这次对话的核心问题、关键进展和下一步动作。
+3) 避免空泛的套话。`;
 }
 
 function toLegacyTranscript(
@@ -242,7 +256,7 @@ export const CURRENT_CONVERSATION_SUMMARY_PROMPT: PromptVersion<ConversationSumm
       "Thread Summary prompt aligned to latest thread-summary-skill contract (journey steps + real-world anchor + glossary insights).",
     system: CONVERSATION_SUMMARY_SYSTEM,
     fallbackSystem:
-      "You are a clear, restrained conversation-record organizer. Output plain text only, no markdown. Write in the language requested by the user prompt (English or Chinese).",
+      "You are a clear, restrained conversation-record organizer. Output plain text only, no markdown. Write in the language requested by the user prompt (English, Chinese, or Japanese).",
     userTemplate: buildConversationSummaryPrompt,
     fallbackTemplate: buildConversationFallbackPrompt,
   };

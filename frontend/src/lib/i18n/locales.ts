@@ -1,4 +1,4 @@
-export const SUPPORTED_LOCALES = ["en", "zh"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh", "ja"] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 export const DEFAULT_LOCALE: SupportedLocale = "en";
 
@@ -13,6 +13,8 @@ const LOCALE_ALIASES: Record<string, SupportedLocale> = {
   "en-GB": "en",
   "en-CA": "en",
   "en-AU": "en",
+  ja: "ja",
+  "ja-JP": "ja",
 };
 
 export function resolveLocale(raw: string): SupportedLocale {

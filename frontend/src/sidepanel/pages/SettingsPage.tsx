@@ -187,6 +187,7 @@ function LanguageSelector({
       >
         <option value="en">{t.settings.language.en}</option>
         <option value="zh">{t.settings.language.zh}</option>
+        <option value="ja">{t.settings.language.ja}</option>
       </select>
     </div>
   )

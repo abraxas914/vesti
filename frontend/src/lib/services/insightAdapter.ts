@@ -36,13 +36,19 @@ const TECH_KEYWORDS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /prompt|schema/i, label: "Prompt Engineering" },
 ];
 function defaultWeeklySuggestedFocus(locale: SupportedLocale): string {
-  return locale === "zh"
-    ? "下周优先推进一个高价值问题并记录验证结果。"
-    : "Next week, prioritize one high-value question and record the validation result.";
+  return locale === "ja"
+    ? "来週は価値の高い問いを一つに絞って前に進め、検証結果を記録しましょう。"
+    : locale === "zh"
+      ? "下周优先推进一个高价值问题，并记录验证结果。"
+      : "Next week, prioritize one high-value question and record the validation result.";
 }
 
 function insightTermLabel(locale: SupportedLocale, index: number): string {
-  return locale === "zh" ? `洞察${index}` : `Insight ${index}`;
+  return locale === "ja"
+    ? `インサイト${index}`
+    : locale === "zh"
+      ? `洞察${index}`
+      : `Insight ${index}`;
 }
 
 interface AdapterDefaults {
@@ -61,20 +67,36 @@ interface AdapterDefaults {
 }
 
 function getAdapterDefaults(locale: SupportedLocale): AdapterDefaults {
+  if (locale === "ja") {
+    return {
+      generalTag: "総合",
+      thinkingStyle: "一歩ずつ掘り下げ、問いを重ねるたびに範囲を絞り込んでいます。",
+      emotionalTone: "慎重さと好奇心を併せ持ち、重要な仮説を継続的に検証しています。",
+      v1ThinkingStyle: "問題を段階的に分解し、少しずつ範囲を絞り込んでいます。",
+      v1EmotionalTone: "理性的で慎重な口調を保ち、仮説を継続的に検証しています。",
+      v1OpeningAssertion: "まず方向を決める前に整理しておくべき問いを投げかけています。",
+      sparseThinkingStyle: "サンプルが少なく、思考スタイルを安定して推定できません。",
+      sparseEmotionalTone: "サンプルが少ないため、感情のトーンは中立として扱います。",
+      conversationSummaryTitle: "会話の要約",
+      noStableConclusion: "まだ安定した結論はありません。",
+      coreQuestionPrefix: (title: string) => `今回の会話の核心的な問い：${title}`,
+      weeklyFallbackHighlight: "今週は再利用できる段階的な結論がまとまりました。",
+    };
+  }
   if (locale === "zh") {
     return {
       generalTag: "综合",
-      thinkingStyle: "逐步深挖，每一问都在收紧范围。",
-      emotionalTone: "谨慎而带着好奇，持续验证关键假设。",
-      v1ThinkingStyle: "你把问题逐步拆解，并不断收紧范围。",
-      v1EmotionalTone: "语气理性、审慎，持续验证假设。",
-      v1OpeningAssertion: "你先抛出一个需要先厘清、才能决定方向的问题。",
-      sparseThinkingStyle: "样本较少，暂时无法稳定推断思考风格。",
-      sparseEmotionalTone: "样本较少，情绪基调按中性处理。",
+      thinkingStyle: "一步步深挖，每问一次都在收紧范围。",
+      emotionalTone: "谨慎又不失好奇，持续验证关键假设。",
+      v1ThinkingStyle: "你把问题逐层拆开，并不断收紧范围。",
+      v1EmotionalTone: "语气理性而审慎，持续在验证假设。",
+      v1OpeningAssertion: "你先抛出一个需要先理清、才能决定方向的问题。",
+      sparseThinkingStyle: "样本偏少，暂时难以稳定判断思考风格。",
+      sparseEmotionalTone: "样本偏少，情绪基调暂按中性处理。",
       conversationSummaryTitle: "对话摘要",
-      noStableConclusion: "尚无稳定结论。",
+      noStableConclusion: "暂时还没有稳定的结论。",
       coreQuestionPrefix: (title: string) => `本次对话的核心问题：${title}`,
-      weeklyFallbackHighlight: "本周形成了可复用的阶段性结论。",
+      weeklyFallbackHighlight: "本周沉淀出了可复用的阶段性结论。",
     };
   }
   return {
@@ -206,7 +228,8 @@ function toRangeLabel(
   rangeEnd: number,
   locale: SupportedLocale
 ): string {
-  const dateLocale = locale === "zh" ? "zh-CN" : "en-US";
+  const dateLocale =
+    locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
   const start = new Date(rangeStart).toLocaleDateString(dateLocale, {
     month: "2-digit",
     day: "2-digit",

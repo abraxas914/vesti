@@ -509,9 +509,11 @@ function normalizeAgentPlan(
 }
 
 function localeOutputDirective(locale: SupportedLocale): string {
-  return locale === "zh"
-    ? "请用简体中文撰写面向用户的回答，除非用户明确要求其他语言。"
-    : "Write the user-facing answer in English, unless the user explicitly requests another language.";
+  return locale === "ja"
+    ? "ユーザーが他の言語を明示的に求めない限り、ユーザー向けの回答は自然な日本語で書いてください。"
+    : locale === "zh"
+      ? "请用自然流畅的简体中文撰写面向用户的回答，除非用户明确要求使用其他语言。"
+      : "Write the user-facing answer in English, unless the user explicitly requests another language.";
 }
 
 function buildPlannerPrompt(params: {
@@ -548,7 +550,11 @@ function buildPlannerPrompt(params: {
     "- Use clarification_needed only when the request is too ambiguous to answer responsibly.",
     "- Use rag for factual lookup and cross-conversation synthesis that are not primarily time-window based.",
     `- Write "clarifyingQuestion", "answerGoal", and any other user-facing natural-language text in ${
-      params.locale === "zh" ? "Simplified Chinese" : "English"
+      params.locale === "ja"
+        ? "natural Japanese (自然な日本語)"
+        : params.locale === "zh"
+          ? "Simplified Chinese"
+          : "English"
     } (JSON field names stay in English).`,
     "",
     "Return JSON only with this schema:",
@@ -879,38 +885,48 @@ function buildLocalFallbackAnswer(
   sources: RelatedConversation[],
   locale: SupportedLocale
 ): string {
-  const zh = locale === "zh";
+  const pick = <T,>(ja: T, zh: T, en: T): T =>
+    locale === "ja" ? ja : locale === "zh" ? zh : en;
   if (sources.length === 0) {
-    return zh
-      ? [
-          `未找到与"${truncateInline(query, 120)}"高度相似的对话。`,
-          "可以换个说法，或选择更宽泛的主题。",
-          "提示：在设置中配置 LLM 可获得更丰富的综合回答。",
-        ].join("\n")
-      : [
-          `I could not find highly similar conversations for: "${truncateInline(query, 120)}".`,
-          "Try rephrasing the query or selecting a broader topic.",
-          "Tip: configure an LLM in Settings for richer synthesis.",
-        ].join("\n");
+    return pick(
+      [
+        `「${truncateInline(query, 120)}」に強く類似する対話は見つかりませんでした。`,
+        "言い回しを変えるか、もう少し広いトピックを選んでみてください。",
+        "ヒント：設定で LLM を構成すると、より充実した統合回答が得られます。",
+      ],
+      [
+        `未找到与"${truncateInline(query, 120)}"高度相似的对话。`,
+        "可以换个说法，或者选择更宽泛的主题。",
+        "提示：在设置中配置 LLM，就能获得更丰富的综合回答。",
+      ],
+      [
+        `I could not find highly similar conversations for: "${truncateInline(query, 120)}".`,
+        "Try rephrasing the query or selecting a broader topic.",
+        "Tip: configure an LLM in Settings for richer synthesis.",
+      ]
+    ).join("\n");
   }
 
+  const matchSuffix = pick(" 一致", " 匹配", " match");
   const lines = sources
     .slice(0, 5)
     .map(
       (source, index) =>
-        `${index + 1}. ${source.title} [${source.platform}] (${source.similarity}%${
-          zh ? " 匹配" : " match"
-        })`
+        `${index + 1}. ${source.title} [${source.platform}] (${source.similarity}%${matchSuffix})`
     );
 
   return [
-    zh
-      ? "模型综合暂不可用，但以下本地对话最相关："
-      : "Model synthesis is unavailable, but these local conversations are most relevant:",
+    pick(
+      "モデルによる統合は現在利用できませんが、以下のローカル対話が最も関連しています：",
+      "模型综合暂时不可用，但以下本地对话最相关：",
+      "Model synthesis is unavailable, but these local conversations are most relevant:"
+    ),
     ...lines,
-    zh
-      ? "打开来源查看详情，然后提出更聚焦的追问。"
-      : "Open a source to inspect details, then ask a narrower follow-up.",
+    pick(
+      "気になる出典を開いて詳細を確認し、より絞り込んだ追加質問をしてみてください。",
+      "打开来源查看详情，再提出更聚焦的追问。",
+      "Open a source to inspect details, then ask a narrower follow-up."
+    ),
   ].join("\n");
 }
 
@@ -1157,48 +1173,65 @@ function buildWeeklyLocalFallbackAnswer(params: {
   scoped: boolean;
   locale: SupportedLocale;
 }): string {
-  const zh = params.locale === "zh";
+  const pick = <T,>(ja: T, zh: T, en: T): T =>
+    params.locale === "ja" ? ja : params.locale === "zh" ? zh : en;
   const lines: string[] = [];
   if (params.summaryText?.trim()) {
     lines.push(params.summaryText.trim(), "");
   } else {
     lines.push(
-      zh
-        ? `在没有模型协助的情况下，无法为"${truncateInline(params.query, 120)}"综合出完整答案。`
-        : `I could not synthesize a full answer for "${truncateInline(params.query, 120)}" without model assistance.`,
-      zh
-        ? `相关时间窗为 ${params.timeScope.label}（${params.timeScope.startDate} 至 ${params.timeScope.endDate}）。`
-        : `The relevant window is ${params.timeScope.label} (${params.timeScope.startDate} to ${params.timeScope.endDate}).`,
+      pick(
+        `モデルの支援がない状態では、「${truncateInline(params.query, 120)}」に対する完全な答えをまとめることができませんでした。`,
+        `在没有模型协助的情况下，无法为"${truncateInline(params.query, 120)}"综合出完整的答案。`,
+        `I could not synthesize a full answer for "${truncateInline(params.query, 120)}" without model assistance.`
+      ),
+      pick(
+        `対象となる期間は ${params.timeScope.label}（${params.timeScope.startDate} 〜 ${params.timeScope.endDate}）です。`,
+        `相关时间窗为 ${params.timeScope.label}（${params.timeScope.startDate} 至 ${params.timeScope.endDate}）。`,
+        `The relevant window is ${params.timeScope.label} (${params.timeScope.startDate} to ${params.timeScope.endDate}).`
+      ),
       ""
     );
   }
 
   if (params.sources.length === 0) {
     lines.push(
-      zh
-        ? params.scoped
-          ? "在所选范围的该时间窗内未找到任何对话。"
-          : "在该时间窗内未找到任何对话。"
-        : params.scoped
-          ? "No conversations were found in that time window within the selected scope."
-          : "No conversations were found in that time window.",
-      zh
-        ? "可以扩大范围，或换一个时间段再问。"
-        : "Try broadening the scope or asking for a different period."
+      params.scoped
+        ? pick(
+            "選択した範囲のその期間内には対話が見つかりませんでした。",
+            "在所选范围的该时间窗内没有找到任何对话。",
+            "No conversations were found in that time window within the selected scope."
+          )
+        : pick(
+            "その期間内には対話が見つかりませんでした。",
+            "在该时间窗内没有找到任何对话。",
+            "No conversations were found in that time window."
+          ),
+      pick(
+        "範囲を広げるか、別の期間で聞き直してみてください。",
+        "可以扩大范围，或换一个时间段再问。",
+        "Try broadening the scope or asking for a different period."
+      )
     );
     return lines.join("\n");
   }
 
   lines.push(
-    zh ? "你可以查看以下对话来核实答案：" : "You can inspect these conversations to verify the answer:"
+    pick(
+      "以下の対話を確認すると、答えの裏付けが取れます：",
+      "你可以查看以下对话来核实答案：",
+      "You can inspect these conversations to verify the answer:"
+    )
   );
   params.sources.forEach((source, index) => {
     lines.push(`${index + 1}. ${source.title} [${source.platform}]`);
   });
   lines.push(
-    zh
-      ? "点击来源标签，或切换到资料库直接查看。"
-      : "Open the source chips or switch to Library to inspect them directly."
+    pick(
+      "出典のタグをクリックするか、ライブラリに切り替えて直接確認してください。",
+      "点击来源标签，或切换到资料库直接查看。",
+      "Open the source chips or switch to Library to inspect them directly."
+    )
   );
 
   return lines.join("\n");
@@ -1659,9 +1692,11 @@ async function runAgentKnowledgeBase(
       return {
         answer:
           plan.clarifyingQuestion ||
-          (locale === "zh"
-            ? "在可靠作答前，我还需要你再补充一个限定条件。"
-            : "I need one more constraint before I can answer this reliably."),
+          (locale === "ja"
+            ? "確実にお答えするために、もう一つだけ条件を補足していただけますか。"
+            : locale === "zh"
+              ? "在可靠作答前，我还需要你再补充一个限定条件。"
+              : "I need one more constraint before I can answer this reliably."),
         sources: [],
         agent: agentMeta,
       };

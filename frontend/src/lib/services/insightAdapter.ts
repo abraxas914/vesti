@@ -4,11 +4,13 @@
   ConversationSummaryV2Legacy,
   SummaryRecord,
   WeeklyLiteReportV1,
+  WeeklyRecapV1,
   WeeklyReportRecord,
   WeeklyReportV1,
 } from "../types";
 import type {
   ChatSummaryData,
+  WeeklyRecapData,
   WeeklySummaryData,
 } from "../types/insightsPresentation";
 import {
@@ -274,6 +276,20 @@ function isWeeklyLiteReportV1(value: unknown): value is WeeklyLiteReportV1 {
 function isWeeklyReportV1(value: unknown): value is WeeklyReportV1 {
   if (!value || typeof value !== "object") return false;
   return "period_title" in value && "main_themes" in value;
+}
+
+function isWeeklyRecapV1(value: unknown): value is WeeklyRecapV1 {
+  if (!value || typeof value !== "object") return false;
+  return "greeting" in value && "stats" in value && "persona_tag" in value;
+}
+
+/**
+ * Detect whether a stored weekly report is a weekly_recap.v1 (Plan B recap).
+ * Checks the schemaVersion first, then structurally falls back to "greeting".
+ */
+export function isWeeklyRecapReport(report: WeeklyReportRecord): boolean {
+  if (report.schemaVersion === "weekly_recap.v1") return true;
+  return isWeeklyRecapV1(report.structured);
 }
 
 function inferUnresolved(lines: string[]): string[] {
@@ -661,6 +677,65 @@ export function toWeeklySummaryData(
     suggested_focus: [],
     evidence: [],
     insufficient_data: true,
+    plain_text: report.content,
+  };
+}
+
+/**
+ * Adapt a stored weekly_recap.v1 report into presentation data. Returns null
+ * when the report is not a recap (caller should fall back to the digest path).
+ */
+export function toWeeklyRecapData(
+  report: WeeklyReportRecord,
+  locale: SupportedLocale = "en"
+): WeeklyRecapData | null {
+  const structured = report.structured;
+  if (!isWeeklyRecapV1(structured)) {
+    return null;
+  }
+
+  const rangeLabel = toRangeLabel(report.rangeStart, report.rangeEnd, locale);
+
+  const greeting = normalizeText(structured.greeting);
+  const personaTag = normalizeText(structured.persona_tag);
+  const moodEmoji = normalizeText(structured.mood_emoji) || "✨";
+  const encouragement = normalizeText(structured.encouragement);
+  const nextNudge = normalizeText(structured.next_nudge);
+
+  const highlight =
+    structured.highlight &&
+    normalizeText(structured.highlight.title) &&
+    normalizeText(structured.highlight.detail)
+      ? {
+          title: normalizeText(structured.highlight.title),
+          detail: normalizeText(structured.highlight.detail),
+        }
+      : null;
+
+  const delta = structured.stats.week_over_week_delta;
+
+  return {
+    meta: {
+      title: `Weekly Recap ${rangeLabel}`,
+      generated_at: toIsoTime(report.createdAt),
+      tags: inferTags([], `${greeting}\n${encouragement}`, locale),
+      fallback: report.status === "fallback",
+      range_label: rangeLabel,
+    },
+    greeting,
+    persona_tag: personaTag,
+    mood_emoji: moodEmoji,
+    stats: {
+      conversation_count: Math.max(0, Math.floor(structured.stats.conversation_count)),
+      active_days: Math.max(0, Math.floor(structured.stats.active_days)),
+      streak_weeks: Math.max(0, Math.floor(structured.stats.streak_weeks)),
+      top_platform: normalizeText(structured.stats.top_platform) || "—",
+      week_over_week_delta:
+        typeof delta === "number" && Number.isFinite(delta) ? Math.trunc(delta) : null,
+    },
+    highlight,
+    encouragement,
+    next_nudge: nextNudge,
     plain_text: report.content,
   };
 }

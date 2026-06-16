@@ -10,6 +10,7 @@ import {
   Play,
 } from "lucide-react";
 import { useI18n } from "~lib/i18n";
+import type { SupportedLocale } from "~lib/i18n/locales";
 import type {
   AsyncStatus,
   Conversation,
@@ -24,7 +25,7 @@ import type {
 } from "~lib/messaging/protocol";
 import {
   generateConversationSummary,
-  generateWeeklyReport,
+  generateWeeklyRecap,
   getConversationSummary,
   getConversations,
   getWeeklyReport,
@@ -32,10 +33,14 @@ import {
 import { resolveTurnCount } from "~lib/capture/turn-metrics";
 import {
   toChatSummaryData,
+  toWeeklyRecapData,
   toWeeklySummaryData,
 } from "~lib/services/insightAdapter";
 import { getConversationOriginAt } from "~lib/conversations/timestamps";
-import type { WeeklySummaryData } from "~lib/types/insightsPresentation";
+import type {
+  WeeklyRecapData,
+  WeeklySummaryData,
+} from "~lib/types/insightsPresentation";
 import { InsightsAccordionItem } from "../components/InsightsAccordionItem";
 import { InsightsWandIcon } from "../components/InsightsWandIcon";
 
@@ -564,6 +569,17 @@ function toWeeklyStableState(data: WeeklySummaryData | null): WeeklyStableUiStat
   return data.insufficient_data ? "sparse_week" : "ready";
 }
 
+// A weekly_recap.v1 report is always "ready" (warm recap never goes sparse);
+// other reports fall back to the weekly_lite stable-state logic.
+function resolveWeeklyStableState(
+  report: WeeklyReportRecord | null,
+  locale: SupportedLocale
+): WeeklyStableUiState {
+  if (!report) return "idle";
+  if (toWeeklyRecapData(report, locale)) return "ready";
+  return toWeeklyStableState(toWeeklySummaryData(report, locale));
+}
+
 interface InsightsPageProps {
   conversation: Conversation | null;
   refreshToken: number;
@@ -636,6 +652,10 @@ export function InsightsPage({
 
   const weeklyData = useMemo(
     () => (weeklyReport ? toWeeklySummaryData(weeklyReport, locale) : null),
+    [weeklyReport, locale]
+  );
+  const weeklyRecapData = useMemo<WeeklyRecapData | null>(
+    () => (weeklyReport ? toWeeklyRecapData(weeklyReport, locale) : null),
     [weeklyReport, locale]
   );
   const activeThreadPipelineEvent = useMemo(() => {
@@ -1033,8 +1053,7 @@ export function InsightsPage({
       .then((data) => {
         if (!active) return;
         setWeeklyReport(data);
-        const nextData = data ? toWeeklySummaryData(data, locale) : null;
-        const nextStableState = toWeeklyStableState(nextData);
+        const nextStableState = resolveWeeklyStableState(data, locale);
         setWeeklyStableState(nextStableState);
         setWeeklyUiState(nextStableState);
         setWeeklyPhase("ready_to_compile");
@@ -1087,7 +1106,7 @@ export function InsightsPage({
     setWeeklyPauseStartedAt(null);
     setWeeklyPausedAccumulatedMs(0);
 
-    const result = await generateWeeklyReport(weeklyRange.rangeStart, weeklyRange.rangeEnd)
+    const result = await generateWeeklyRecap(weeklyRange.rangeStart, weeklyRange.rangeEnd)
       .then((data) => ({ ok: true as const, data }))
       .catch((error) => ({ ok: false as const, error }));
 
@@ -1103,8 +1122,7 @@ export function InsightsPage({
 
     if (result.ok === true) {
       setWeeklyReport(result.data);
-      const nextData = toWeeklySummaryData(result.data, locale);
-      const nextStableState = toWeeklyStableState(nextData);
+      const nextStableState = resolveWeeklyStableState(result.data, locale);
       setWeeklyStableState(nextStableState);
       setWeeklyUiState(nextStableState);
       setWeeklyError(null);
@@ -1596,7 +1614,149 @@ export function InsightsPage({
     );
   };
 
+  const renderWeeklyRecap = (recap: WeeklyRecapData) => {
+    const delta = recap.stats.week_over_week_delta;
+    const deltaLabel =
+      delta === null ? null : delta > 0 ? `+${delta}` : String(delta);
+    const statItems: Array<{ label: string; value: string }> = [
+      {
+        label: t.insights.statConversations,
+        value: String(recap.stats.conversation_count),
+      },
+      {
+        label: t.insights.statActiveDays,
+        value: String(recap.stats.active_days),
+      },
+      {
+        label: t.insights.statStreak,
+        value: String(recap.stats.streak_weeks),
+      },
+      {
+        label: t.insights.statTopPlatform,
+        value: recap.stats.top_platform,
+      },
+    ];
+
+    return (
+      <>
+        <div className="ins-week-banner">
+          <p className="ins-week-range">{weeklyRangeLabel}</p>
+          <span className="ins-week-count-chip">
+            {weeklyCountLabel} - {weeklyRangeModeLabel}
+          </span>
+        </div>
+        {renderWeeklyRangeToggle()}
+
+        {weeklyError && (
+          <p className="ins-status-row ins-status-error ins-week-inline-gap">
+            {t.insights.latestRegenerationFailed} {weeklyError}
+            <button
+              type="button"
+              onClick={handleGenerateWeekly}
+              className="ins-inline-link"
+            >
+              {t.common.retry}
+            </button>
+          </p>
+        )}
+
+        <div className="ins-week-ready-shell">
+          <section className="ins-thread-core-card">
+            <p className="ins-thread-core-label">
+              {recap.mood_emoji} {t.insights.recapTitle}
+            </p>
+            <p className="ins-thread-core-text">{recap.greeting}</p>
+            {recap.persona_tag && (
+              <span className="ins-week-count-chip">{recap.persona_tag}</span>
+            )}
+          </section>
+
+          <section>
+            <div className="ins-week-highlight-list">
+              {statItems.map((item) => (
+                <article className="ins-week-highlight-item" key={item.label}>
+                  <p className="ins-week-echo-label">{item.label}</p>
+                  <p className="ins-thread-core-text">{item.value}</p>
+                </article>
+              ))}
+              {deltaLabel !== null && (
+                <article className="ins-week-highlight-item">
+                  <p className="ins-week-echo-label">{t.insights.nextWeek}</p>
+                  <p className="ins-thread-core-text">{deltaLabel}</p>
+                </article>
+              )}
+            </div>
+          </section>
+
+          {recap.highlight && (
+            <section>
+              <div className="ins-week-sec-head">
+                <span className="ins-week-sec-label">{t.insights.recapHighlight}</span>
+                <span className="ins-week-sec-line" />
+              </div>
+              <article className="ins-week-highlight-item">
+                <p className="ins-week-highlight-text">{recap.highlight.title}</p>
+                <p className="ins-thread-insight-def">{recap.highlight.detail}</p>
+              </article>
+            </section>
+          )}
+
+          {recap.encouragement && (
+            <section>
+              <div className="ins-week-sec-head">
+                <span className="ins-week-sec-label">{t.insights.recapEncouragement}</span>
+                <span className="ins-week-sec-line" />
+              </div>
+              <p className="ins-thread-core-text">{recap.encouragement}</p>
+            </section>
+          )}
+
+          {recap.next_nudge && (
+            <section>
+              <div className="ins-week-sec-head">
+                <span className="ins-week-sec-label">{t.insights.recapNextWeek}</span>
+                <span className="ins-week-sec-line" />
+              </div>
+              <article className="ins-week-focus-item">
+                <span className="ins-week-focus-arrow">-&gt;</span>
+                <p className="ins-week-focus-text">{recap.next_nudge}</p>
+              </article>
+            </section>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGenerateWeekly}
+          className="ins-generate-btn"
+        >
+          <InsightsWandIcon className="h-3.5 w-3.5 text-accent-primary" />
+          {t.insights.regenerate}
+        </button>
+
+        {weeklyReport && (
+          <div className="ins-model-meta">
+            <p className="ins-model-meta-line">
+              <span className="ins-model-meta-label">{t.insights.modelLabel}:</span>
+              <span className="ins-model-meta-value">{weeklyReport.modelId}</span>
+            </p>
+            <p className="ins-model-meta-line">
+              <span className="ins-model-meta-label">{t.insights.generatedLabel}:</span>
+              <span className="ins-model-meta-value">
+                {formatDateTime(weeklyReport.createdAt, locale)}
+              </span>
+            </p>
+          </div>
+        )}
+      </>
+    );
+  };
+
   const renderWeeklyReady = () => {
+    if (weeklyRecapData) {
+      return renderWeeklyRecap(weeklyRecapData);
+    }
+
     return (
       <>
         <div className="ins-week-banner">

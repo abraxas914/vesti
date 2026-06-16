@@ -9,6 +9,7 @@ import type {
   Message,
   SummaryRecord,
   WeeklyLiteReportV1,
+  WeeklyRecapV1,
   WeeklyReportRecord,
   WeeklyReportV1,
 } from "../types";
@@ -22,6 +23,7 @@ import type {
 import {
   getConversationById,
   getSummary,
+  getTopics,
   getWeeklyReport,
   listConversationsByRange,
   listMessages,
@@ -29,6 +31,7 @@ import {
   saveWeeklyReport,
 } from "../db/repository";
 import { getPrompt } from "../prompts";
+import type { WeeklyRecapPromptPayload } from "../prompts/types";
 import {
   buildWeeklySourceHash,
   callInference,
@@ -39,13 +42,20 @@ import {
   insightSchemaHints,
   normalizeConversationSummaryV2Legacy,
   normalizeWeeklyLiteReport,
+  normalizeWeeklyRecap,
   parseConversationSummaryObject,
   parseConversationSummaryV2Object,
   parseJsonObjectFromText,
   parseWeeklyLiteReportObject,
+  parseWeeklyRecapObject,
   parseWeeklyReportObject,
   validateWeeklySemanticQuality,
 } from "./insightSchemas";
+import {
+  computeWeeklyStats,
+  rankHighlightCandidates,
+  type WeeklyStats,
+} from "./weeklyStats";
 import type { WeeklySemanticIssueCode } from "./insightSchemas";
 import { logger } from "../utils/logger";
 import { getLanguageSettings } from "./languageSettingsService";
@@ -2805,6 +2815,379 @@ export async function generateWeeklyReport(
       pipelineEmitter.emit("completed", "completed", {
         attempt: generated.attempt,
         promptVersion: generated.promptVersion,
+      });
+    }
+
+    return saved;
+  } catch (error) {
+    pipelineEmitter.emit("degraded_fallback", "degraded_fallback");
+    throw error;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Weekly Recap (Plan B): code-computed stats + ONE warm LLM copy pass.
+// Additive and independent from generateWeeklyReport / generateStructuredWeekly.
+// ──────────────────────────────────────────────────────────────────────────
+
+const WEEKLY_RECAP_MAX_CHARS = 8000;
+const WEEKLY_RECAP_PRIOR_WEEKS = 4;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function buildPriorWeekRanges(
+  rangeStart: number,
+  rangeEnd: number,
+  weeks: number
+): Array<{ start: number; end: number }> {
+  const span = Math.max(rangeEnd - rangeStart, WEEK_MS - 1);
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (let i = 1; i <= weeks; i += 1) {
+    const end = rangeStart - i * (span + 1) + span;
+    const start = rangeStart - i * (span + 1);
+    ranges.push({ start, end });
+  }
+  return ranges;
+}
+
+function buildRecapHighlightContext(
+  conversations: Conversation[],
+  topics: Awaited<ReturnType<typeof getTopics>>,
+  summaryGist?: string
+): WeeklyRecapPromptPayload["highlightContext"] {
+  const ranked = rankHighlightCandidates(conversations, { topics });
+  const top = ranked[0];
+  if (!top) {
+    return null;
+  }
+  return {
+    title: top.title,
+    topic: top.topic,
+    messageCount: top.messageCount,
+    turnCount: top.turnCount,
+    isStarred: top.isStarred,
+    summaryGist: summaryGist || top.snippet || undefined,
+  };
+}
+
+function buildSummaryGistFromV2(summary: ConversationSummaryV2): string {
+  const parts: string[] = [];
+  if (summary.core_question) {
+    parts.push(summary.core_question);
+  }
+  if (Array.isArray(summary.key_insights) && summary.key_insights.length > 0) {
+    parts.push(
+      ...summary.key_insights.slice(0, 2).map((item) => `${item.term}: ${item.definition}`)
+    );
+  }
+  return buildSummaryReference(parts.join(" "));
+}
+
+function renderWeeklyRecapText(
+  recap: WeeklyRecapV1,
+  locale: SupportedLocale
+): string {
+  const labels =
+    locale === "ja"
+      ? {
+          stats: "今週の記録",
+          conversations: "対話数",
+          activeDays: "アクティブ日数",
+          streak: "継続週数",
+          platform: "よく使ったプラットフォーム",
+          highlight: "ハイライト",
+          nextWeek: "来週に向けて",
+        }
+      : locale === "zh"
+        ? {
+            stats: "本周记录",
+            conversations: "对话数",
+            activeDays: "活跃天数",
+            streak: "连续周数",
+            platform: "最常用平台",
+            highlight: "亮点",
+            nextWeek: "下周建议",
+          }
+        : {
+            stats: "This week",
+            conversations: "Conversations",
+            activeDays: "Active days",
+            streak: "Streak (weeks)",
+            platform: "Top platform",
+            highlight: "Highlight",
+            nextWeek: "Next week",
+          };
+
+  const lines = [
+    `${recap.mood_emoji} ${recap.greeting} (${recap.persona_tag})`,
+    `${labels.stats}: ${labels.conversations} ${recap.stats.conversation_count} · ${labels.activeDays} ${recap.stats.active_days} · ${labels.streak} ${recap.stats.streak_weeks} · ${labels.platform} ${recap.stats.top_platform}`,
+  ];
+
+  if (recap.highlight) {
+    lines.push(`${labels.highlight}: ${recap.highlight.title} — ${recap.highlight.detail}`);
+  }
+
+  lines.push(recap.encouragement);
+  lines.push(`${labels.nextWeek}: ${recap.next_nudge}`);
+
+  return sanitizeSummaryText(lines.join("\n"));
+}
+
+function buildCodeOnlyRecap(
+  stats: WeeklyStats,
+  highlightContext: WeeklyRecapPromptPayload["highlightContext"],
+  locale: SupportedLocale
+): WeeklyRecapV1 {
+  const topPlatform = stats.topPlatforms[0]?.platform ?? "—";
+  const copy =
+    locale === "ja"
+      ? {
+          greeting: `今週は ${stats.conversationCount} 件の対話に取り組みました。`,
+          persona: "コツコツ探究家",
+          encouragement: "この調子で前に進んでいきましょう。",
+          nudge: "来週は気になるテーマを一つ選んで深掘りしてみましょう。",
+          highlightDetail: (title: string) => `「${title}」にじっくり向き合いました。`,
+        }
+      : locale === "zh"
+        ? {
+            greeting: `本周你完成了 ${stats.conversationCount} 次对话。`,
+            persona: "稳步探索者",
+            encouragement: "保持这股劲头，继续往前走。",
+            nudge: "下周挑一个你最感兴趣的话题深入聊聊吧。",
+            highlightDetail: (title: string) => `你在「${title}」上聊了很多。`,
+          }
+        : {
+            greeting: `You had ${stats.conversationCount} conversations this week.`,
+            persona: "Steady Explorer",
+            encouragement: "Keep that momentum going.",
+            nudge: "Next week, pick one topic you care about and go deeper.",
+            highlightDetail: (title: string) => `You spent real time on "${title}".`,
+          };
+
+  return normalizeWeeklyRecap({
+    schema: "weekly_recap.v1",
+    greeting: copy.greeting,
+    persona_tag: copy.persona,
+    stats: {
+      conversation_count: stats.conversationCount,
+      active_days: stats.activeDays,
+      streak_weeks: stats.streakWeeks,
+      top_platform: topPlatform,
+      week_over_week_delta: stats.weekOverWeekDelta,
+    },
+    highlight: highlightContext
+      ? {
+          title: highlightContext.title,
+          detail: copy.highlightDetail(highlightContext.title),
+        }
+      : null,
+    encouragement: copy.encouragement,
+    next_nudge: copy.nudge,
+    mood_emoji: stats.conversationCount > 0 ? "✨" : "🌱",
+  });
+}
+
+export async function generateWeeklyRecap(
+  settings: LlmConfig,
+  rangeStart: number,
+  rangeEnd: number
+): Promise<WeeklyReportRecord> {
+  const targetId = `${rangeStart}:${rangeEnd}`;
+  const pipelineEmitter = createPipelineProgressEmitter({
+    scope: "weekly",
+    targetId,
+    route: resolvePipelineRoute(settings),
+    modelId: getEffectiveModelId(settings),
+    promptVersion: getPrompt("weeklyRecap", { variant: "current" }).version,
+  });
+  pipelineEmitter.emit("initiating_pipeline", "in_progress");
+
+  try {
+    const { locale } = await getLanguageSettings();
+    const allConversations = await listConversationsByRange(rangeStart, rangeEnd);
+    const conversations = allConversations.filter(
+      (conversation) => !conversation.is_trash
+    );
+    const sourceHash = buildWeeklySourceHash(conversations, rangeStart, rangeEnd);
+    const topics = await getTopics();
+
+    // Prior-week counts (local DB, cheap) for streak + week-over-week delta.
+    const priorRanges = buildPriorWeekRanges(
+      rangeStart,
+      rangeEnd,
+      WEEKLY_RECAP_PRIOR_WEEKS
+    );
+    const previousWeekCounts: number[] = [];
+    for (const range of priorRanges) {
+      const priorConversations = await listConversationsByRange(
+        range.start,
+        range.end
+      );
+      previousWeekCounts.push(
+        priorConversations.filter((conversation) => !conversation.is_trash).length
+      );
+    }
+
+    const stats = computeWeeklyStats(conversations, {
+      topics,
+      previousWeekCounts,
+      dateTag: getLocaleDateTag(locale),
+    });
+
+    pipelineEmitter.emit("aggregating_weekly_digest", "in_progress");
+
+    // PLAN B — bounded top-1 summary: take the heaviest conversation; reuse a
+    // substantive summary if it already exists, else generate exactly ONE.
+    const ranked = rankHighlightCandidates(conversations, { topics });
+    const heaviest = ranked[0];
+    let summaryGist: string | undefined;
+
+    if (heaviest) {
+      try {
+        const existing = toSummaryV2ForWeekly(
+          await getSummary(heaviest.conversationId)
+        );
+        if (existing && isSubstantiveSummary(existing)) {
+          summaryGist = buildSummaryGistFromV2(existing);
+        } else {
+          const generatedRecord = await generateConversationSummary(
+            settings,
+            heaviest.conversationId
+          );
+          const generated = toSummaryV2ForWeekly(generatedRecord);
+          if (generated && isSubstantiveSummary(generated)) {
+            summaryGist = buildSummaryGistFromV2(generated);
+          } else if (generatedRecord.content) {
+            summaryGist = buildSummaryReference(generatedRecord.content);
+          }
+        }
+      } catch (error) {
+        // Never throw — emotional product must always return something.
+        logger.warn("service", "Weekly recap top-1 summary failed", {
+          conversationId: heaviest.conversationId,
+          reason: (error as Error).message || "WEEKLY_RECAP_SUMMARY_FAILED",
+        });
+        summaryGist = heaviest.snippet || undefined;
+      }
+    }
+
+    const highlightContext = buildRecapHighlightContext(
+      conversations,
+      topics,
+      summaryGist
+    );
+
+    const prompt = getPrompt("weeklyRecap", { variant: "current" });
+    const payload: WeeklyRecapPromptPayload = {
+      stats,
+      highlightContext,
+      rangeStart,
+      rangeEnd,
+      locale,
+    };
+
+    let recap: WeeklyRecapV1 | null = null;
+    let status: InsightStatus = "ok";
+
+    const parseRecapRaw = (raw: string) => {
+      try {
+        return parseWeeklyRecapObject(
+          parseJsonObjectFromText(toParsableJsonText(raw))
+        );
+      } catch {
+        return { success: false as const, errors: ["INVALID_JSON_PAYLOAD"] };
+      }
+    };
+
+    try {
+      const primaryPrompt = truncateForContext(
+        prompt.userTemplate(payload),
+        WEEKLY_RECAP_MAX_CHARS
+      );
+      const first = await callInference(settings, primaryPrompt, {
+        responseFormat: "json_object",
+        systemPrompt: prompt.system,
+      });
+
+      let parsed = parseRecapRaw(first.content);
+
+      if (!parsed.success) {
+        // ONE repair attempt.
+        const repairPrompt = truncateForContext(
+          buildRepairPrompt(
+            "weekly",
+            first.content,
+            parsed.success === false ? parsed.errors : []
+          ),
+          WEEKLY_RECAP_MAX_CHARS
+        );
+        const repaired = await callInference(settings, repairPrompt, {
+          responseFormat: "json_object",
+          systemPrompt: prompt.system,
+        });
+        parsed = parseRecapRaw(repaired.content);
+      }
+
+      if (parsed.success) {
+        // Trust code-computed stats over whatever the model echoed back.
+        recap = normalizeWeeklyRecap({
+          ...parsed.data,
+          stats: {
+            conversation_count: stats.conversationCount,
+            active_days: stats.activeDays,
+            streak_weeks: stats.streakWeeks,
+            top_platform:
+              stats.topPlatforms[0]?.platform ?? parsed.data.stats.top_platform,
+            week_over_week_delta: stats.weekOverWeekDelta,
+          },
+        });
+      }
+    } catch (error) {
+      logger.warn("service", "Weekly recap LLM copy failed", {
+        rangeStart,
+        rangeEnd,
+        reason: (error as Error).message || "WEEKLY_RECAP_COPY_FAILED",
+      });
+    }
+
+    if (!recap) {
+      recap = buildCodeOnlyRecap(stats, highlightContext, locale);
+      status = "fallback";
+    }
+
+    pipelineEmitter.emit("persisting_result", "in_progress", {
+      promptVersion: prompt.version,
+    });
+
+    logger.info("service", "Weekly recap generation result", {
+      promptVersion: prompt.version,
+      schemaVersion: "weekly_recap.v1",
+      status,
+      weekly_conversation_count: stats.conversationCount,
+      weekly_active_days: stats.activeDays,
+      weekly_streak_weeks: stats.streakWeeks,
+      weekly_recap_has_highlight: Boolean(highlightContext),
+    });
+
+    const saved = await saveWeeklyReport({
+      rangeStart,
+      rangeEnd,
+      content: renderWeeklyRecapText(recap, locale),
+      structured: recap,
+      format: "structured_v1",
+      status,
+      schemaVersion: "weekly_recap.v1",
+      modelId: getEffectiveModelId(settings),
+      createdAt: Date.now(),
+      sourceHash,
+    });
+
+    if (status === "fallback") {
+      pipelineEmitter.emit("degraded_fallback", "degraded_fallback", {
+        promptVersion: prompt.version,
+      });
+    } else {
+      pipelineEmitter.emit("completed", "completed", {
+        promptVersion: prompt.version,
       });
     }
 

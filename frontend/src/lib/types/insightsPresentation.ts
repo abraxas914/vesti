@@ -48,3 +48,21 @@ export interface WeeklySummaryData {
   insufficient_data: boolean;
   plain_text?: string;
 }
+
+export interface WeeklyRecapData {
+  meta: ArtifactMetaData;
+  greeting: string;
+  persona_tag: string;
+  mood_emoji: string;
+  stats: {
+    conversation_count: number;
+    active_days: number;
+    streak_weeks: number;
+    top_platform: string;
+    week_over_week_delta: number | null;
+  };
+  highlight: { title: string; detail: string } | null;
+  encouragement: string;
+  next_nudge: string;
+  plain_text?: string;
+}

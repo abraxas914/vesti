@@ -410,6 +410,7 @@ export const zhTranslations = {
     recapStatActiveDays: "活跃 {count} 天",
     recapStatStreak: "连续 {count} 周",
     recapStatPlatform: "常去 {platform}",
+    recapGenerating: "正在生成本周回顾...",
     depthLabels: {
       deep: "深度拆解",
       moderate: "逐步深挖",

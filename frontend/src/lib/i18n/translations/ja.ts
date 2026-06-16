@@ -410,6 +410,7 @@ export const jaTranslations = {
     recapStatActiveDays: "アクティブ {count} 日",
     recapStatStreak: "{count} 週連続",
     recapStatPlatform: "主に {platform}",
+    recapGenerating: "今週のふりかえりを作成中...",
     depthLabels: {
       deep: "深掘り",
       moderate: "標準的な分析",

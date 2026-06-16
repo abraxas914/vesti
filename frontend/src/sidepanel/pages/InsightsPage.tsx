@@ -629,6 +629,9 @@ export function InsightsPage({
   const weeklyUiStateRef = useRef<WeeklyDigestUiState>("idle");
   const weeklyHasReportRef = useRef(false);
   const weeklyGenerationRunRef = useRef(0);
+  // Tracks which last-full-week range we've already auto-generated, so the
+  // automatic recap fires at most once per range (no retry loop on failure).
+  const weeklyAutoGenRangeRef = useRef<string | null>(null);
 
   const weekAnchorKey = new Date().toDateString();
   const weeklyRange = useMemo(
@@ -1057,6 +1060,19 @@ export function InsightsPage({
         setWeeklyStableState(nextStableState);
         setWeeklyUiState(nextStableState);
         setWeeklyPhase("ready_to_compile");
+
+        // Auto-generate the recap for the completed week ("上周") once it has no
+        // stored report yet. "近 7 天" stays manual (it changes daily, so an
+        // auto recap would be stale immediately).
+        const rangeKey = `${weeklyRange.rangeStart}:${weeklyRange.rangeEnd}`;
+        if (
+          !data &&
+          weeklyRangeMode === "last_full_week" &&
+          weeklyAutoGenRangeRef.current !== rangeKey
+        ) {
+          weeklyAutoGenRangeRef.current = rangeKey;
+          void handleGenerateWeekly();
+        }
       })
       .catch((error) => {
         if (!active) return;
@@ -1549,65 +1565,11 @@ export function InsightsPage({
 
         <div className="ins-week-gen-shell">
           <div className="ins-week-gen-header">
-            <span className="ins-week-wand-wrap" aria-hidden="true">
-              <span className="ins-week-wand-ring" />
-              <span className="ins-week-wand-chip">
-                <InsightsWandIcon className="h-3.5 w-3.5 text-accent-primary" />
-              </span>
-            </span>
-
+            <Loader2 className="h-4 w-4 animate-spin text-accent-primary" />
             <div className="min-w-0 flex-1">
-              <p className="ins-week-status-copy">
-                {weeklyGenerationPaused
-                  ? t.insights.pausedResumeHint
-                  : weeklyStatusText}
-              </p>
+              <p className="ins-week-status-copy">{t.insights.recapGenerating}</p>
             </div>
-
             <span className="ins-week-timer">{formatTimer(weeklyElapsedMs)}</span>
-          </div>
-
-          <div className="ins-week-phase-track">
-            {WEEKLY_PHASES.map((phase, index) => {
-              const rowState =
-                weeklyPhaseIndex > index
-                  ? "ins-week-phase-done"
-                  : weeklyPhaseIndex === index
-                    ? "ins-week-phase-active"
-                    : "ins-week-phase-idle";
-
-              return (
-                <div key={phase.phase} className={`ins-week-phase-row ${rowState}`}>
-                  <span className="ins-week-phase-dot" />
-                  <span className="min-w-0 flex-1">
-                    <span className="ins-week-phase-label">{getWeeklyPhaseLabel(t, phase.phase)}</span>
-                    <span className="ins-week-phase-sublabel">{getWeeklyPhaseSublabel(t, phase.phase)}</span>
-                  </span>
-                  <span className="ins-week-phase-time">{phase.hint}</span>
-                  <span className="ins-week-phase-tick">OK</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="ins-week-gen-controls">
-            <button
-              type="button"
-              onClick={handleToggleWeeklyPause}
-              aria-pressed={weeklyGenerationPaused}
-              aria-label={weeklyGenerationPaused ? t.insights.resumeProgress : t.insights.pauseProgress}
-              className="ins-week-gen-control-btn"
-            >
-              {weeklyGenerationPaused ? (
-                <Play className="h-3.5 w-3.5" strokeWidth={1.8} />
-              ) : (
-                <Pause className="h-3.5 w-3.5" strokeWidth={1.8} />
-              )}
-              <span>{weeklyGenerationPaused ? t.insights.resume : t.insights.pause}</span>
-            </button>
-            <p className="ins-week-gen-control-note">
-              {t.insights.uiPauseOnly}
-            </p>
           </div>
         </div>
       </>

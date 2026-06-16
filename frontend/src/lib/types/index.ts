@@ -715,6 +715,9 @@ export interface WeeklyRecapV1 {
   schema?: "weekly_recap.v1"
   greeting: string
   persona_tag: string
+  mood_emoji: string
+  narrative: string[]
+  highlight: { title: string; detail: string } | null
   stats: {
     conversation_count: number
     active_days: number
@@ -722,10 +725,6 @@ export interface WeeklyRecapV1 {
     top_platform: string
     week_over_week_delta: number | null
   }
-  highlight: { title: string; detail: string } | null
-  encouragement: string
-  next_nudge: string
-  mood_emoji: string
 }
 
 export interface WeeklyReportRecord {

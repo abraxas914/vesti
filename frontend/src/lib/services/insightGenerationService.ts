@@ -2926,8 +2926,9 @@ function renderWeeklyRecapText(
     lines.push(`${labels.highlight}: ${recap.highlight.title} — ${recap.highlight.detail}`);
   }
 
-  lines.push(recap.encouragement);
-  lines.push(`${labels.nextWeek}: ${recap.next_nudge}`);
+  for (const paragraph of recap.narrative) {
+    lines.push(paragraph);
+  }
 
   return sanitizeSummaryText(lines.join("\n"));
 }
@@ -2938,35 +2939,94 @@ function buildCodeOnlyRecap(
   locale: SupportedLocale
 ): WeeklyRecapV1 {
   const topPlatform = stats.topPlatforms[0]?.platform ?? "—";
-  const copy =
-    locale === "ja"
-      ? {
-          greeting: `今週は ${stats.conversationCount} 件の対話に取り組みました。`,
-          persona: "コツコツ探究家",
-          encouragement: "この調子で前に進んでいきましょう。",
-          nudge: "来週は気になるテーマを一つ選んで深掘りしてみましょう。",
-          highlightDetail: (title: string) => `「${title}」にじっくり向き合いました。`,
-        }
-      : locale === "zh"
-        ? {
-            greeting: `本周你完成了 ${stats.conversationCount} 次对话。`,
-            persona: "稳步探索者",
-            encouragement: "保持这股劲头，继续往前走。",
-            nudge: "下周挑一个你最感兴趣的话题深入聊聊吧。",
-            highlightDetail: (title: string) => `你在「${title}」上聊了很多。`,
-          }
-        : {
-            greeting: `You had ${stats.conversationCount} conversations this week.`,
-            persona: "Steady Explorer",
-            encouragement: "Keep that momentum going.",
-            nudge: "Next week, pick one topic you care about and go deeper.",
-            highlightDetail: (title: string) => `You spent real time on "${title}".`,
-          };
+  const hasPlatform = Boolean(topPlatform && topPlatform !== "—");
+  const delta = stats.weekOverWeekDelta;
+  const title = highlightContext?.title ?? "";
+
+  let greeting: string;
+  let persona: string;
+  const narrative: string[] = [];
+
+  if (locale === "ja") {
+    greeting = "今週もよく対話しましたね 👏";
+    persona = "コツコツ探究家";
+    narrative.push(
+      `今週は ${stats.conversationCount} 件の対話に取り組み、${stats.activeDays} 日アクティブでした${
+        hasPlatform ? `（主に ${topPlatform}）` : ""
+      }。`
+    );
+    if (delta !== null && delta > 0) {
+      narrative.push(`先週より ${delta} 件多く、いい流れです 🔥。`);
+    } else if (delta !== null && delta < 0) {
+      narrative.push(`先週より ${Math.abs(delta)} 件少なめでも、ペースはあなた次第です。`);
+    } else if (stats.streakWeeks >= 2) {
+      narrative.push(`${stats.streakWeeks} 週連続で探究を続けています。すばらしい継続です。`);
+    } else {
+      narrative.push("この好奇心のまま、焦らず進んでいきましょう。");
+    }
+    narrative.push(
+      title
+        ? `特に「${title}」にじっくり向き合いました。来週は気になるテーマを一つ選んで、さらに深掘りしてみましょう。`
+        : "来週は気になるテーマを一つ選んで深掘りしてみましょう。"
+    );
+  } else if (locale === "zh") {
+    greeting = "这一周你很投入 👏";
+    persona = "稳步探索者";
+    narrative.push(
+      `这一周，你完成了 ${stats.conversationCount} 次对话，活跃了 ${stats.activeDays} 天${
+        hasPlatform ? `，最常去 ${topPlatform}` : ""
+      }。`
+    );
+    if (delta !== null && delta > 0) {
+      narrative.push(`比上一周多聊了 ${delta} 次，势头正好 🔥。`);
+    } else if (delta !== null && delta < 0) {
+      narrative.push(`比上一周少了 ${Math.abs(delta)} 次，节奏由你自己说了算。`);
+    } else if (stats.streakWeeks >= 2) {
+      narrative.push(`已经连续 ${stats.streakWeeks} 周保持探索，这份坚持很难得。`);
+    } else {
+      narrative.push("保持这股好奇心，慢慢来也很好。");
+    }
+    narrative.push(
+      title
+        ? `你在「${title}」上聊得最深，值得回看。下周不妨挑一个最感兴趣的方向再聊聊。`
+        : "下周不妨挑一个你最感兴趣的话题深入聊聊。"
+    );
+  } else {
+    greeting = "Nice week — you showed up 👏";
+    persona = "Steady Explorer";
+    narrative.push(
+      `This week you had ${stats.conversationCount} conversations across ${stats.activeDays} active days${
+        hasPlatform ? `, mostly on ${topPlatform}` : ""
+      }.`
+    );
+    if (delta !== null && delta > 0) {
+      narrative.push(`That's ${delta} more than last week — great momentum 🔥.`);
+    } else if (delta !== null && delta < 0) {
+      narrative.push(`That's ${Math.abs(delta)} fewer than last week, and that's perfectly fine — you set the pace.`);
+    } else if (stats.streakWeeks >= 2) {
+      narrative.push(`You're on a ${stats.streakWeeks}-week streak of staying curious. That consistency adds up.`);
+    } else {
+      narrative.push("Keep that curiosity going — slow and steady works too.");
+    }
+    narrative.push(
+      title
+        ? `You went deepest on "${title}" — worth a revisit. Next week, pick one topic you care about and go further.`
+        : "Next week, pick one topic you care about and go deeper."
+    );
+  }
 
   return normalizeWeeklyRecap({
     schema: "weekly_recap.v1",
-    greeting: copy.greeting,
-    persona_tag: copy.persona,
+    greeting,
+    persona_tag: persona,
+    mood_emoji: stats.conversationCount > 0 ? "✨" : "🌱",
+    narrative,
+    highlight: title
+      ? {
+          title,
+          detail: highlightContext?.summaryGist || highlightContext?.title || "",
+        }
+      : null,
     stats: {
       conversation_count: stats.conversationCount,
       active_days: stats.activeDays,
@@ -2974,15 +3034,6 @@ function buildCodeOnlyRecap(
       top_platform: topPlatform,
       week_over_week_delta: stats.weekOverWeekDelta,
     },
-    highlight: highlightContext
-      ? {
-          title: highlightContext.title,
-          detail: copy.highlightDetail(highlightContext.title),
-        }
-      : null,
-    encouragement: copy.encouragement,
-    next_nudge: copy.nudge,
-    mood_emoji: stats.conversationCount > 0 ? "✨" : "🌱",
   });
 }
 

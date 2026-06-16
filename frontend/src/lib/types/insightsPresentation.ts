@@ -62,7 +62,6 @@ export interface WeeklyRecapData {
     week_over_week_delta: number | null;
   };
   highlight: { title: string; detail: string } | null;
-  encouragement: string;
-  next_nudge: string;
+  narrative: string[];
   plain_text?: string;
 }

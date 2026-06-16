@@ -404,6 +404,10 @@ export const enTranslations = {
     recapHighlight: "Highlight of the week",
     recapEncouragement: "Encouragement",
     recapNextWeek: "For next week",
+    recapStatConversations: "{count} conversations",
+    recapStatActiveDays: "{count} active days",
+    recapStatStreak: "{count}-week streak",
+    recapStatPlatform: "mostly on {platform}",
     depthLabels: {
       deep: "Deep Dive",
       moderate: "Moderate Analysis",

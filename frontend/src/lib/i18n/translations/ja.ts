@@ -406,6 +406,10 @@ export const jaTranslations = {
     recapHighlight: "今週のハイライト",
     recapEncouragement: "応援メッセージ",
     recapNextWeek: "来週に向けて",
+    recapStatConversations: "{count} 件の対話",
+    recapStatActiveDays: "アクティブ {count} 日",
+    recapStatStreak: "{count} 週連続",
+    recapStatPlatform: "主に {platform}",
     depthLabels: {
       deep: "深掘り",
       moderate: "標準的な分析",

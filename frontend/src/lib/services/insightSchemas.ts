@@ -27,6 +27,8 @@ const MAX_RECAP_DETAIL_LENGTH = 200;
 const MAX_RECAP_PERSONA_LENGTH = 24;
 const MAX_RECAP_EMOJI_LENGTH = 8;
 const MAX_RECAP_PLATFORM_LENGTH = 40;
+const MAX_RECAP_NARRATIVE_LENGTH = 280;
+const MAX_RECAP_NARRATIVE_ITEMS = 4;
 
 type WeeklyCrossDomainEcho = WeeklyLiteReportV1["cross_domain_echoes"][number];
 type WeeklyNarrativeField =
@@ -296,13 +298,22 @@ const weeklyRecapSchema = z.object({
       })
       .nullable()
   ),
-  encouragement: z.preprocess(
-    (v) => (typeof v === "string" ? v.slice(0, MAX_RECAP_TEXT_LENGTH) : v),
-    z.string().min(1).max(MAX_RECAP_TEXT_LENGTH)
-  ),
-  next_nudge: z.preprocess(
-    (v) => (typeof v === "string" ? v.slice(0, MAX_RECAP_TEXT_LENGTH) : v),
-    z.string().min(1).max(MAX_RECAP_TEXT_LENGTH)
+  narrative: z.preprocess(
+    (v) => {
+      if (Array.isArray(v)) {
+        return v
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim().slice(0, MAX_RECAP_NARRATIVE_LENGTH))
+          .filter((item) => item.length > 0)
+          .slice(0, MAX_RECAP_NARRATIVE_ITEMS);
+      }
+      if (typeof v === "string") {
+        const trimmed = v.trim();
+        return trimmed ? [trimmed.slice(0, MAX_RECAP_NARRATIVE_LENGTH)] : [];
+      }
+      return [];
+    },
+    z.array(z.string().min(1).max(MAX_RECAP_NARRATIVE_LENGTH)).max(MAX_RECAP_NARRATIVE_ITEMS)
   ),
   mood_emoji: z.preprocess(
     (v) => (typeof v === "string" ? v.slice(0, MAX_RECAP_EMOJI_LENGTH) : v),
@@ -1417,6 +1428,9 @@ export function normalizeWeeklyRecap(input: {
   schema?: "weekly_recap.v1";
   greeting: string;
   persona_tag: string;
+  mood_emoji: string;
+  narrative: string[];
+  highlight: { title: string; detail: string } | null;
   stats: {
     conversation_count: number;
     active_days: number;
@@ -1424,24 +1438,19 @@ export function normalizeWeeklyRecap(input: {
     top_platform: string;
     week_over_week_delta: number | null;
   };
-  highlight: { title: string; detail: string } | null;
-  encouragement: string;
-  next_nudge: string;
-  mood_emoji: string;
 }): WeeklyRecapV1 {
   const greeting =
     clampRecapText(input.greeting, MAX_RECAP_TEXT_LENGTH) || "Nice work this week.";
   const personaTag =
     clampRecapText(input.persona_tag, MAX_RECAP_PERSONA_LENGTH) || "Explorer";
-  const encouragement =
-    clampRecapText(input.encouragement, MAX_RECAP_TEXT_LENGTH) ||
-    "Keep the momentum going.";
-  const nextNudge =
-    clampRecapText(input.next_nudge, MAX_RECAP_TEXT_LENGTH) ||
-    "Pick one thread to revisit next week.";
   const moodEmoji = clampRecapText(input.mood_emoji, MAX_RECAP_EMOJI_LENGTH) || "✨";
   const topPlatform =
     clampRecapText(input.stats.top_platform, MAX_RECAP_PLATFORM_LENGTH) || "—";
+
+  const narrative = (Array.isArray(input.narrative) ? input.narrative : [])
+    .map((item) => clampRecapText(item, MAX_RECAP_NARRATIVE_LENGTH))
+    .filter((item) => item.length > 0)
+    .slice(0, MAX_RECAP_NARRATIVE_ITEMS);
 
   let highlight: WeeklyRecapV1["highlight"] = null;
   if (input.highlight) {
@@ -1461,6 +1470,9 @@ export function normalizeWeeklyRecap(input: {
     schema: "weekly_recap.v1",
     greeting,
     persona_tag: personaTag,
+    mood_emoji: moodEmoji,
+    narrative,
+    highlight,
     stats: {
       conversation_count: toCount(input.stats.conversation_count),
       active_days: toCount(input.stats.active_days),
@@ -1471,10 +1483,6 @@ export function normalizeWeeklyRecap(input: {
           ? Math.trunc(delta)
           : null,
     },
-    highlight,
-    encouragement,
-    next_nudge: nextNudge,
-    mood_emoji: moodEmoji,
   };
 }
 
@@ -1744,8 +1752,13 @@ export const insightSchemaHints = {
   },
   weekly_recap: {
     schema: "weekly_recap.v1",
-    greeting: "string (1 short sentence, <= 120 chars)",
+    greeting: "string (punchy one-line title, <= 120 chars)",
     persona_tag: "string (<= 24 chars, e.g. 'Deep Diver')",
+    mood_emoji: "string (a single emoji)",
+    narrative: [
+      "string (2-3 warm second-person paragraphs, each 1-2 sentences, <= 280 chars; weave the real numbers in naturally)",
+    ],
+    highlight: { title: "string", detail: "string (<= 200 chars)" },
     stats: {
       conversation_count: "number",
       active_days: "number",
@@ -1753,9 +1766,5 @@ export const insightSchemaHints = {
       top_platform: "string",
       week_over_week_delta: "number | null",
     },
-    highlight: { title: "string", detail: "string (<= 200 chars)" },
-    encouragement: "string (1 short sentence, <= 120 chars)",
-    next_nudge: "string (1 short sentence, <= 120 chars)",
-    mood_emoji: "string (a single emoji)",
   },
 };

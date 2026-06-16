@@ -604,7 +604,7 @@ export function InsightsPage({
   const [weeklyConversations, setWeeklyConversations] = useState<Conversation[]>([]);
   const [isWeeklyListExpanded, setIsWeeklyListExpanded] = useState(false);
   const [weeklyRangeMode, setWeeklyRangeMode] =
-    useState<WeeklyRangeMode>("last_7_days");
+    useState<WeeklyRangeMode>("last_full_week");
 
   const [weeklyPhase, setWeeklyPhase] =
     useState<WeeklyGenerationPhase>("ready_to_compile");
@@ -1615,27 +1615,33 @@ export function InsightsPage({
   };
 
   const renderWeeklyRecap = (recap: WeeklyRecapData) => {
-    const delta = recap.stats.week_over_week_delta;
-    const deltaLabel =
-      delta === null ? null : delta > 0 ? `+${delta}` : String(delta);
-    const statItems: Array<{ label: string; value: string }> = [
-      {
-        label: t.insights.statConversations,
-        value: String(recap.stats.conversation_count),
-      },
-      {
-        label: t.insights.statActiveDays,
-        value: String(recap.stats.active_days),
-      },
-      {
-        label: t.insights.statStreak,
-        value: String(recap.stats.streak_weeks),
-      },
-      {
-        label: t.insights.statTopPlatform,
-        value: recap.stats.top_platform,
-      },
+    const statStripParts: string[] = [
+      t.insights.recapStatConversations.replace(
+        "{count}",
+        String(recap.stats.conversation_count)
+      ),
+      t.insights.recapStatActiveDays.replace(
+        "{count}",
+        String(recap.stats.active_days)
+      ),
     ];
+    if (recap.stats.streak_weeks >= 1) {
+      statStripParts.push(
+        t.insights.recapStatStreak.replace(
+          "{count}",
+          String(recap.stats.streak_weeks)
+        )
+      );
+    }
+    if (recap.stats.top_platform && recap.stats.top_platform !== "—") {
+      statStripParts.push(
+        t.insights.recapStatPlatform.replace(
+          "{platform}",
+          recap.stats.top_platform
+        )
+      );
+    }
+    const statStrip = statStripParts.join(" · ");
 
     return (
       <>
@@ -1662,31 +1668,29 @@ export function InsightsPage({
 
         <div className="ins-week-ready-shell">
           <section className="ins-thread-core-card">
-            <p className="ins-thread-core-label">
-              {recap.mood_emoji} {t.insights.recapTitle}
+            <p className="ins-thread-core-label">{t.insights.recapTitle}</p>
+            <p className="ins-thread-core-text">
+              {recap.mood_emoji} {recap.greeting}
             </p>
-            <p className="ins-thread-core-text">{recap.greeting}</p>
-            {recap.persona_tag && (
-              <span className="ins-week-count-chip">{recap.persona_tag}</span>
-            )}
-          </section>
-
-          <section>
-            <div className="ins-week-highlight-list">
-              {statItems.map((item) => (
-                <article className="ins-week-highlight-item" key={item.label}>
-                  <p className="ins-week-echo-label">{item.label}</p>
-                  <p className="ins-thread-core-text">{item.value}</p>
-                </article>
-              ))}
-              {deltaLabel !== null && (
-                <article className="ins-week-highlight-item">
-                  <p className="ins-week-echo-label">{t.insights.nextWeek}</p>
-                  <p className="ins-thread-core-text">{deltaLabel}</p>
-                </article>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {recap.persona_tag && (
+                <span className="ins-week-count-chip">{recap.persona_tag}</span>
+              )}
+              {statStrip && (
+                <span className="text-[11px] text-text-tertiary">{statStrip}</span>
               )}
             </div>
           </section>
+
+          {recap.narrative.length > 0 && (
+            <section className="flex flex-col gap-2">
+              {recap.narrative.map((paragraph, index) => (
+                <p className="ins-thread-core-text" key={`recap-p-${index}`}>
+                  {paragraph}
+                </p>
+              ))}
+            </section>
+          )}
 
           {recap.highlight && (
             <section>
@@ -1697,29 +1701,6 @@ export function InsightsPage({
               <article className="ins-week-highlight-item">
                 <p className="ins-week-highlight-text">{recap.highlight.title}</p>
                 <p className="ins-thread-insight-def">{recap.highlight.detail}</p>
-              </article>
-            </section>
-          )}
-
-          {recap.encouragement && (
-            <section>
-              <div className="ins-week-sec-head">
-                <span className="ins-week-sec-label">{t.insights.recapEncouragement}</span>
-                <span className="ins-week-sec-line" />
-              </div>
-              <p className="ins-thread-core-text">{recap.encouragement}</p>
-            </section>
-          )}
-
-          {recap.next_nudge && (
-            <section>
-              <div className="ins-week-sec-head">
-                <span className="ins-week-sec-label">{t.insights.recapNextWeek}</span>
-                <span className="ins-week-sec-line" />
-              </div>
-              <article className="ins-week-focus-item">
-                <span className="ins-week-focus-arrow">-&gt;</span>
-                <p className="ins-week-focus-text">{recap.next_nudge}</p>
               </article>
             </section>
           )}

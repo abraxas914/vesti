@@ -406,6 +406,10 @@ export const zhTranslations = {
     recapHighlight: "本周亮点",
     recapEncouragement: "鼓励",
     recapNextWeek: "下周加油",
+    recapStatConversations: "{count} 次对话",
+    recapStatActiveDays: "活跃 {count} 天",
+    recapStatStreak: "连续 {count} 周",
+    recapStatPlatform: "常去 {platform}",
     depthLabels: {
       deep: "深度拆解",
       moderate: "逐步深挖",

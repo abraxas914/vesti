@@ -13,30 +13,29 @@ Your job: turn the provided pre-computed stats into a SHORT, emotionally-encoura
 
 Hard constraints:
 1) Output ONE JSON object only. No markdown, no code fences, no commentary.
-2) Each user-facing text field is ONE short sentence. Be specific and warm.
-3) Write in the second person ("you"), celebrating the user's week.
-4) Use the REAL numbers from the provided stats (conversation_count, active_days, streak_weeks, top_platform). Do NOT invent any facts beyond the provided stats and highlight.
-5) If a highlight is provided, reflect it honestly in highlight.title/detail; if none is provided, set highlight to null.
-6) mood_emoji is a single emoji that matches the week's energy.
-7) persona_tag is a short, playful label for the user this week (<= 24 chars), e.g. "Deep Diver", "Curious Builder".
-8) JSON field names stay in English. Only the text VALUES are localized.
+2) "greeting" is a punchy one-line title. "narrative" is an array of 2-3 SHORT warm paragraphs (1-2 sentences each) that tell the story of the user's week as FLOWING PROSE — not a list of stats.
+3) Write in the second person ("you"), warm and celebratory (Spotify Wrapped / Duolingo vibe).
+4) Weave the REAL numbers from the provided stats INTO the narrative sentences (conversation_count, active_days, streak_weeks, top_platform). Express week_over_week_delta as a NATURAL sentence (e.g. "that's 11 more than last week") — NEVER a bare "+11". Do NOT invent anything beyond the provided stats and highlight.
+5) Shape the narrative as: open by celebrating the week with the numbers; mention the change vs last week (or the streak); end with a gentle nudge for next week. Keep it tight and human.
+6) If a highlight is provided, reflect it in highlight.title/detail; if none, set highlight to null.
+7) mood_emoji is a single emoji matching the week's energy. persona_tag is a short, playful label (<= 24 chars), e.g. "Deep Diver".
+8) Copy the numbers into "stats" exactly as provided. JSON field names stay English; only text VALUES are localized.
 
 Output schema (weekly_recap.v1):
 {
   "schema": "weekly_recap.v1",
-  "greeting": "string",
-  "persona_tag": "string",
+  "greeting": "string (punchy one-line title)",
+  "persona_tag": "string (<= 24 chars)",
+  "mood_emoji": "string (one emoji)",
+  "narrative": ["string", "string"],
+  "highlight": { "title": "string", "detail": "string" } | null,
   "stats": {
     "conversation_count": 0,
     "active_days": 0,
     "streak_weeks": 0,
     "top_platform": "string",
     "week_over_week_delta": 0
-  },
-  "highlight": { "title": "string", "detail": "string" } | null,
-  "encouragement": "string",
-  "next_nudge": "string",
-  "mood_emoji": "string"
+  }
 }`;
 
 const WEEKLY_RECAP_FALLBACK_SYSTEM =
@@ -105,10 +104,11 @@ ${buildHighlightBlock(payload)}
 Requirements:
 1) Output one JSON object only, matching weekly_recap.v1.
 2) Copy the numbers into stats exactly (conversation_count, active_days, streak_weeks, top_platform, week_over_week_delta).
-3) Each text field is ONE short, warm, second-person sentence.
-4) If the highlight above is null, set "highlight" to null; otherwise fill title + detail from it (no fabrication).
-5) Pick a fitting mood_emoji and a playful persona_tag.
-6) ${languageDirective}`;
+3) Write "narrative" as 2-3 short, warm, second-person paragraphs that weave the numbers in naturally; say the week-over-week change as a sentence (e.g. "11 more than last week"), never a bare "+11".
+4) "greeting" is a punchy one-line title (not a full paragraph).
+5) If the highlight above is null, set "highlight" to null; otherwise fill title + detail from it (no fabrication).
+6) Pick a fitting mood_emoji and a playful persona_tag.
+7) ${languageDirective}`;
 }
 
 function buildWeeklyRecapFallbackPrompt(

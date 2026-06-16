@@ -699,8 +699,11 @@ export function toWeeklyRecapData(
   const greeting = normalizeText(structured.greeting);
   const personaTag = normalizeText(structured.persona_tag);
   const moodEmoji = normalizeText(structured.mood_emoji) || "✨";
-  const encouragement = normalizeText(structured.encouragement);
-  const nextNudge = normalizeText(structured.next_nudge);
+  const narrative = Array.isArray(structured.narrative)
+    ? structured.narrative
+        .map((paragraph) => normalizeText(paragraph))
+        .filter((paragraph) => paragraph.length > 0)
+    : [];
 
   const highlight =
     structured.highlight &&
@@ -718,7 +721,7 @@ export function toWeeklyRecapData(
     meta: {
       title: `Weekly Recap ${rangeLabel}`,
       generated_at: toIsoTime(report.createdAt),
-      tags: inferTags([], `${greeting}\n${encouragement}`, locale),
+      tags: inferTags([], `${greeting}\n${narrative.join("\n")}`, locale),
       fallback: report.status === "fallback",
       range_label: rangeLabel,
     },
@@ -734,8 +737,7 @@ export function toWeeklyRecapData(
         typeof delta === "number" && Number.isFinite(delta) ? Math.trunc(delta) : null,
     },
     highlight,
-    encouragement,
-    next_nudge: nextNudge,
+    narrative,
     plain_text: report.content,
   };
 }

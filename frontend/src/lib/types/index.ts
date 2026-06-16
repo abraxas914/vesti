@@ -558,7 +558,9 @@ export interface UiSettings {
   themeMode: UiThemeMode
 }
 
-export type SupportedLocale = "en" | "zh" | "ja"
+// Single source of truth lives in the locale registry; re-exported here so
+// existing `~lib/types` importers stay in sync automatically when a language is added.
+export type { SupportedLocale } from "../i18n/locales"
 
 export type NotionAuthMode = "disconnected" | "oauth_public" | "legacy_manual"
 

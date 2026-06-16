@@ -1,24 +1,7 @@
 import type { Message } from "../types";
-import type { SupportedLocale } from "../i18n/locales";
+import { getLocaleDateTag, getLlmLanguageName, type SupportedLocale } from "../i18n/locales";
 import { buildMessageFallbackDisplayText } from "../utils/messageContentPackage";
 import type { CompactionPromptPayload, PromptVersion } from "./types";
-
-function dateLocaleTag(locale: SupportedLocale): string {
-  return locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
-}
-
-function compactionLanguageLabel(
-  locale: SupportedLocale,
-  options: { withNatural: boolean }
-): string {
-  if (locale === "ja") {
-    return options.withNatural ? "natural Japanese (自然な日本語)" : "Japanese";
-  }
-  if (locale === "zh") {
-    return options.withNatural ? "natural Chinese" : "Chinese";
-  }
-  return options.withNatural ? "natural English" : "English";
-}
 
 const COMPACTION_SYSTEM = `You are Agent A: Vesti's structured context compaction engine.
 
@@ -43,7 +26,7 @@ Hard rules:
 8) Output markdown only. No JSON. No code fences.`;
 
 function formatTime(value: number, locale: SupportedLocale): string {
-  return new Date(value).toLocaleTimeString(dateLocaleTag(locale), {
+  return new Date(value).toLocaleTimeString(getLocaleDateTag(locale), {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -75,7 +58,7 @@ function buildCompactionPrompt(payload: CompactionPromptPayload): string {
   const conversationTitle = payload.conversationTitle || "(untitled)";
   const conversationPlatform = payload.conversationPlatform || "unknown";
   const conversationOriginAt = payload.conversationOriginAt
-    ? new Date(payload.conversationOriginAt).toLocaleString(dateLocaleTag(locale))
+    ? new Date(payload.conversationOriginAt).toLocaleString(getLocaleDateTag(locale))
     : "unknown";
 
   return `Build an Agent-A compaction markdown skeleton from this conversation slice.
@@ -100,9 +83,7 @@ Execution constraints:
    - ## Concept Matrix
    - ## Unresolved Tensions
 6) If evidence is sparse, keep sections but use minimal conservative bullets.
-7) Write all user-facing skeleton text in ${compactionLanguageLabel(locale, {
-    withNatural: true,
-  })} (keep the section headings exactly as listed above in English).
+7) Write all user-facing skeleton text in ${getLlmLanguageName(locale)} (keep the section headings exactly as listed above in English).
 8) Output markdown only (no JSON, no code fences).`;
 }
 
@@ -110,7 +91,7 @@ function buildCompactionFallbackPrompt(payload: CompactionPromptPayload): string
   const locale = payload.locale || "en";
   return `Write a concise plain-text compaction for this conversation in 5-8 lines.
 Focus on: core tension, key reasoning transitions, concrete anchor, and unresolved points.
-Write the output in ${compactionLanguageLabel(locale, { withNatural: false })}.
+Write the output in ${getLlmLanguageName(locale)}.
 
 Conversation:
 ${toCompactTranscript(payload.messages, locale, payload.transcriptOverride)}`;

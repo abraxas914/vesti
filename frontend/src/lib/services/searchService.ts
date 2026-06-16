@@ -42,7 +42,7 @@ import type {
 } from "./llmService";
 import { callInference } from "./llmService";
 import { getLanguageSettings } from "./languageSettingsService";
-import type { SupportedLocale } from "../i18n/locales";
+import { getLlmLanguageName, buildLlmOutputDirective, type SupportedLocale } from "../i18n/locales";
 import { getEffectiveModelId, getLlmAccessMode } from "./llmConfig";
 import { getLlmSettings } from "./llmSettingsService";
 import { logger } from "../utils/logger";
@@ -509,11 +509,7 @@ function normalizeAgentPlan(
 }
 
 function localeOutputDirective(locale: SupportedLocale): string {
-  return locale === "ja"
-    ? "ユーザーが他の言語を明示的に求めない限り、ユーザー向けの回答は自然な日本語で書いてください。"
-    : locale === "zh"
-      ? "请用自然流畅的简体中文撰写面向用户的回答，除非用户明确要求使用其他语言。"
-      : "Write the user-facing answer in English, unless the user explicitly requests another language.";
+  return buildLlmOutputDirective(locale);
 }
 
 function buildPlannerPrompt(params: {
@@ -549,13 +545,9 @@ function buildPlannerPrompt(params: {
     "- Never choose weekly_summary for a topic-only query with no explicit time phrase. For example, '数学建模比赛' must stay on the rag path.",
     "- Use clarification_needed only when the request is too ambiguous to answer responsibly.",
     "- Use rag for factual lookup and cross-conversation synthesis that are not primarily time-window based.",
-    `- Write "clarifyingQuestion", "answerGoal", and any other user-facing natural-language text in ${
-      params.locale === "ja"
-        ? "natural Japanese (自然な日本語)"
-        : params.locale === "zh"
-          ? "Simplified Chinese"
-          : "English"
-    } (JSON field names stay in English).`,
+    `- Write "clarifyingQuestion", "answerGoal", and any other user-facing natural-language text in ${getLlmLanguageName(
+      params.locale
+    )} (JSON field names stay in English).`,
     "",
     "Return JSON only with this schema:",
     "{",

@@ -49,7 +49,7 @@ import {
 import type { WeeklySemanticIssueCode } from "./insightSchemas";
 import { logger } from "../utils/logger";
 import { getLanguageSettings } from "./languageSettingsService";
-import type { SupportedLocale } from "../i18n/locales";
+import { getLocaleDateTag, getLlmLanguageName, type SupportedLocale } from "../i18n/locales";
 import { getEffectiveModelId, getLlmAccessMode } from "./llmConfig";
 import {
   getConversationCaptureFreshnessAt,
@@ -516,8 +516,7 @@ function formatRangeLabel(
   rangeEnd: number,
   locale: SupportedLocale
 ): string {
-  const dateLocale =
-    locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
+  const dateLocale = getLocaleDateTag(locale);
   const start = new Date(rangeStart).toLocaleDateString(dateLocale, {
     month: "2-digit",
     day: "2-digit",
@@ -1022,13 +1021,9 @@ Constraints:
 10) depth_level must be one of: "superficial", "moderate", "deep" (lowercase only).
 11) unresolved_threads and actionable_next_steps must be complete phrases, not fragments.
 12) When evidence is sufficient, target 2-4 items for unresolved_threads and actionable_next_steps; when sparse, 1 item or [] is acceptable.
-13) Write all user-facing text values in ${
-    locale === "ja"
-      ? "natural Japanese (自然な日本語)"
-      : locale === "zh"
-        ? "natural Chinese"
-        : "natural English"
-  }. Keep JSON keys and enum values (speaker, depth_level) in English.`;
+13) Write all user-facing text values in ${getLlmLanguageName(
+    locale
+  )}. Keep JSON keys and enum values (speaker, depth_level) in English.`;
 }
 
 async function runCompaction(

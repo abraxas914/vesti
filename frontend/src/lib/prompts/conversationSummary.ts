@@ -1,14 +1,10 @@
 ﻿import type { Message } from "../types";
-import type { SupportedLocale } from "../i18n/locales";
+import { getLocaleDateTag, getLlmLanguageName, type SupportedLocale } from "../i18n/locales";
 import type {
   ConversationSummaryPromptPayload,
   PromptVersion,
 } from "./types";
 import { buildMessageFallbackDisplayText } from "../utils/messageContentPackage";
-
-function dateLocaleTag(locale: SupportedLocale): string {
-  return locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
-}
 
 const CONVERSATION_SUMMARY_SYSTEM = `You are Vesti's thread-summary mapper.
 
@@ -45,7 +41,7 @@ Hard rules:
 4) real_world_anchor: use null (not "" empty string) when no anchor exists. Must be plain-language.
 5) speaker: must be exactly "User" or "AI" (capital-sensitive).
 6) meta_observations must use natural user-facing phrases, not technical labels like "deductive" or "precise".
-7) Write all user-facing text (assertions, definitions, observations, threads, steps) in the language named by the locale field in the user prompt: natural English when locale is en, natural Chinese when locale is zh, natural Japanese (自然な日本語) when locale is ja. Keep all JSON keys and enum values (speaker, depth_level) in English.
+7) Write all user-facing text (assertions, definitions, observations, threads, steps) in the language specified by the output-language instruction in the user prompt. Keep all JSON keys and enum values (speaker, depth_level) in English.
 8) key_insights can be [] when evidence is sparse.
 9) Optional <think>...</think> is allowed before JSON; it will be stripped by runtime.
 10) unresolved_threads and actionable_next_steps must be complete phrases, not 1-3 character fragments.
@@ -63,7 +59,7 @@ const LEGACY_SUMMARY_JSON_SCHEMA_HINT = {
 };
 
 function formatDateTime(value: number, locale: SupportedLocale): string {
-  return new Date(value).toLocaleString(dateLocaleTag(locale), {
+  return new Date(value).toLocaleString(getLocaleDateTag(locale), {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -73,7 +69,7 @@ function formatDateTime(value: number, locale: SupportedLocale): string {
 }
 
 function formatTime(value: number, locale: SupportedLocale): string {
-  return new Date(value).toLocaleTimeString(dateLocaleTag(locale), {
+  return new Date(value).toLocaleTimeString(getLocaleDateTag(locale), {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -114,10 +110,9 @@ function buildConversationSummaryPrompt(
   );
 
   if (locale !== "zh") {
-    const outputLanguageRule =
-      locale === "ja"
-        ? "Write all user-facing text in natural Japanese (自然な日本語). Keep JSON keys and enum values in English."
-        : "Write all user-facing text in natural English. Keep JSON keys and enum values in English.";
+    const outputLanguageRule = `Write all user-facing text in ${getLlmLanguageName(
+      locale
+    )}. Keep JSON keys and enum values in English.`;
     const conversationTitle = payload.conversationTitle ?? "(untitled conversation)";
     return `Analyze the conversation below and output conversation_summary.v2 JSON:
 
@@ -183,10 +178,7 @@ function buildConversationFallbackPrompt(
   );
 
   if (locale !== "zh") {
-    const languageDirective =
-      locale === "ja"
-        ? "Write the recap in natural Japanese (自然な日本語)."
-        : "Write the recap in natural English.";
+    const languageDirective = `Write the recap in ${getLlmLanguageName(locale)}.`;
     return `Write a plain-text recap of this conversation (no JSON, no markdown symbols):
 
 ${transcript}

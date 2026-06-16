@@ -16,7 +16,7 @@ import {
   normalizeConversationSummaryV2Legacy,
   normalizeWeeklyNarrativeList,
 } from "./insightSchemas";
-import type { SupportedLocale } from "../i18n/locales";
+import { getLocaleDateTag, type SupportedLocale } from "../i18n/locales";
 
 interface WeeklyCrossDomainEcho {
   domain_a: string;
@@ -228,8 +228,7 @@ function toRangeLabel(
   rangeEnd: number,
   locale: SupportedLocale
 ): string {
-  const dateLocale =
-    locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
+  const dateLocale = getLocaleDateTag(locale);
   const start = new Date(rangeStart).toLocaleDateString(dateLocale, {
     month: "2-digit",
     day: "2-digit",

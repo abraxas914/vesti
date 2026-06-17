@@ -587,6 +587,15 @@ const DEFAULT_LABELS: DashboardLabels = {
     starred: "Starred",
     unknownPlatform: "Unknown platform",
     conversationN: "Conversation {id}",
+    thinkingMapView: "Thinking map",
+    conversationMapView: "Conversations",
+    thinkingMapEmpty:
+      "Generate conversation summaries in the Library first — the thinking map is built from the key insights inside them.",
+    loadingThinkingMap: "Building your thinking map...",
+    gapInsightTitle: "Threads you haven't connected",
+    gapInsightTemplate: "You explored {a} and {b} but never linked them",
+    conceptMentionedIn: "Across {count} conversations",
+    relatedConversations: "Related conversations",
   },
 };
 

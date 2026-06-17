@@ -1127,5 +1127,13 @@ export interface DashboardLabels {
     starred: string;
     unknownPlatform: string;
     conversationN: string;
+    thinkingMapView: string;
+    conversationMapView: string;
+    thinkingMapEmpty: string;
+    loadingThinkingMap: string;
+    gapInsightTitle: string;
+    gapInsightTemplate: string;
+    conceptMentionedIn: string;
+    relatedConversations: string;
   };
 }

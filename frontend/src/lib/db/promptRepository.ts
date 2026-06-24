@@ -216,10 +216,25 @@ export type PromptBatchEnricher = (
   candidates: PromptCandidate[],
 ) => Promise<PromptEnrichment[]>;
 
+/** A reusable fragment distilled by the LLM (injected; keeps this module LLM-free). */
+export interface ExtractedFragment {
+  title: string;
+  body: string;
+  category?: string | null;
+}
+
 export interface ExtractPromptsOptions {
   scope?: "all" | "recent";
   limit?: number;
+  /**
+   * Optional LLM distiller: given candidate user prompts, returns reusable
+   * FRAGMENTS (常用提示词 片段). When provided and it returns results, fragments
+   * replace the heuristic frequency selection. Omitted → offline heuristic path.
+   */
+  distill?: (turns: string[]) => Promise<ExtractedFragment[]>;
 }
+
+const DISTILL_INPUT_CAP = 150;
 
 /**
  * Scan captured conversations, extract prompt-worthy user turns, and archive
@@ -310,6 +325,51 @@ export async function extractPromptsFromLibrary(
   const allGroups = Array.from(groups.values());
   const byCurationScore = (a: CandidateGroup, b: CandidateGroup) =>
     combinedCurationScore(b) - combinedCurationScore(a);
+
+  // LLM path: distill reusable FRAGMENTS from the best candidate prompts. When a
+  // distiller is injected and yields fragments, they become the 常用提示词
+  // library (片段-level), superseding the heuristic full-turn selection.
+  if (options.distill) {
+    const ranked = [...allGroups].sort(byCurationScore).slice(0, DISTILL_INPUT_CAP);
+    const turns = ranked.map((group) => group.candidate.body);
+    let fragments: ExtractedFragment[] = [];
+    try {
+      fragments = await options.distill(turns);
+    } catch (error) {
+      logger.warn("service", "Fragment distillation failed; falling back to heuristics", {
+        error: (error as Error)?.message ?? String(error),
+      });
+    }
+    if (fragments.length > 0) {
+      let created = 0;
+      let skipped = 0;
+      for (const fragment of fragments) {
+        const body = fragment.body.trim();
+        if (!body) {
+          skipped += 1;
+          continue;
+        }
+        const result = await createPrompt({
+          title: (fragment.title || deriveTitle(body, 28)).trim(),
+          body,
+          category: fragment.category ?? null,
+          source: "extracted",
+          quality_score: scorePrompt(body),
+        });
+        if (result.created) created += 1;
+        else skipped += 1;
+      }
+      logger.info("service", "Prompt fragment distillation complete", {
+        scope,
+        candidates: allGroups.length,
+        fragments: fragments.length,
+        created,
+        skipped,
+      });
+      return { created, skipped, candidates: allGroups.length, usedLlm: true };
+    }
+    // distiller produced nothing → fall through to the heuristic path below.
+  }
 
   // Primary: frequent prompts that clear a (lenient) quality gate.
   const frequent = allGroups

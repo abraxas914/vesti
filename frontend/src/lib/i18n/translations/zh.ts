@@ -903,6 +903,12 @@ export const zhTranslations: TranslationsType = {
       plazaDailyHint: "每天刷新。",
       plazaUse: "使用",
       plazaSourcePrefix: "来源：",
+      supermarketTitle: "提示词超市",
+      supermarketSubtitle: "按分类浏览更多优质提示词，挑选加入你的提示词广场。",
+      myPlaza: "我的广场",
+      myPlazaEmpty: "从下方的提示词超市挑选并加入，打造你自己的提示词广场。",
+      adopt: "加入",
+      adopted: "已加入",
     },
   },
 

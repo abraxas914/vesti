@@ -3,7 +3,16 @@ import "katex/dist/katex.min.css";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { UiThemeMode } from "~lib/types";
-import { buildPlazaPrompts } from "~lib/promptPlaza/commonPrompts";
+import {
+  buildPlazaPrompts,
+  getCuratedCategories,
+  resolveCuratedPrompts,
+} from "~lib/promptPlaza/commonPrompts";
+import {
+  getAdoptedPlazaIds,
+  setPlazaAdopted,
+  subscribeAdoptedPlazaIds,
+} from "~lib/promptPlaza/plazaCollectionService";
 import {
   connectObsidianVault,
   exportNoteToObsidian,
@@ -164,20 +173,38 @@ function VestiDashboardInner({
   themeSyncMessage: string | null;
 }) {
   const { t, locale } = useI18n();
+  const lang = locale === "zh" ? "zh" : "en";
 
-  // 提示词广场: bundled curated set, localized + date-seeded daily rotation. The
-  // day index keys the memo so the "daily picks" refresh across days.
-  const plazaPrompts = useMemo(
-    () => buildPlazaPrompts(locale === "zh" ? "zh" : "en", Date.now()),
-    [locale],
-  );
+  // 提示词广场 + 提示词超市: bundled curated catalog, localized. Daily picks are
+  // date-seeded; the supermarket is the full catalog grouped by big-category;
+  // adopted ids are the user's personal shelf (chrome.storage.local).
+  const [adoptedIds, setAdoptedIds] = useState<string[]>([]);
+  useEffect(() => {
+    void getAdoptedPlazaIds().then(setAdoptedIds);
+    return subscribeAdoptedPlazaIds(setAdoptedIds);
+  }, []);
+
+  const plaza = useMemo(() => {
+    const daily = buildPlazaPrompts(lang, Date.now()).filter((p) => p.featured);
+    const resolved = resolveCuratedPrompts(lang);
+    const supermarket = getCuratedCategories(lang).map((category) => ({
+      category,
+      prompts: resolved.filter((p) => p.category === category),
+    }));
+    return { daily, supermarket, adoptedIds };
+  }, [lang, adoptedIds]);
+
+  const handlePlazaAdoptToggle = useCallback((id: string, adopt: boolean) => {
+    void setPlazaAdopted(id, adopt).then(setAdoptedIds);
+  }, []);
 
   return (
     <VestiDashboardShell
       logoSrc={LOGO_BASE64}
       rootClassName="vesti-options"
       labels={t.dashboard}
-      plazaPrompts={plazaPrompts}
+      plaza={plaza}
+      onPlazaAdoptToggle={handlePlazaAdoptToggle}
       themeMode={themeMode}
       onToggleTheme={onToggleTheme}
       themeSyncStatus={themeSyncStatus}

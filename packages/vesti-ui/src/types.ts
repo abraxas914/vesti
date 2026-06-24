@@ -1102,6 +1102,12 @@ export interface DashboardLabels {
     plazaDailyHint: string;
     plazaUse: string;
     plazaSourcePrefix: string;
+    supermarketTitle: string;
+    supermarketSubtitle: string;
+    myPlaza: string;
+    myPlazaEmpty: string;
+    adopt: string;
+    adopted: string;
   };
 }
 
@@ -1114,4 +1120,20 @@ export interface PlazaPrompt {
   source: string;
   sourceUrl?: string;
   featured?: boolean;
+}
+
+/** A big-category group of curated prompts for the 提示词超市. */
+export interface PlazaCategory {
+  category: string;
+  prompts: PlazaPrompt[];
+}
+
+/** Everything the Prompts tab needs to render the plaza + supermarket. */
+export interface PlazaData {
+  /** Today's date-seeded recommendations. */
+  daily: PlazaPrompt[];
+  /** Full catalog grouped by big-category (the 提示词超市). */
+  supermarket: PlazaCategory[];
+  /** Catalog ids the user has adopted into their personal 提示词广场. */
+  adoptedIds: string[];
 }

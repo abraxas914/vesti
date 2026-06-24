@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, ExternalLink, Plus, Search, Sparkles, Trash2, Upload } from "lucide-react";
-import type { DashboardLabels, PlazaPrompt, Prompt, StorageApi, UiThemeMode } from "../types";
+import type {
+  DashboardLabels,
+  PlazaData,
+  PlazaPrompt,
+  Prompt,
+  StorageApi,
+  UiThemeMode,
+} from "../types";
 
 interface PromptsTabProps {
   storage: StorageApi;
@@ -10,8 +17,10 @@ interface PromptsTabProps {
   isActive?: boolean;
   onOpenConversation?: (conversationId: number) => void;
   labels: DashboardLabels["prompts"];
-  /** Curated/recommended prompts for the 提示词广场 (built by the host app). */
-  plazaPrompts?: PlazaPrompt[];
+  /** Plaza data (daily picks + supermarket catalog + adopted ids), host-built. */
+  plaza?: PlazaData;
+  /** Toggle adoption of a catalog prompt into the user's personal plaza. */
+  onPlazaAdoptToggle?: (id: string, adopt: boolean) => void;
 }
 
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -42,7 +51,8 @@ export function PromptsTab({
   isActive = false,
   onOpenConversation,
   labels,
-  plazaPrompts,
+  plaza,
+  onPlazaAdoptToggle,
 }: PromptsTabProps) {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [status, setStatus] = useState<LoadStatus>("idle");
@@ -147,19 +157,24 @@ export function PromptsTab({
     });
   }, []);
 
-  const plazaDaily = useMemo(
-    () => (plazaPrompts ?? []).filter((p) => p.featured),
-    [plazaPrompts],
-  );
-  const plazaRest = useMemo(
-    () => (plazaPrompts ?? []).filter((p) => !p.featured),
-    [plazaPrompts],
-  );
+  const plazaDaily = plaza?.daily ?? [];
+  const supermarket = plaza?.supermarket ?? [];
+  const adoptedSet = useMemo(() => new Set(plaza?.adoptedIds ?? []), [plaza?.adoptedIds]);
+  const adoptedItems = useMemo(() => {
+    if (adoptedSet.size === 0) return [] as PlazaPrompt[];
+    const out: PlazaPrompt[] = [];
+    for (const cat of supermarket) {
+      for (const p of cat.prompts) {
+        if (adoptedSet.has(p.id)) out.push(p);
+      }
+    }
+    return out;
+  }, [supermarket, adoptedSet]);
   const showPlaza =
     status === "ready" &&
     extractStatus !== "running" &&
     search.trim() === "" &&
-    (plazaPrompts?.length ?? 0) > 0;
+    (plazaDaily.length > 0 || supermarket.length > 0);
 
   const openEdit = useCallback((prompt: Prompt) => {
     setEditor({
@@ -494,7 +509,7 @@ export function PromptsTab({
           </ul>
         )}
 
-        {/* 提示词广场 (Prompt Plaza): curated + daily-rotating recommendations */}
+        {/* 提示词广场 (Plaza): daily picks + my adopted shelf + the supermarket */}
         {showPlaza && (
           <section className="mt-8 border-t border-border-subtle pt-6">
             <h3 className="text-[13px] font-medium text-text-primary">{labels.plazaTitle}</h3>
@@ -514,22 +529,71 @@ export function PromptsTab({
                       key={p.id}
                       prompt={p}
                       labels={labels}
+                      adopted={adoptedSet.has(p.id)}
                       onUse={() => usePlazaPrompt(p)}
+                      onAdopt={
+                        onPlazaAdoptToggle
+                          ? () => onPlazaAdoptToggle(p.id, !adoptedSet.has(p.id))
+                          : undefined
+                      }
                     />
                   ))}
                 </div>
               </div>
             )}
 
-            {plazaRest.length > 0 && (
-              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {plazaRest.map((p) => (
-                  <PlazaCard
-                    key={p.id}
-                    prompt={p}
-                    labels={labels}
-                    onUse={() => usePlazaPrompt(p)}
-                  />
+            {/* 我的广场: prompts the user adopted from the supermarket */}
+            <div className="mt-5">
+              <div className="mb-2 text-[12px] font-medium text-text-secondary">{labels.myPlaza}</div>
+              {adoptedItems.length === 0 ? (
+                <p className="text-[11.5px] text-text-tertiary">{labels.myPlazaEmpty}</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {adoptedItems.map((p) => (
+                    <PlazaCard
+                      key={p.id}
+                      prompt={p}
+                      labels={labels}
+                      adopted
+                      onUse={() => usePlazaPrompt(p)}
+                      onAdopt={
+                        onPlazaAdoptToggle ? () => onPlazaAdoptToggle(p.id, false) : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 提示词超市: full catalog grouped by big-category */}
+            {supermarket.length > 0 && (
+              <div className="mt-6 border-t border-border-subtle pt-5">
+                <h4 className="text-[13px] font-medium text-text-primary">
+                  {labels.supermarketTitle}
+                </h4>
+                <p className="mt-1 text-[12px] text-text-tertiary">{labels.supermarketSubtitle}</p>
+                {supermarket.map((group) => (
+                  <div key={group.category} className="mt-4">
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                      {group.category}
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {group.prompts.map((p) => (
+                        <PlazaCard
+                          key={p.id}
+                          prompt={p}
+                          labels={labels}
+                          adopted={adoptedSet.has(p.id)}
+                          onUse={() => usePlazaPrompt(p)}
+                          onAdopt={
+                            onPlazaAdoptToggle
+                              ? () => onPlazaAdoptToggle(p.id, !adoptedSet.has(p.id))
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
@@ -641,10 +705,14 @@ function PlazaCard({
   prompt,
   labels,
   onUse,
+  adopted = false,
+  onAdopt,
 }: {
   prompt: PlazaPrompt;
   labels: DashboardLabels["prompts"];
   onUse: () => void;
+  adopted?: boolean;
+  onAdopt?: () => void;
 }) {
   return (
     <div
@@ -687,16 +755,35 @@ function PlazaCard({
             {prompt.source}
           </span>
         )}
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onUse();
-          }}
-          className="rounded-lg border border-border-subtle px-2.5 py-1 text-[11.5px] text-text-primary opacity-0 transition-opacity hover:bg-bg-tertiary group-hover:opacity-100"
-        >
-          {labels.plazaUse}
-        </button>
+        <div className="flex items-center gap-1.5">
+          {onAdopt && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onAdopt();
+              }}
+              aria-pressed={adopted}
+              className={`rounded-lg border px-2.5 py-1 text-[11.5px] transition-colors ${
+                adopted
+                  ? "border-accent-primary bg-accent-primary-light text-accent-primary"
+                  : "border-border-subtle text-text-secondary hover:bg-bg-tertiary"
+              }`}
+            >
+              {adopted ? labels.adopted : labels.adopt}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onUse();
+            }}
+            className="rounded-lg border border-border-subtle px-2.5 py-1 text-[11.5px] text-text-primary opacity-0 transition-opacity hover:bg-bg-tertiary group-hover:opacity-100"
+          >
+            {labels.plazaUse}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -20,6 +20,16 @@ import {
   setComposerText,
   type ComposerEl,
 } from "../lib/contents/composerIo";
+import { searchCuratedPrompts } from "../lib/promptPlaza/commonPrompts";
+
+// A dock search result: either a saved prompt (has promptId) or a curated plaza
+// prompt (fromPlaza). Both fill the composer; only saved ones track usage.
+type PmResult = {
+  title: string;
+  body: string;
+  promptId?: number;
+  fromPlaza?: boolean;
+};
 import type { ActiveCaptureStatus, Platform, Prompt, UiThemeMode } from "../lib/types";
 import { resolveCapsuleLogoSrc } from "../lib/ui/capsuleLogo";
 import { logger } from "../lib/utils/logger";
@@ -266,7 +276,7 @@ const capsuleEn = {
     optimizing: "Optimizing...",
     continue: "Continue",
     continuing: "Continuing...",
-    searchPlaceholder: "Type a trigger to search prompts...",
+    searchPlaceholder: "Search your prompts + plaza picks by trigger/keyword...",
     empty: "No prompts yet.",
     noResults: "No match.",
     noDraft: "Type something in the chat box first.",
@@ -275,6 +285,7 @@ const capsuleEn = {
     failed: "Could not generate. Try again.",
     offlineHint: "Connect a model in Settings to optimize prompts.",
     hint: "Listens to your input box in real time — type a trigger to match, Enter to fill.",
+    plazaBadge: "Plaza",
   },
   errorMessages: {
     ARCHIVE_MODE_DISABLED: "Archive is disabled in mirror mode.",
@@ -311,7 +322,7 @@ const capsuleZh = {
     optimizing: "优化中...",
     continue: "续写",
     continuing: "续写中...",
-    searchPlaceholder: "输入唤醒词搜索提示词...",
+    searchPlaceholder: "使用唤醒词/关键词 搜索常用提示词/优质提示词（来自提示词广场）",
     empty: "暂无提示词。",
     noResults: "无匹配。",
     noDraft: "请先在对话输入框中输入内容。",
@@ -320,6 +331,7 @@ const capsuleZh = {
     failed: "生成失败，请重试。",
     offlineHint: "在设置中连接模型后即可优化提示词。",
     hint: "实时监听输入框：输入唤醒词即时匹配，回车一键填入。",
+    plazaBadge: "广场",
   },
   errorMessages: {
     ARCHIVE_MODE_DISABLED: "镜像模式下归档已禁用。",
@@ -971,6 +983,19 @@ const SHADOW_STYLE = `
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.capsule-pm-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.5;
+  vertical-align: middle;
+  color: var(--capsule-text2);
+  background: color-mix(in srgb, var(--capsule-text1) 10%, transparent 90%);
 }
 
 .capsule-pm-item-body {
@@ -1654,7 +1679,7 @@ const mount = async () => {
   const promptPlatform = resolvePlatform(hostname);
   let pmEnabled = true;
   let pmBusy: "optimize" | "continue" | null = null;
-  let pmResults: Prompt[] = [];
+  let pmResults: PmResult[] = [];
   let pmPreviewBody = "";
   let pmSearchDebounce: number | null = null;
   let unsubscribePromptAssist: (() => void) | null = null;
@@ -1939,38 +1964,63 @@ const mount = async () => {
     return true;
   };
 
-  const insertPrompt = (prompt: Prompt) => {
-    if (fillComposer(prompt.body, false)) {
-      void pmIncrementUsage(prompt.id);
+  const insertPrompt = (result: PmResult) => {
+    if (fillComposer(result.body, false)) {
+      if (typeof result.promptId === "number") void pmIncrementUsage(result.promptId);
       setViewMode("collapsed");
     }
   };
 
   const renderPromptResults = async (query: string) => {
     if (!pmEnabled) return;
-    const prompts = await pmSearchPrompts(query.trim());
-    pmResults = prompts;
+    const trimmed = query.trim();
+    // Search the user's saved 常用提示词 (DB) AND the curated 优质提示词 (plaza).
+    const [saved, curated] = await Promise.all([
+      pmSearchPrompts(trimmed),
+      Promise.resolve(searchCuratedPrompts(trimmed, capsuleLocale, 6)),
+    ]);
+    const seen = new Set<string>();
+    const merged: PmResult[] = [];
+    for (const p of saved) {
+      const key = p.body.trim();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({ title: p.title || p.body.slice(0, 32), body: p.body, promptId: p.id });
+    }
+    for (const c of curated) {
+      const key = c.body.trim();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({ title: c.title || c.body.slice(0, 32), body: c.body, fromPlaza: true });
+    }
+    pmResults = merged;
     pmList.innerHTML = "";
-    if (prompts.length === 0) {
+    if (merged.length === 0) {
       const empty = document.createElement("div");
       empty.className = "capsule-pm-empty";
-      empty.textContent = query.trim() ? capsuleT.pm.noResults : capsuleT.pm.empty;
+      empty.textContent = trimmed ? capsuleT.pm.noResults : capsuleT.pm.empty;
       pmList.appendChild(empty);
       return;
     }
-    for (const prompt of prompts) {
+    for (const result of merged) {
       const item = document.createElement("button");
       item.type = "button";
       item.className = "capsule-pm-item";
       const title = document.createElement("span");
       title.className = "capsule-pm-item-title";
-      title.textContent = prompt.title || prompt.body.slice(0, 32);
+      title.textContent = result.title;
+      if (result.fromPlaza) {
+        const badge = document.createElement("span");
+        badge.className = "capsule-pm-badge";
+        badge.textContent = capsuleT.pm.plazaBadge;
+        title.appendChild(badge);
+      }
       const body = document.createElement("span");
       body.className = "capsule-pm-item-body";
-      body.textContent = prompt.body;
+      body.textContent = result.body;
       item.appendChild(title);
       item.appendChild(body);
-      item.addEventListener("click", () => insertPrompt(prompt));
+      item.addEventListener("click", () => insertPrompt(result));
       pmList.appendChild(item);
     }
   };

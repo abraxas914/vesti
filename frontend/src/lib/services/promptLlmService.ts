@@ -145,6 +145,91 @@ export async function enrichPromptCandidates(
   return result;
 }
 
+// ---- prompt FRAGMENT distillation (常用提示词) -----------------------------
+// Distill reusable, high-quality prompt FRAGMENTS (short composable building
+// blocks) from the user's past prompts — not whole turns. Heavy LLM use is
+// intentional here; callers gate on having a usable config.
+
+export interface DistilledFragment {
+  title: string;
+  body: string;
+  category: string | null;
+}
+
+const FRAGMENT_CHUNK_SIZE = 15;
+const MAX_FRAGMENT_INPUT = 120;
+const MAX_FRAGMENTS_OUT = 30;
+
+const fragmentItemSchema = z.object({
+  title: z.string().trim().min(1).max(60),
+  body: z.string().trim().min(4).max(600),
+  category: z.string().trim().max(40).nullable().optional(),
+});
+const fragmentArraySchema = z.array(fragmentItemSchema);
+
+const FRAGMENT_SYSTEM_PROMPT = `You curate a personal library of reusable PROMPT FRAGMENTS — short, composable building blocks a user repeatedly relies on, NOT whole prompts. From the user's past prompts, extract the most reusable, high-quality FRAGMENTS: e.g. a crisp role/persona line, a strong instruction pattern, a useful constraint, an output-format spec, or a recurring task framing.
+Rules:
+- Each fragment is SHORT and self-contained (roughly one to three sentences, or a single directive).
+- Generalize: replace specific nouns with {{variables}} where that makes the fragment reusable.
+- Keep the user's language. Deduplicate aggressively; merge near-duplicates.
+- Quality over quantity: only genuinely reusable, high-value fragments.
+- Give each a concise trigger title (<= 6 words) the user would type to recall it.
+Return ONLY a JSON array: [{"title": "...", "body": "...", "category": "<Writing|Coding|Analysis|Learning|Productivity|Translation|Roleplay|Other>"}]. No prose.`;
+
+function buildFragmentUserPrompt(chunk: string[]): string {
+  const lines = chunk.map((body, i) => `#${i}\n${body.slice(0, MAX_BODY_CHARS)}`);
+  return `User prompts:\n\n${lines.join("\n\n---\n\n")}`;
+}
+
+/**
+ * Distill reusable fragments from a list of past user prompts. Chunks the input,
+ * calls the model per chunk, validates + dedupes. Returns [] on total failure so
+ * callers can fall back to heuristics.
+ */
+export async function distillFragments(
+  config: LlmConfig | null,
+  turns: string[],
+): Promise<DistilledFragment[]> {
+  if (!config) return [];
+  const input = turns
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 12)
+    .slice(0, MAX_FRAGMENT_INPUT);
+  if (input.length === 0) return [];
+
+  const out: DistilledFragment[] = [];
+  const seen = new Set<string>();
+  for (let offset = 0; offset < input.length; offset += FRAGMENT_CHUNK_SIZE) {
+    const chunk = input.slice(offset, offset + FRAGMENT_CHUNK_SIZE);
+    try {
+      const result = await callInference(config, buildFragmentUserPrompt(chunk), {
+        responseFormat: "json_object",
+        systemPrompt: FRAGMENT_SYSTEM_PROMPT,
+      });
+      const parsed = fragmentArraySchema.safeParse(
+        JSON.parse(extractJsonArray(result.content.trim())),
+      );
+      if (!parsed.success) continue;
+      for (const item of parsed.data) {
+        const key = item.body.trim().toLowerCase().replace(/\s+/g, " ");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          title: item.title.trim(),
+          body: item.body.trim(),
+          category: item.category ?? null,
+        });
+        if (out.length >= MAX_FRAGMENTS_OUT) return out;
+      }
+    } catch (error) {
+      logger.debug("llm", "Fragment distillation chunk failed", {
+        error: (error as Error)?.message ?? String(error),
+      });
+    }
+  }
+  return out;
+}
+
 export type PromptCompletionMode = "optimize" | "continue";
 
 const OPTIMIZE_SYSTEM_PROMPT = `You are a prompt-engineering assistant. The user gives you a DRAFT prompt they intend to send to an AI assistant.

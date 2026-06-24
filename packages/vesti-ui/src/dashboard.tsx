@@ -17,7 +17,7 @@ import { ExploreTab } from "./tabs/explore-tab";
 import { LibraryTab } from "./tabs/library-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { PromptsTab } from "./tabs/prompts-tab";
-import type { DashboardLabels, PlazaPrompt, StorageApi, UiThemeMode } from "./types";
+import type { DashboardLabels, PlazaData, StorageApi, UiThemeMode } from "./types";
 import type { NotionDatabaseOption, NotionSettings } from "./notion-integration";
 import {
   connectToNotion,
@@ -231,6 +231,12 @@ const DEFAULT_LABELS: DashboardLabels = {
     plazaDailyHint: "Refreshes every day.",
     plazaUse: "Use",
     plazaSourcePrefix: "Source: ",
+    supermarketTitle: "Prompt Supermarket",
+    supermarketSubtitle: "Browse more quality prompts by category and add them to your plaza.",
+    myPlaza: "My plaza",
+    myPlazaEmpty: "Add prompts from the supermarket below to build your plaza.",
+    adopt: "Add",
+    adopted: "Added",
   },
 };
 
@@ -244,7 +250,8 @@ type DashboardProps = {
   themeSyncStatus?: ThemeSyncStatus;
   themeSyncMessage?: string | null;
   labels?: DashboardLabels;
-  plazaPrompts?: PlazaPrompt[];
+  plaza?: PlazaData;
+  onPlazaAdoptToggle?: (id: string, adopt: boolean) => void;
 };
 
 export function VestiDashboard({
@@ -257,7 +264,8 @@ export function VestiDashboard({
   themeSyncStatus = "idle",
   themeSyncMessage = null,
   labels: providedLabels,
-  plazaPrompts,
+  plaza,
+  onPlazaAdoptToggle,
 }: DashboardProps) {
   const labels = providedLabels ?? DEFAULT_LABELS;
   const SETTINGS_KEY = "vesti_llm_settings";
@@ -729,7 +737,8 @@ export function VestiDashboard({
                 isActive={activeTab === "prompts"}
                 onOpenConversation={handleOpenConversation}
                 labels={labels.prompts}
-                plazaPrompts={plazaPrompts}
+                plaza={plaza}
+                onPlazaAdoptToggle={onPlazaAdoptToggle}
               />
             </div>
           )}

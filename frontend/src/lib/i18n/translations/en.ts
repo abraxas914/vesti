@@ -904,6 +904,12 @@ export const enTranslations = {
       plazaDailyHint: "Refreshes every day.",
       plazaUse: "Use",
       plazaSourcePrefix: "Source: ",
+      supermarketTitle: "Prompt Supermarket",
+      supermarketSubtitle: "Browse more quality prompts by category and add them to your plaza.",
+      myPlaza: "My plaza",
+      myPlazaEmpty: "Add prompts from the supermarket below to build your plaza.",
+      adopt: "Add",
+      adopted: "Added",
     },
   },
 

@@ -63,5 +63,7 @@ export type {
   PromptExtractionResult,
   PromptCompletionResult,
   PlazaPrompt,
+  PlazaCategory,
+  PlazaData,
   DashboardLabels,
 } from "./types";

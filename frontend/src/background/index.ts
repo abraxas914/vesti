@@ -52,6 +52,7 @@ import {
 } from "../lib/db/promptRepository"
 import {
   completePromptDraft,
+  distillFragments,
   resolveUsableLlmConfig
 } from "../lib/services/promptLlmService"
 import { isRequestMessage } from "../lib/messaging/protocol"
@@ -792,10 +793,13 @@ async function handleOffscreenRequest(
         return { ok: true, type: messageType, data: { prompt } }
       }
       case "EXTRACT_PROMPTS_FROM_LIBRARY": {
-        // Lightweight: high-frequency extraction, offline (no LLM enrichment).
+        // Prefer LLM-distilled reusable FRAGMENTS when a model is configured;
+        // otherwise fall back to offline high-frequency extraction.
+        const config = await resolveUsableLlmConfig()
         const data = await extractPromptsFromLibrary({
           scope: message.payload?.scope,
-          limit: message.payload?.limit
+          limit: message.payload?.limit,
+          distill: config ? (turns) => distillFragments(config, turns) : undefined
         })
         return { ok: true, type: messageType, data }
       }

@@ -854,6 +854,50 @@ function openSidepanelForTab(tabId: number): void {
   )
 }
 
+// Clicking the toolbar icon opens our standalone web UI (the full Dashboard at
+// options.html) in its own tab; if one is already open we focus it instead of
+// piling up duplicates. Tracked in-memory (no "tabs" permission needed) — after
+// a service-worker restart a stale id just falls back to opening a fresh tab.
+let dashboardTabId: number | null = null
+
+function focusOrOpenDashboard(): void {
+  const url = chrome.runtime.getURL("options.html")
+  const openNew = () => {
+    chrome.tabs.create({ url }, (tab) => {
+      void chrome.runtime.lastError
+      dashboardTabId = tab?.id ?? null
+    })
+  }
+  if (dashboardTabId == null) {
+    openNew()
+    return
+  }
+  chrome.tabs.update(dashboardTabId, { active: true }, (tab) => {
+    if (chrome.runtime.lastError || !tab) {
+      dashboardTabId = null
+      openNew()
+      return
+    }
+    if (typeof tab.windowId === "number") {
+      chrome.windows.update(tab.windowId, { focused: true }, () => {
+        void chrome.runtime.lastError
+      })
+    }
+  })
+}
+
+if (chrome?.tabs?.onRemoved) {
+  chrome.tabs.onRemoved.addListener((removedTabId) => {
+    if (removedTabId === dashboardTabId) dashboardTabId = null
+  })
+}
+
+if (chrome?.action?.onClicked) {
+  chrome.action.onClicked.addListener(() => {
+    focusOrOpenDashboard()
+  })
+}
+
 chrome.runtime.onMessage.addListener(
   (
     message: unknown,

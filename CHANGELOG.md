@@ -11,6 +11,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 ## [Unreleased]
 
 ### Added
+- **Toolbar icon opens the dashboard**: clicking the Vesti browser-toolbar icon
+  now opens (or focuses) the full standalone web UI (`options.html`) in its own
+  tab. The in-page owl still opens the sidepanel.
+- **Hover tooltips** on the sidebar dock: each item shows a clear title +
+  description card on hover/focus (reusable, dependency-free component).
+- **提示词广场 (Prompt Plaza)**: the Prompts page now recommends curated,
+  high-quality prompts from trusted public sources (with attribution + links),
+  plus a date-seeded "每日推荐" strip that rotates daily. Bundled and offline;
+  bilingual. Clicking a card prefills the editor.
+- **Timeline range filter + sort mode**: the Threads timeline gains a draggable
+  two-handle scrubber (with histogram) to filter conversations to a time window,
+  and a toggle to order/group by the conversation's own time (按对话时间) vs
+  capture time (按捕获时间).
 - **Bulk-import historical conversations** (ChatGPT, Claude): a new "Import
   platform history" panel in the Data page reads your existing threads through
   each platform's own API (using your current login) and saves them locally via
@@ -44,6 +57,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Localized in English and Chinese.
 
 ### Changed
+- Prompt curation is now selective: the library auto-collects only frequent +
+  high-quality prompts (capped, with a quality floor) instead of everything; the
+  tab is now labelled **常用提示词**. The dock prompt module is renamed
+  **提示词助手** and its hint now reads "实时监听输入框：输入唤醒词即时匹配，回车
+  一键填入。".
 - Merged the standalone in-page prompt assistant into the owl/dock as one
   feature with a single open/close toggle; the lower dock holds a clean
   prompt-manager panel. The existing per-host "real-time assistant" setting now

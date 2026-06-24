@@ -11,6 +11,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 ## [Unreleased]
 
 ### Added
+- **提示词超市 (Prompt Supermarket)**: a large bilingual curated catalog (by
+  big-category) on the Prompts page; **加入/已加入** adopts prompts into a personal
+  **我的广场** shelf (kept separate from the auto-extracted 常用提示词).
 - **Toolbar icon opens the dashboard**: clicking the Vesti browser-toolbar icon
   now opens (or focuses) the full standalone web UI (`options.html`) in its own
   tab. The in-page owl still opens the sidepanel.
@@ -57,6 +60,11 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Localized in English and Chinese.
 
 ### Changed
+- 常用提示词 are now LLM-distilled reusable **fragments** (短小、可复用的片段，含
+  {{变量}}) when a model is configured, instead of whole captured turns; falls
+  back to the offline frequency heuristic with no model.
+- The in-dock 提示词助手 search now spans **both** your 常用提示词 and the curated
+  优质提示词 (plaza), with curated results tagged 广场.
 - Prompt curation is now selective: the library auto-collects only frequent +
   high-quality prompts (capped, with a quality floor) instead of everything; the
   tab is now labelled **常用提示词**. The dock prompt module is renamed

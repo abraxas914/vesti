@@ -1,8 +1,9 @@
 import "~style.css";
 import "katex/dist/katex.min.css";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { UiThemeMode } from "~lib/types";
+import { buildPlazaPrompts } from "~lib/promptPlaza/commonPrompts";
 import {
   connectObsidianVault,
   exportNoteToObsidian,
@@ -162,13 +163,21 @@ function VestiDashboardInner({
   themeSyncStatus: ThemeSyncStatus;
   themeSyncMessage: string | null;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+
+  // 提示词广场: bundled curated set, localized + date-seeded daily rotation. The
+  // day index keys the memo so the "daily picks" refresh across days.
+  const plazaPrompts = useMemo(
+    () => buildPlazaPrompts(locale === "zh" ? "zh" : "en", Date.now()),
+    [locale],
+  );
 
   return (
     <VestiDashboardShell
       logoSrc={LOGO_BASE64}
       rootClassName="vesti-options"
       labels={t.dashboard}
+      plazaPrompts={plazaPrompts}
       themeMode={themeMode}
       onToggleTheme={onToggleTheme}
       themeSyncStatus={themeSyncStatus}

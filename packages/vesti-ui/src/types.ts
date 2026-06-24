@@ -1096,5 +1096,22 @@ export interface DashboardLabels {
     draftFirst: string;
     extractFailed: string;
     summaryLabel: string;
+    plazaTitle: string;
+    plazaSubtitle: string;
+    plazaDaily: string;
+    plazaDailyHint: string;
+    plazaUse: string;
+    plazaSourcePrefix: string;
   };
+}
+
+/** A curated/recommended prompt for the 提示词广场 (Prompt Plaza). */
+export interface PlazaPrompt {
+  id: string;
+  title: string;
+  body: string;
+  category: string;
+  source: string;
+  sourceUrl?: string;
+  featured?: boolean;
 }

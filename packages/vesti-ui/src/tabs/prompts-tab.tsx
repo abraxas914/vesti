@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Download, ExternalLink, Plus, Search, Sparkles, Trash2, Upload } from "lucide-react";
-import type { DashboardLabels, Prompt, StorageApi, UiThemeMode } from "../types";
+import type { DashboardLabels, PlazaPrompt, Prompt, StorageApi, UiThemeMode } from "../types";
 
 interface PromptsTabProps {
   storage: StorageApi;
@@ -10,6 +10,8 @@ interface PromptsTabProps {
   isActive?: boolean;
   onOpenConversation?: (conversationId: number) => void;
   labels: DashboardLabels["prompts"];
+  /** Curated/recommended prompts for the 提示词广场 (built by the host app). */
+  plazaPrompts?: PlazaPrompt[];
 }
 
 type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -40,6 +42,7 @@ export function PromptsTab({
   isActive = false,
   onOpenConversation,
   labels,
+  plazaPrompts,
 }: PromptsTabProps) {
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [status, setStatus] = useState<LoadStatus>("idle");
@@ -130,6 +133,33 @@ export function PromptsTab({
   const openNew = useCallback(() => {
     setEditor({ ...EMPTY_EDITOR, open: true, isNew: true });
   }, []);
+
+  // Plaza → prefill the editor as a NEW prompt so the user reviews/edits before
+  // saving (dedup by body hash avoids accidental duplicates on save).
+  const usePlazaPrompt = useCallback((p: PlazaPrompt) => {
+    setEditor({
+      open: true,
+      isNew: true,
+      id: null,
+      title: p.title,
+      body: p.body,
+      sourceConversationId: null,
+    });
+  }, []);
+
+  const plazaDaily = useMemo(
+    () => (plazaPrompts ?? []).filter((p) => p.featured),
+    [plazaPrompts],
+  );
+  const plazaRest = useMemo(
+    () => (plazaPrompts ?? []).filter((p) => !p.featured),
+    [plazaPrompts],
+  );
+  const showPlaza =
+    status === "ready" &&
+    extractStatus !== "running" &&
+    search.trim() === "" &&
+    (plazaPrompts?.length ?? 0) > 0;
 
   const openEdit = useCallback((prompt: Prompt) => {
     setEditor({
@@ -463,6 +493,48 @@ export function PromptsTab({
             ))}
           </ul>
         )}
+
+        {/* 提示词广场 (Prompt Plaza): curated + daily-rotating recommendations */}
+        {showPlaza && (
+          <section className="mt-8 border-t border-border-subtle pt-6">
+            <h3 className="text-[13px] font-medium text-text-primary">{labels.plazaTitle}</h3>
+            <p className="mt-1 text-[12px] text-text-tertiary">{labels.plazaSubtitle}</p>
+
+            {plazaDaily.length > 0 && (
+              <div className="mt-4">
+                <div className="mb-2 flex items-baseline gap-2">
+                  <span className="text-[12px] font-medium text-accent-primary">
+                    {labels.plazaDaily}
+                  </span>
+                  <span className="text-[11px] text-text-tertiary">{labels.plazaDailyHint}</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {plazaDaily.map((p) => (
+                    <PlazaCard
+                      key={p.id}
+                      prompt={p}
+                      labels={labels}
+                      onUse={() => usePlazaPrompt(p)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {plazaRest.length > 0 && (
+              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {plazaRest.map((p) => (
+                  <PlazaCard
+                    key={p.id}
+                    prompt={p}
+                    labels={labels}
+                    onUse={() => usePlazaPrompt(p)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {/* Editor drawer */}
@@ -561,6 +633,71 @@ export function PromptsTab({
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+function PlazaCard({
+  prompt,
+  labels,
+  onUse,
+}: {
+  prompt: PlazaPrompt;
+  labels: DashboardLabels["prompts"];
+  onUse: () => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onUse}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onUse();
+        }
+      }}
+      className="group flex cursor-pointer flex-col rounded-xl border border-border-subtle bg-bg-surface-card p-3.5 transition-shadow hover:shadow-[0_4px_14px_rgba(0,0,0,0.05)]"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="truncate text-[13px] font-medium text-text-primary">{prompt.title}</div>
+        <span className="shrink-0 rounded-full bg-bg-tertiary px-2 py-0.5 text-[10px] text-text-tertiary">
+          {prompt.category}
+        </span>
+      </div>
+      <div className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-text-secondary">
+        {prompt.body}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {prompt.sourceUrl ? (
+          <a
+            href={prompt.sourceUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={(event) => event.stopPropagation()}
+            className="inline-flex items-center gap-1 text-[10.5px] text-text-tertiary hover:text-text-primary hover:underline"
+          >
+            <ExternalLink strokeWidth={1.7} className="h-3 w-3" />
+            {labels.plazaSourcePrefix}
+            {prompt.source}
+          </a>
+        ) : (
+          <span className="text-[10.5px] text-text-tertiary">
+            {labels.plazaSourcePrefix}
+            {prompt.source}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onUse();
+          }}
+          className="rounded-lg border border-border-subtle px-2.5 py-1 text-[11.5px] text-text-primary opacity-0 transition-opacity hover:bg-bg-tertiary group-hover:opacity-100"
+        >
+          {labels.plazaUse}
+        </button>
+      </div>
     </div>
   );
 }

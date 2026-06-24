@@ -232,14 +232,30 @@ interface CandidateGroup {
   conversationIds: Set<number>;
 }
 
-const MIN_FREQUENCY = 2; // appears in >= 2 conversations to count as "frequent"
-const MIN_RESULTS = 24; // top up with best singletons so the library is populated
+// Selective curation: collect only FREQUENT + HIGH-QUALITY prompts ("常用提示词"),
+// not everything. Frequency (recurs across conversations) is the primary signal;
+// a quality gate keeps low-value chatter out; a hard cap keeps the library
+// curated. A small quality-gated singleton top-up ensures a useful minimum on
+// sparse/new libraries without hoarding.
+const FREQUENT_MIN_CONVERSATIONS = 3; // recurs in >= 3 distinct conversations
+const FREQUENT_QUALITY_GATE = 0.3; // recurrence already implies value → lenient
+const SINGLETON_QUALITY_GATE = 0.5; // one-offs must be genuinely high quality
+const MAX_RESULTS = 20; // curate, don't hoard
+const MIN_FLOOR = 8; // ensure the library is useful even with few repeats
+const MAX_SINGLETON_TOPUP = 10;
+
+function combinedCurationScore(group: CandidateGroup): number {
+  const quality = group.candidate.heuristicScore; // 0..1
+  const freqNorm = Math.min(1, group.conversationIds.size / 5); // 0..1
+  return quality * 0.6 + freqNorm * 0.4;
+}
 
 /**
- * Build the lightweight prompt library by surfacing HIGH-FREQUENCY prompts —
- * user prompts that recur across captured conversations. Frequency-ranked,
- * offline, no LLM enrichment. New prompts get a concise trigger (唤醒词) derived
- * from the body; the user curates/edits afterwards.
+ * Build the lightweight prompt library by surfacing FREQUENT + HIGH-QUALITY
+ * prompts ("常用提示词") — user prompts that recur across captured conversations
+ * and clear a quality bar. Selective (capped), offline, no LLM enrichment. New
+ * prompts get a concise trigger (唤醒词) derived from the body; the user
+ * curates/edits afterwards.
  */
 export async function extractPromptsFromLibrary(
   options: ExtractPromptsOptions = {},
@@ -292,23 +308,35 @@ export async function extractPromptsFromLibrary(
   }
 
   const allGroups = Array.from(groups.values());
-  const byFrequencyThenScore = (a: CandidateGroup, b: CandidateGroup) =>
-    b.conversationIds.size - a.conversationIds.size ||
-    b.candidate.heuristicScore - a.candidate.heuristicScore;
+  const byCurationScore = (a: CandidateGroup, b: CandidateGroup) =>
+    combinedCurationScore(b) - combinedCurationScore(a);
 
+  // Primary: frequent prompts that clear a (lenient) quality gate.
   const frequent = allGroups
-    .filter((group) => group.conversationIds.size >= MIN_FREQUENCY)
-    .sort(byFrequencyThenScore);
+    .filter(
+      (group) =>
+        group.conversationIds.size >= FREQUENT_MIN_CONVERSATIONS &&
+        group.candidate.heuristicScore >= FREQUENT_QUALITY_GATE,
+    )
+    .sort(byCurationScore);
 
-  // First run / few repeats: top up with the best-scoring singletons so the
-  // auto-built library is immediately useful (user can prune).
-  let selected = frequent;
-  if (selected.length < MIN_RESULTS) {
-    const singletons = allGroups
-      .filter((group) => group.conversationIds.size < MIN_FREQUENCY)
+  let selected = frequent.slice(0, MAX_RESULTS);
+
+  // Floor top-up: if too few recur, add only genuinely HIGH-QUALITY one-offs so
+  // the library is useful without collecting everything.
+  if (selected.length < MIN_FLOOR) {
+    const selectedHashes = new Set(
+      selected.map((group) => canonicalizeForHash(group.candidate.body)),
+    );
+    const topUp = allGroups
+      .filter(
+        (group) =>
+          !selectedHashes.has(canonicalizeForHash(group.candidate.body)) &&
+          group.candidate.heuristicScore >= SINGLETON_QUALITY_GATE,
+      )
       .sort((a, b) => b.candidate.heuristicScore - a.candidate.heuristicScore)
-      .slice(0, MIN_RESULTS - selected.length);
-    selected = [...selected, ...singletons];
+      .slice(0, Math.min(MAX_SINGLETON_TOPUP, MIN_FLOOR - selected.length, MAX_RESULTS - selected.length));
+    selected = [...selected, ...topUp];
   }
 
   let created = 0;

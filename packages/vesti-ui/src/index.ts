@@ -62,4 +62,6 @@ export type {
   PromptListFilter,
   PromptExtractionResult,
   PromptCompletionResult,
+  PlazaPrompt,
+  DashboardLabels,
 } from "./types";

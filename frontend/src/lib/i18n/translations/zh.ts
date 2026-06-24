@@ -52,6 +52,11 @@ export const zhTranslations: TranslationsType = {
     settings: "设置",
     openLibrary: "打开资料库面板",
     navigation: "Vesti 导航",
+    threadsDesc: "浏览、搜索并整理你已捕获的对话。",
+    insightsDesc: "对话的自动摘要与每周报告。",
+    dataDesc: "存储、备份导出/导入，以及历史对话导入。",
+    settingsDesc: "模型、捕获、语言与外观设置。",
+    openLibraryDesc: "打开完整面板（资料库、Explore、知识图谱、提示词）。",
   },
 
   settings: {
@@ -817,7 +822,7 @@ export const zhTranslations: TranslationsType = {
       conversationN: "对话 {id}",
     },
     prompts: {
-      title: "提示词库",
+      title: "常用提示词",
       summary: "{count} 条提示词",
       extractFromChats: "从对话提取",
       extracting: "提取中…",
@@ -886,6 +891,12 @@ export const zhTranslations: TranslationsType = {
       draftFirst: "请先输入草稿再优化。",
       extractFailed: "提取失败。",
       summaryLabel: "摘要：",
+      plazaTitle: "提示词广场",
+      plazaSubtitle: "来自优质来源的精选高质量提示词推荐。",
+      plazaDaily: "每日推荐",
+      plazaDailyHint: "每天刷新。",
+      plazaUse: "使用",
+      plazaSourcePrefix: "来源：",
     },
   },
 

@@ -261,7 +261,7 @@ const capsuleEn = {
   openVestiDock: "Open Vesti Dock",
   openDock: "Open Dock",
   pm: {
-    heading: "Prompts",
+    heading: "Prompt Assistant",
     optimize: "Optimize",
     optimizing: "Optimizing...",
     continue: "Continue",
@@ -274,7 +274,7 @@ const capsuleEn = {
     cancel: "Cancel",
     failed: "Could not generate. Try again.",
     offlineHint: "Connect a model in Settings to optimize prompts.",
-    hint: "Enter to fill the top match · click any prompt to insert",
+    hint: "Listens to your input box in real time — type a trigger to match, Enter to fill.",
   },
   errorMessages: {
     ARCHIVE_MODE_DISABLED: "Archive is disabled in mirror mode.",
@@ -306,7 +306,7 @@ const capsuleZh = {
   openVestiDock: "打开 Vesti 面板",
   openDock: "打开面板",
   pm: {
-    heading: "提示词",
+    heading: "提示词助手",
     optimize: "优化",
     optimizing: "优化中...",
     continue: "续写",
@@ -319,7 +319,7 @@ const capsuleZh = {
     cancel: "取消",
     failed: "生成失败，请重试。",
     offlineHint: "在设置中连接模型后即可优化提示词。",
-    hint: "回车填入最匹配项 · 点击任意提示词插入",
+    hint: "实时监听输入框：输入唤醒词即时匹配，回车一键填入。",
   },
   errorMessages: {
     ARCHIVE_MODE_DISABLED: "镜像模式下归档已禁用。",

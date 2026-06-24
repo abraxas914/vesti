@@ -50,6 +50,11 @@ export const enTranslations = {
     settings: "Settings",
     openLibrary: "Open Library Dashboard",
     navigation: "Vesti navigation",
+    threadsDesc: "Browse, search, and organize your captured conversations.",
+    insightsDesc: "Auto summaries and weekly reports across your chats.",
+    dataDesc: "Storage, backup export/import, and history import.",
+    settingsDesc: "Models, capture, language, and appearance.",
+    openLibraryDesc: "Open the full dashboard (Library, Explore, Knowledge Graph, Prompts).",
   },
 
   settings: {
@@ -818,7 +823,7 @@ export const enTranslations = {
       conversationN: "Conversation {id}",
     },
     prompts: {
-      title: "Prompt Library",
+      title: "Frequent Prompts",
       summary: "{count} prompts",
       extractFromChats: "Extract from chats",
       extracting: "Extracting…",
@@ -887,6 +892,12 @@ export const enTranslations = {
       draftFirst: "Write a draft to improve first.",
       extractFailed: "Extraction failed.",
       summaryLabel: "Summary: ",
+      plazaTitle: "Prompt Plaza",
+      plazaSubtitle: "Recommended high-quality prompts from trusted sources.",
+      plazaDaily: "Daily picks",
+      plazaDailyHint: "Refreshes every day.",
+      plazaUse: "Use",
+      plazaSourcePrefix: "Source: ",
     },
   },
 

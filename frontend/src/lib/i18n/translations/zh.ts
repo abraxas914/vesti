@@ -943,6 +943,19 @@ export const zhTranslations: TranslationsType = {
       axisAffectLeftStrength: "你冷静克制，能在复杂中保持清醒的判断。",
       axisAffectRightStrength: "你充满热情与投入，能把能量注入你所探索的事。",
     },
+    learn: {
+      modeLearn: "学习",
+      title: "你最近在学些什么",
+      subtitle: "把你的对话整理成一份个人学习地图，完全本地计算。",
+      insufficient: "对话还不够多 —— 多聊一些，你的学习地图会逐渐成形。",
+      sample: "来自 {n} 段已分析对话",
+      domainsTitle: "知识领域",
+      uncategorized: "未分类",
+      domainConversations: "{n} 个对话",
+      glossaryTitle: "你学到的东西",
+      openLoopsTitle: "未解的线索",
+      openLoopsEmpty: "没有遗留的未解问题 —— 都收好尾了。",
+    },
   },
 
   platforms: {

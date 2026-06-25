@@ -16,4 +16,8 @@ export type {
   AitiProfile,
   AitiAxisScore,
   AitiObsession,
+  LearnProfile,
+  LearnDomain,
+  LearnGlossaryEntry,
+  LearnOpenLoop,
 } from "@vesti/ui";

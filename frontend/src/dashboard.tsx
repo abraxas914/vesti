@@ -14,8 +14,9 @@ import {
   subscribeAdoptedPlazaIds,
 } from "~lib/promptPlaza/plazaCollectionService";
 import { computeAiti } from "~lib/aiti/computeAiti";
+import { computeLearn } from "~lib/learn/computeLearn";
 import { getAllSummaries } from "~lib/services/storageService";
-import type { AitiProfile } from "~vendor/vesti-ui";
+import type { AitiProfile, LearnProfile } from "~vendor/vesti-ui";
 import {
   connectObsidianVault,
   exportNoteToObsidian,
@@ -232,6 +233,38 @@ function VestiDashboardInner({
     };
   }, []);
 
+  // Learn (学习): local curriculum view from summaries + topics + conversations.
+  const [learn, setLearn] = useState<LearnProfile | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    const recompute = () => {
+      void Promise.all([getAllSummaries(), getTopics(), getConversations()])
+        .then(([summaries, topics, conversations]) => {
+          if (!cancelled) setLearn(computeLearn(summaries, topics, conversations));
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setLearn({ available: false, sampleSize: 0, domains: [], glossary: [], openLoops: [] });
+          }
+        });
+    };
+    recompute();
+    const onMsg = (msg: unknown) => {
+      if (msg && typeof msg === "object" && (msg as { type?: string }).type === "VESTI_DATA_UPDATED") {
+        recompute();
+      }
+    };
+    if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener(onMsg);
+    }
+    return () => {
+      cancelled = true;
+      if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(onMsg);
+      }
+    };
+  }, []);
+
   return (
     <VestiDashboardShell
       logoSrc={LOGO_BASE64}
@@ -240,6 +273,7 @@ function VestiDashboardInner({
       plaza={plaza}
       onPlazaAdoptToggle={handlePlazaAdoptToggle}
       aiti={aiti}
+      learn={learn}
       themeMode={themeMode}
       onToggleTheme={onToggleTheme}
       themeSyncStatus={themeSyncStatus}

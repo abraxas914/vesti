@@ -1143,6 +1143,19 @@ export interface DashboardLabels {
     axisAffectLeftStrength: string;
     axisAffectRightStrength: string;
   };
+  learn: {
+    modeLearn: string;
+    title: string;
+    subtitle: string;
+    insufficient: string;
+    sample: string;
+    domainsTitle: string;
+    uncategorized: string;
+    domainConversations: string;
+    glossaryTitle: string;
+    openLoopsTitle: string;
+    openLoopsEmpty: string;
+  };
 }
 
 /** A curated/recommended prompt for the 提示词广场 (Prompt Plaza). */
@@ -1183,6 +1196,32 @@ export interface AitiProfile {
   sampleSize: number;
   axes: AitiAxisScore[];
   obsessions: AitiObsession[];
+}
+
+/** "学习 Learn" — the captured KB reframed as a personal curriculum. */
+export interface LearnDomain {
+  topicId: number | null;
+  name: string;
+  count: number;
+  deep: number;
+  moderate: number;
+  superficial: number;
+}
+export interface LearnGlossaryEntry {
+  term: string;
+  definition: string;
+  conversationId?: number;
+}
+export interface LearnOpenLoop {
+  text: string;
+  conversationId: number;
+}
+export interface LearnProfile {
+  available: boolean;
+  sampleSize: number;
+  domains: LearnDomain[];
+  glossary: LearnGlossaryEntry[];
+  openLoops: LearnOpenLoop[];
 }
 
 /** Everything the Prompts tab needs to render the plaza + supermarket. */

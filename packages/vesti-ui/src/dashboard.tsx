@@ -15,10 +15,11 @@ import { DataManagementPanel } from "./components/DataManagementPanel";
 import { LibraryDataProvider } from "./contexts/library-data";
 import { ExploreTab } from "./tabs/explore-tab";
 import { AitiCard } from "./components/AitiCard";
+import { LearnCard } from "./components/LearnCard";
 import { LibraryTab } from "./tabs/library-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { PromptsTab } from "./tabs/prompts-tab";
-import type { AitiProfile, DashboardLabels, PlazaData, StorageApi, UiThemeMode } from "./types";
+import type { AitiProfile, DashboardLabels, LearnProfile, PlazaData, StorageApi, UiThemeMode } from "./types";
 import type { NotionDatabaseOption, NotionSettings } from "./notion-integration";
 import {
   connectToNotion,
@@ -272,6 +273,19 @@ const DEFAULT_LABELS: DashboardLabels = {
     axisAffectLeftStrength: "You stay calm and keep clear judgment under complexity.",
     axisAffectRightStrength: "You bring real passion and energy to what you explore.",
   },
+  learn: {
+    modeLearn: "Learn",
+    title: "What you've been learning",
+    subtitle: "Your conversations, organized as a personal curriculum. Computed locally.",
+    insufficient: "Not enough conversations yet — keep chatting and your learning map will fill in.",
+    sample: "From {n} analyzed conversations",
+    domainsTitle: "Knowledge domains",
+    uncategorized: "Uncategorized",
+    domainConversations: "{n} conversations",
+    glossaryTitle: "Things you've learned",
+    openLoopsTitle: "Open loops",
+    openLoopsEmpty: "No unresolved threads — nicely closed out.",
+  },
 };
 
 type DashboardProps = {
@@ -287,6 +301,7 @@ type DashboardProps = {
   plaza?: PlazaData;
   onPlazaAdoptToggle?: (id: string, adopt: boolean) => void;
   aiti?: AitiProfile;
+  learn?: LearnProfile;
 };
 
 export function VestiDashboard({
@@ -302,6 +317,7 @@ export function VestiDashboard({
   plaza,
   onPlazaAdoptToggle,
   aiti,
+  learn,
 }: DashboardProps) {
   const labels = providedLabels ?? DEFAULT_LABELS;
   const SETTINGS_KEY = "vesti_llm_settings";
@@ -318,7 +334,7 @@ export function VestiDashboard({
       return tab;
     return "library";
   });
-  const [exploreMode, setExploreMode] = useState<"ask" | "aiti">("ask");
+  const [exploreMode, setExploreMode] = useState<"ask" | "aiti" | "learn">("ask");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerView, setDrawerView] = useState<DrawerView>("settings");
@@ -747,9 +763,9 @@ export function VestiDashboard({
           )}
           {mountedTabs.explore && (
             <div className={`h-full ${activeTab === "explore" ? "flex flex-col" : "hidden"}`}>
-              {/* Explore = the reflective-AI hub: 问答 / AITI 画像 (圆桌/学习 later) */}
+              {/* Explore = the reflective-AI hub: 问答 / AITI 画像 / 学习 (圆桌 later) */}
               <div className="flex items-center gap-1 border-b border-border-subtle px-4 py-2">
-                {(["ask", "aiti"] as const).map((mode) => (
+                {(["ask", "aiti", "learn"] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
@@ -760,7 +776,11 @@ export function VestiDashboard({
                         : "text-text-tertiary hover:text-text-secondary"
                     }`}
                   >
-                    {mode === "ask" ? labels.aiti.modeAsk : labels.aiti.modeAiti}
+                    {mode === "ask"
+                      ? labels.aiti.modeAsk
+                      : mode === "aiti"
+                        ? labels.aiti.modeAiti
+                        : labels.learn.modeLearn}
                   </button>
                 ))}
               </div>
@@ -775,6 +795,15 @@ export function VestiDashboard({
               {exploreMode === "aiti" && (
                 <div className="min-h-0 flex-1">
                   <AitiCard profile={aiti} labels={labels.aiti} />
+                </div>
+              )}
+              {exploreMode === "learn" && (
+                <div className="min-h-0 flex-1">
+                  <LearnCard
+                    profile={learn}
+                    labels={labels.learn}
+                    onOpenConversation={handleOpenConversation}
+                  />
                 </div>
               )}
             </div>

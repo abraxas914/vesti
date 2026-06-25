@@ -944,6 +944,19 @@ export const enTranslations = {
       axisAffectLeftStrength: "You stay calm and keep clear judgment under complexity.",
       axisAffectRightStrength: "You bring real passion and energy to what you explore.",
     },
+    learn: {
+      modeLearn: "Learn",
+      title: "What you've been learning",
+      subtitle: "Your conversations, organized as a personal curriculum. Computed locally.",
+      insufficient: "Not enough conversations yet — keep chatting and your learning map will fill in.",
+      sample: "From {n} analyzed conversations",
+      domainsTitle: "Knowledge domains",
+      uncategorized: "Uncategorized",
+      domainConversations: "{n} conversations",
+      glossaryTitle: "Things you've learned",
+      openLoopsTitle: "Open loops",
+      openLoopsEmpty: "No unresolved threads — nicely closed out.",
+    },
   },
 
   platforms: {

@@ -1983,13 +1983,24 @@ export async function ensureVectorForConversation(
   });
 }
 
+// True cosine similarity. Previously this returned a raw dot product, which is
+// only correct when both vectors are unit-normalized — an assumption the
+// embedding pipeline did not guarantee, so similarity (and the 0.15 retrieval /
+// 0.4 edge cutoffs) could be skewed on non-normalized vectors. Dividing by the
+// magnitudes makes it correct regardless of normalization; for already-normalized
+// vectors the result is essentially unchanged, so existing cutoffs stay valid.
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
   let dot = 0;
+  let normA = 0;
+  let normB = 0;
   for (let i = 0; i < a.length; i += 1) {
     dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
   }
-  return dot;
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 export async function findRelatedConversations(

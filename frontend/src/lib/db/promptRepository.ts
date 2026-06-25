@@ -253,11 +253,11 @@ interface CandidateGroup {
 // curated. A small quality-gated singleton top-up ensures a useful minimum on
 // sparse/new libraries without hoarding.
 const FREQUENT_MIN_CONVERSATIONS = 3; // recurs in >= 3 distinct conversations
-const FREQUENT_QUALITY_GATE = 0.3; // recurrence already implies value → lenient
-const SINGLETON_QUALITY_GATE = 0.5; // one-offs must be genuinely high quality
-const MAX_RESULTS = 20; // curate, don't hoard
-const MIN_FLOOR = 8; // ensure the library is useful even with few repeats
-const MAX_SINGLETON_TOPUP = 10;
+const FREQUENT_QUALITY_GATE = 0.48; // recurrence + a real quality bar (raised)
+const SINGLETON_QUALITY_GATE = 0.62; // one-offs must be genuinely excellent
+const MAX_RESULTS = 12; // keep the library small + high-quality, don't hoard
+const MIN_FLOOR = 5; // a small useful minimum even with few repeats
+const MAX_SINGLETON_TOPUP = 5;
 
 function combinedCurationScore(group: CandidateGroup): number {
   const quality = group.candidate.heuristicScore; // 0..1

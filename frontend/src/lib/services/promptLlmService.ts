@@ -158,7 +158,7 @@ export interface DistilledFragment {
 
 const FRAGMENT_CHUNK_SIZE = 15;
 const MAX_FRAGMENT_INPUT = 120;
-const MAX_FRAGMENTS_OUT = 30;
+const MAX_FRAGMENTS_OUT = 12;
 
 const fragmentItemSchema = z.object({
   title: z.string().trim().min(1).max(60),
@@ -172,7 +172,7 @@ Rules:
 - Each fragment is SHORT and self-contained (roughly one to three sentences, or a single directive).
 - Generalize: replace specific nouns with {{variables}} where that makes the fragment reusable.
 - Keep the user's language. Deduplicate aggressively; merge near-duplicates.
-- Quality over quantity: only genuinely reusable, high-value fragments.
+- Be HIGHLY selective — return FEWER, excellent fragments (often 0-2 per chunk; skip a chunk entirely if nothing is genuinely reusable). Do NOT pad to fill a quota. Only the highest-value, broadly-reusable building blocks belong in the library.
 - Give each a concise trigger title (<= 6 words) the user would type to recall it.
 Return ONLY a JSON array: [{"title": "...", "body": "...", "category": "<Writing|Coding|Analysis|Learning|Productivity|Translation|Roleplay|Other>"}]. No prose.`;
 

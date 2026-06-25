@@ -284,7 +284,7 @@ const capsuleEn = {
     cancel: "Cancel",
     failed: "Could not generate. Try again.",
     offlineHint: "Connect a model in Settings to optimize prompts.",
-    hint: "Listens to your input box in real time — type a trigger to match, Enter to fill.",
+    hint: "Type to match · Enter to fill",
     plazaBadge: "Plaza",
   },
   errorMessages: {
@@ -330,7 +330,7 @@ const capsuleZh = {
     cancel: "取消",
     failed: "生成失败，请重试。",
     offlineHint: "在设置中连接模型后即可优化提示词。",
-    hint: "实时监听输入框：输入唤醒词即时匹配，回车一键填入。",
+    hint: "输入即匹配 · 回车填入",
     plazaBadge: "广场",
   },
   errorMessages: {

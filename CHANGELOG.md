@@ -11,6 +11,21 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 ## [Unreleased]
 
 ### Added
+- **探索 hub — four reflective modes** under 探索/Explore (one switcher): 问答
+  (ask), **AITI 画像** (a local, empowering strengths portrait from your own
+  conversations), **学习 (Learn)** — your KB reframed as a personal curriculum
+  (knowledge domains with a depth mix, a glossary of "things you've learned", and
+  open loops, all computed locally), and **AI 圆桌 (Roundtable)** — a
+  multi-perspective panel (Skeptic/Optimist/Pragmatist/Domain Expert/Devil's
+  Advocate) on your configured model with a moderated, structured synthesis.
+  Bilingual; 圆桌 needs a connected model.
+- **Send to… (whole conversation or its summary)**: from the reader you can now
+  export a conversation — or its AI summary — to **Notion** (a new page under your
+  selected database, via a dependency-free Markdown→Notion-blocks renderer) or
+  **Obsidian** (a `Vesti/<title>.md` file with frontmatter). Plus per-message
+  **Copy as rich text** (faithful AST→HTML) that pastes formatted into
+  Word/WPS/Notion/Obsidian. Bilingual; Notion needs OAuth, Obsidian a connected
+  vault.
 - **提示词超市 (Prompt Supermarket)**: a large bilingual curated catalog (by
   big-category) on the Prompts page; **加入/已加入** adopts prompts into a personal
   **我的广场** shelf (kept separate from the auto-extracted 常用提示词).
@@ -60,6 +75,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Localized in English and Chinese.
 
 ### Changed
+- **常用提示词 curation refreshes instead of accumulating** (fixes "数量太多"):
+  extraction now clears the prior auto-set before installing a new one, and
+  auto-extract runs only on an empty library (re-running is the explicit Extract
+  button). Tighter caps (≤8) + higher quality gates + an LLM consolidation pass
+  that ranks/merges the best fragments across chunks. Editing a prompt promotes
+  it to `manual` so it survives a refresh.
+- **AITI is now an empowering, strengths-based portrait** (给人力量): both poles
+  framed as strengths, a "你的思维优势" section, obsessions reframed as areas
+  you've invested in.
 - 常用提示词 are now LLM-distilled reusable **fragments** (短小、可复用的片段，含
   {{变量}}) when a model is configured, instead of whole captured turns; falls
   back to the offline frequency heuristic with no model.
@@ -99,6 +123,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   Errors panel as if the extension were failing.
 
 ### Fixed
+- **Retrieval correctness**: Explore RAG, related-conversations, and graph edges
+  now use true cosine similarity (was a raw dot product), so similarity scores and
+  the 0.15/0.4 cutoffs behave as intended across embeddings of differing norms.
 - Fixed Doubao (`www.doubao.com`) "cannot capture": added the staggered initial
   capture triggers the content script was missing (parity with ChatGPT/Yuanbao)
   and scoped `DoubaoParser.isGenerating()` to message bubbles so persistent page

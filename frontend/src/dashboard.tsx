@@ -302,16 +302,16 @@ function VestiDashboardInner({
         askKnowledgeBase,
         runRoundtable,
         exportConversationToNotion,
-        // Obsidian export runs in-page (File System Access needs a user gesture).
-        exportConversationToObsidian: async (input: { title: string; markdown: string }) => {
-          const status = await getObsidianVaultStatus();
-          if (status.state !== "connected") await connectObsidianVault();
-          return writeMarkdownToVault({
+        // Obsidian export runs in-page (File System Access). Connect the vault in
+        // Settings first; writeMarkdownToVault throws a clear error if it isn't —
+        // we deliberately don't pre-await a status check here (that would consume
+        // the user gesture that a first-time directory picker needs).
+        exportConversationToObsidian: async (input: { title: string; markdown: string }) =>
+          writeMarkdownToVault({
             title: input.title,
             frontmatter: { source: "VESTI" },
             body: input.markdown,
-          });
-        },
+          }),
         createExploreSession,
         listExploreSessions,
         getExploreSession,

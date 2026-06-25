@@ -62,6 +62,7 @@ import {
   exportAnnotationToMyNotes,
   exportAnnotationToNotion
 } from "../lib/services/annotationExportService"
+import { exportConversationToNotion } from "../lib/services/conversationExportService"
 import { getCaptureSettings } from "../lib/services/captureSettingsService"
 import { runGardener } from "../lib/services/gardenerService"
 import {
@@ -599,6 +600,13 @@ async function handleOffscreenRequest(
         const data = await exportAnnotationToNotion(
           message.payload.annotationId
         )
+        return { ok: true, type: messageType, data }
+      }
+      case "EXPORT_CONVERSATION_TO_NOTION": {
+        const data = await exportConversationToNotion({
+          title: message.payload.title,
+          markdown: message.payload.markdown
+        })
         return { ok: true, type: messageType, data }
       }
       case "GET_NOTES": {

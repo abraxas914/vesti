@@ -345,6 +345,13 @@ export type RequestMessage =
       payload: AnnotationActionPayload
     }
   | {
+      type: "EXPORT_CONVERSATION_TO_NOTION"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: { title: string; markdown: string }
+    }
+  | {
       type: "GET_NOTES"
       target: "offscreen"
       via?: "background"
@@ -653,6 +660,7 @@ export type ResponseDataMap = {
   DELETE_ANNOTATION: { deleted: boolean }
   EXPORT_ANNOTATION_TO_NOTE: { note: Note }
   EXPORT_ANNOTATION_TO_NOTION: { pageId: string; url?: string }
+  EXPORT_CONVERSATION_TO_NOTION: { pageId: string; url?: string }
   GET_NOTES: Note[]
   CREATE_NOTE: { note: Note }
   UPDATE_NOTE: { note: Note }

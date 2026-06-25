@@ -483,6 +483,15 @@ export type StorageApi = {
   getObsidianVaultStatus?: () => Promise<ObsidianVaultStatus>;
   connectObsidianVault?: () => Promise<ObsidianVaultStatus>;
   exportNoteToObsidian?: (note: Note) => Promise<ObsidianNoteExportResult>;
+  // Send a whole conversation / its summary out as ready Markdown.
+  exportConversationToNotion?: (input: {
+    title: string;
+    markdown: string;
+  }) => Promise<{ pageId: string; url?: string }>;
+  exportConversationToObsidian?: (input: {
+    title: string;
+    markdown: string;
+  }) => Promise<{ relative_path: string; vault_name: string; exported_at: number }>;
   importObsidianDirectory?: (
     vaultName: string,
     entries: ObsidianImportFileEntry[]
@@ -999,6 +1008,14 @@ export interface DashboardLabels {
       nextSteps: string;
       fallback: string;
     };
+    sendToButton?: string;
+    sendToNotionConversation?: string;
+    sendToNotionSummary?: string;
+    sendToObsidianConversation?: string;
+    sendToObsidianSummary?: string;
+    sendToExporting?: string;
+    sendToDone?: string;
+    sendToFailed?: string;
   };
   explore: Record<string, string>;
   network: {

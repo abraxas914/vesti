@@ -21,6 +21,7 @@ import {
   connectObsidianVault,
   exportNoteToObsidian,
   getObsidianVaultStatus,
+  writeMarkdownToVault,
 } from "~lib/services/obsidianVaultService";
 import {
   applyUiTheme,
@@ -51,6 +52,7 @@ import {
   removeFolderTag,
   askKnowledgeBase,
   runRoundtable,
+  exportConversationToNotion,
   createExploreSession,
   listExploreSessions,
   getExploreSession,
@@ -299,6 +301,17 @@ function VestiDashboardInner({
         removeFolderTag,
         askKnowledgeBase,
         runRoundtable,
+        exportConversationToNotion,
+        // Obsidian export runs in-page (File System Access needs a user gesture).
+        exportConversationToObsidian: async (input: { title: string; markdown: string }) => {
+          const status = await getObsidianVaultStatus();
+          if (status.state !== "connected") await connectObsidianVault();
+          return writeMarkdownToVault({
+            title: input.title,
+            frontmatter: { source: "VESTI" },
+            body: input.markdown,
+          });
+        },
         createExploreSession,
         listExploreSessions,
         getExploreSession,

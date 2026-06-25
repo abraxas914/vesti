@@ -316,6 +316,19 @@ export async function exportAnnotationToNotion(
   return result
 }
 
+export async function exportConversationToNotion(
+  input: { title: string; markdown: string }
+): Promise<{ pageId: string; url?: string }> {
+  return (await sendRequest(
+    {
+      type: "EXPORT_CONVERSATION_TO_NOTION",
+      target: "offscreen",
+      payload: input
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  )) as { pageId: string; url?: string }
+}
+
 export async function getNotes(): Promise<Note[]> {
   return sendRequest({
     type: "GET_NOTES",

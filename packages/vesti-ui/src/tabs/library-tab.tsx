@@ -56,6 +56,7 @@ import {
   isNotionExportConfigured,
 } from "../notion-integration";
 import { RichMessageContent } from "../components/RichMessageContent";
+import { SendToMenu } from "../components/SendToMenu";
 import { ReaderTimestampFooter } from "../components/ReaderTimestampFooter";
 import { useResizableWidth } from "../hooks/use-resizable-width";
 import { useNoteDraft, type NoteSaveStatus } from "../hooks/use-note-draft";
@@ -3775,6 +3776,13 @@ export function LibraryTab({
                           </span>
                         </button>
                       ) : null}
+                      <SendToMenu
+                        storage={storage}
+                        conversation={selectedConversation}
+                        messages={messages}
+                        summary={summaryData}
+                        labels={labels}
+                      />
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {activeTags.map((tag) => (

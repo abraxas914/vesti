@@ -17,6 +17,7 @@ import {
   Megaphone,
   Moon,
   ShieldCheck,
+  Sparkles,
   Sun
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -77,6 +78,11 @@ import type {
 } from "~lib/types"
 
 import { useI18n } from "~lib/i18n"
+import {
+  GLOBAL_SCOPE,
+  getPromptAssistSettingsForHost,
+  updatePromptAssistSettings
+} from "~lib/services/promptAssistSettingsService"
 import type { SupportedLocale } from "~lib/types"
 import { DisclosureSection } from "../components/DisclosureSection"
 
@@ -188,6 +194,60 @@ function LanguageSelector({
         <option value="en">{t.settings.language.en}</option>
         <option value="zh">{t.settings.language.zh}</option>
       </select>
+    </div>
+  )
+}
+
+function RealtimeAssistToggle() {
+  const { t } = useI18n()
+  const [enabled, setEnabled] = useState(true)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void getPromptAssistSettingsForHost(GLOBAL_SCOPE).then((settings) => {
+      if (cancelled) return
+      setEnabled(settings.realtimeEnabled)
+      setReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleToggle = async () => {
+    const next = !enabled
+    setEnabled(next)
+    try {
+      await updatePromptAssistSettings(GLOBAL_SCOPE, { realtimeEnabled: next })
+    } catch {
+      setEnabled(!next)
+    }
+  }
+
+  const a = t.realTimeAssist.toggle
+
+  return (
+    <div className="card-shadow-warm flex items-center gap-3 rounded-xl border border-border-subtle bg-bg-surface px-4 py-3">
+      <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-bg-secondary text-text-secondary">
+        <Sparkles className="h-4 w-4" strokeWidth={1.5} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-medium text-text-primary">{a.label}</p>
+        <p className="mt-0.5 text-[11px] text-text-tertiary">{a.description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={a.label}
+        disabled={!ready}
+        onClick={() => void handleToggle()}
+        data-state={enabled ? "checked" : "unchecked"}
+        className="settings-switch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-focus"
+      >
+        <span className="settings-switch-thumb" />
+      </button>
     </div>
   )
 }
@@ -1030,6 +1090,8 @@ export function SettingsPage({ onNavigateToData }: SettingsPageProps) {
         </section>
 
         <LanguageSelector locale={locale} onChange={setLocale} />
+
+        <RealtimeAssistToggle />
 
         <SettingsGroupLabel label={t.settings.groups.system} />
 

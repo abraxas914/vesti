@@ -1,6 +1,11 @@
-import { SlidersHorizontal } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Clock, History, SlidersHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "~lib/i18n";
+import {
+  getConversationFirstCapturedAt,
+  getConversationOriginAt,
+} from "~lib/conversations/timestamps";
+import { TimelineScrubber } from "../components/TimelineScrubber";
 import type {
   Conversation,
   ConversationMatchSummary,
@@ -101,7 +106,7 @@ export function TimelinePage({
   onSelectConversation,
   refreshToken,
 }: TimelinePageProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const compactExportVariant = "experimental" as const;
   const {
     headerMode,
@@ -113,6 +118,9 @@ export function TimelinePage({
   } = session;
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [visibleConversations, setVisibleConversations] = useState<Conversation[]>([]);
+  const [allConversations, setAllConversations] = useState<Conversation[]>([]);
+  const [sortMode, setSortMode] = useState<"origin" | "capture">("origin");
+  const [timeRange, setTimeRange] = useState<{ start: number; end: number } | null>(null);
   const [exportMode, setExportMode] =
     useState<ConversationExportContentMode>("full");
   const [selectedExportFormat, setSelectedExportFormat] =
@@ -133,6 +141,43 @@ export function TimelinePage({
   const clipboardAvailable =
     typeof navigator !== "undefined" &&
     typeof navigator.clipboard?.writeText === "function";
+
+  // Timeline scrubber domain + histogram over the FULL loaded set (so the range
+  // doesn't collapse as you filter). Computed on the active timestamp mode.
+  const HISTOGRAM_BUCKETS = 32;
+  const timelineDomain = useMemo(() => {
+    const timeOf = (c: Conversation) =>
+      sortMode === "capture"
+        ? getConversationFirstCapturedAt(c)
+        : getConversationOriginAt(c);
+    const times = allConversations
+      .map(timeOf)
+      .filter((v) => Number.isFinite(v) && v > 0);
+    if (times.length === 0) return null;
+    const min = Math.min(...times);
+    const max = Math.max(...times);
+    const span = Math.max(1, max - min);
+    const histogram = new Array(HISTOGRAM_BUCKETS).fill(0) as number[];
+    for (const t0 of times) {
+      const idx = Math.min(
+        HISTOGRAM_BUCKETS - 1,
+        Math.floor(((t0 - min) / span) * HISTOGRAM_BUCKETS),
+      );
+      histogram[idx] += 1;
+    }
+    return { min, max, histogram };
+  }, [allConversations, sortMode]);
+
+  // Clear any active window when the domain disappears or the sort mode flips
+  // (a range in one mode is meaningless in the other).
+  useEffect(() => {
+    setTimeRange(null);
+  }, [sortMode]);
+  useEffect(() => {
+    if (!timelineDomain) setTimeRange(null);
+  }, [timelineDomain]);
+
+  const showTimeline = Boolean(timelineDomain && allConversations.length >= 3);
 
   useEffect(() => {
     let cancelled = false;
@@ -630,6 +675,49 @@ export function TimelinePage({
         </div>
       )}
 
+      {showTimeline && timelineDomain && (
+        <div className="border-b border-border-subtle bg-bg-sidebar/40 px-3 py-2">
+          <div className="mb-1.5 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setSortMode("origin")}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-[3px] text-[11px] font-medium transition-colors ${
+                sortMode === "origin"
+                  ? "border-border-default bg-accent-primary-light text-accent-primary"
+                  : "border-border-subtle text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              <Clock className="h-3 w-3" strokeWidth={1.8} />
+              {t.timeline.sortByOrigin}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSortMode("capture")}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-[3px] text-[11px] font-medium transition-colors ${
+                sortMode === "capture"
+                  ? "border-border-default bg-accent-primary-light text-accent-primary"
+                  : "border-border-subtle text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              <History className="h-3 w-3" strokeWidth={1.8} />
+              {t.timeline.sortByCapture}
+            </button>
+          </div>
+          <TimelineScrubber
+            domainMin={timelineDomain.min}
+            domainMax={timelineDomain.max}
+            start={timeRange?.start ?? timelineDomain.min}
+            end={timeRange?.end ?? timelineDomain.max}
+            histogram={timelineDomain.histogram}
+            onChange={(start, end) => setTimeRange({ start, end })}
+            onReset={() => setTimeRange(null)}
+            locale={locale}
+            resetLabel={t.timeline.timelineReset}
+            isFull={timeRange === null}
+          />
+        </div>
+      )}
+
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <ConversationList
           searchQuery={query}
@@ -648,6 +736,9 @@ export function TimelinePage({
           onToggleSelection={toggleSelection}
           onSelectFromMenu={handleSelectFromMenu}
           onFilteredConversationsChange={setVisibleConversations}
+          onConversationsLoaded={setAllConversations}
+          sortMode={sortMode}
+          timeRange={timeRange}
           bottomInsetPx={listBottomInset}
         />
 

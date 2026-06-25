@@ -52,6 +52,10 @@ interface ConversationListProps {
   onFilteredConversationsChange?: (conversations: Conversation[]) => void;
   onConversationsLoaded?: (conversations: Conversation[]) => void;
   bottomInsetPx?: number;
+  /** Order/group by the conversation's own time ("origin") or capture time. */
+  sortMode?: "origin" | "capture";
+  /** Optional time-window filter (from the timeline scrubber), in the active mode. */
+  timeRange?: { start: number; end: number } | null;
 }
 
 interface FilteredConversationItem {
@@ -184,8 +188,17 @@ export function ConversationList({
   onFilteredConversationsChange,
   onConversationsLoaded,
   bottomInsetPx = 16,
+  sortMode = "origin",
+  timeRange = null,
 }: ConversationListProps) {
   const { t } = useI18n();
+  const timeOf = useCallback(
+    (conversation: Conversation) =>
+      sortMode === "capture"
+        ? getConversationFirstCapturedAt(conversation)
+        : getConversationOriginAt(conversation),
+    [sortMode],
+  );
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -209,7 +222,11 @@ export function ConversationList({
     if (!conversations.length) return [];
     return conversations
       .filter((conversation) => {
-        if (!matchesDatePreset(getConversationOriginAt(conversation), datePreset)) {
+        const at = timeOf(conversation);
+        if (!matchesDatePreset(at, datePreset)) {
+          return false;
+        }
+        if (timeRange && (at < timeRange.start || at > timeRange.end)) {
           return false;
         }
         if (selectedPlatforms.size > 0 && !selectedPlatforms.has(conversation.platform)) {
@@ -218,7 +235,7 @@ export function ConversationList({
         return true;
       })
       .map((conversation) => conversation.id);
-  }, [conversations, datePreset, selectedPlatforms]);
+  }, [conversations, datePreset, selectedPlatforms, timeOf, timeRange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -325,13 +342,17 @@ export function ConversationList({
 
   const filteredConversations = useMemo(() => {
     const convs = conversations ?? [];
-    return convs.reduce<FilteredConversationItem[]>((acc, conversation) => {
+    const items = convs.reduce<FilteredConversationItem[]>((acc, conversation) => {
       const baseMatch = matchesSearch(conversation, normalizedSearchQuery);
       const summary = shouldRunMessageSearch ? resultSummaryMap[conversation.id] : undefined;
       const textMatch = Boolean(summary);
       const matchesQuery = searchReadiness === "empty" ? true : baseMatch || textMatch;
       if (!matchesQuery) return acc;
-      if (!matchesDatePreset(getConversationOriginAt(conversation), datePreset)) {
+      const at = timeOf(conversation);
+      if (!matchesDatePreset(at, datePreset)) {
+        return acc;
+      }
+      if (timeRange && (at < timeRange.start || at > timeRange.end)) {
         return acc;
       }
       if (selectedPlatforms.size > 0 && !selectedPlatforms.has(conversation.platform)) {
@@ -344,6 +365,8 @@ export function ConversationList({
       });
       return acc;
     }, []);
+    items.sort((a, b) => timeOf(b.conversation) - timeOf(a.conversation));
+    return items;
   }, [
     conversations,
     datePreset,
@@ -352,6 +375,8 @@ export function ConversationList({
     resultSummaryMap,
     selectedPlatforms,
     shouldRunMessageSearch,
+    timeOf,
+    timeRange,
   ]);
 
   useEffect(() => {
@@ -387,18 +412,31 @@ export function ConversationList({
     const older: FilteredConversationItem[] = [];
 
     for (const item of filteredConversations) {
-      const diff = now - getConversationOriginAt(item.conversation);
+      const diff = now - timeOf(item.conversation);
       if (diff < 86_400_000) today.push(item);
       else if (diff < 604_800_000) week.push(item);
       else older.push(item);
     }
 
+    const labels =
+      sortMode === "capture"
+        ? {
+            today: t.timeline.capturedToday,
+            week: t.timeline.capturedThisWeek,
+            earlier: t.timeline.capturedEarlier,
+          }
+        : {
+            today: t.timeline.startedToday,
+            week: t.timeline.startedThisWeek,
+            earlier: t.timeline.startedEarlier,
+          };
+
     const groups: { label: string; items: FilteredConversationItem[] }[] = [];
-    if (today.length > 0) groups.push({ label: t.timeline.startedToday, items: today });
-    if (week.length > 0) groups.push({ label: t.timeline.startedThisWeek, items: week });
-    if (older.length > 0) groups.push({ label: t.timeline.startedEarlier, items: older });
+    if (today.length > 0) groups.push({ label: labels.today, items: today });
+    if (week.length > 0) groups.push({ label: labels.week, items: week });
+    if (older.length > 0) groups.push({ label: labels.earlier, items: older });
     return groups;
-  }, [filteredConversations]);
+  }, [filteredConversations, timeOf, sortMode, t]);
 
   useEffect(() => {
     if (!anchorConversationId || loading) return;
@@ -518,9 +556,7 @@ export function ConversationList({
             : item
         );
 
-        next = next.sort(
-          (a, b) => getConversationOriginAt(b) - getConversationOriginAt(a)
-        );
+        next = next.sort((a, b) => timeOf(b) - timeOf(a));
 
         if (!normalizedSearchQuery) {
           return next;
@@ -533,7 +569,7 @@ export function ConversationList({
         });
       });
     },
-    [normalizedSearchQuery, resultSummaryMap, shouldRunMessageSearch]
+    [normalizedSearchQuery, resultSummaryMap, shouldRunMessageSearch, timeOf]
   );
 
   if (loading) {

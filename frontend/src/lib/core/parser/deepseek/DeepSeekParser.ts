@@ -222,7 +222,7 @@ export class DeepSeekParser implements IParser {
     };
 
     if (modeUpdate.switched) {
-      logger.warn("parser", "DeepSeek AST perf mode switched", {
+      logger.debug("parser", "DeepSeek AST perf mode switched", {
         platform: "DeepSeek",
         from: modeUpdate.previousMode,
         to: modeUpdate.mode,
@@ -665,7 +665,7 @@ export class DeepSeekParser implements IParser {
     logger.info("parser", "DeepSeek parse stats", stats);
 
     if (messages.length === 0) {
-      logger.warn("parser", "DeepSeek parser kept zero messages", {
+      logger.debug("parser", "DeepSeek parser kept zero messages", {
         source: stats.source,
         totalCandidates: stats.totalCandidates,
         droppedNoise: stats.droppedNoise,
@@ -676,7 +676,7 @@ export class DeepSeekParser implements IParser {
 
     const hasSingleRole = stats.roleDistribution.user === 0 || stats.roleDistribution.ai === 0;
     if (hasSingleRole) {
-      logger.warn("parser", "DeepSeek parser captured only one role", {
+      logger.debug("parser", "DeepSeek parser captured only one role", {
         source: stats.source,
         roleDistribution: stats.roleDistribution,
         samples: messages

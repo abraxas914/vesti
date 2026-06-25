@@ -83,6 +83,7 @@ import {
   findRelatedConversations,
   vectorizeAllConversations
 } from "../lib/services/searchService"
+import { runRoundtablePanel } from "../lib/services/roundtableService"
 import type {
   ActiveCaptureStatus,
   CaptureMode,
@@ -561,6 +562,14 @@ async function handleOffscreenRequest(
           message.payload.limit,
           message.payload.mode,
           message.payload.options
+        )
+        return { ok: true, type: messageType, data }
+      }
+      case "RUN_ROUNDTABLE": {
+        const data = await runRoundtablePanel(
+          message.payload.question,
+          message.payload.personaIds,
+          { lang: message.payload.lang }
         )
         return { ok: true, type: messageType, data }
       }

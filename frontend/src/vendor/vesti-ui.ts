@@ -20,4 +20,9 @@ export type {
   LearnDomain,
   LearnGlossaryEntry,
   LearnOpenLoop,
+  RoundtablePersonaId,
+  RoundtablePersona,
+  RoundtableSeatTurn,
+  RoundtableSynthesis,
+  RoundtableResult,
 } from "@vesti/ui";

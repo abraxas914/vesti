@@ -5,6 +5,7 @@ export { NetworkTab } from "./tabs/network-tab";
 export { PromptsTab } from "./tabs/prompts-tab";
 export { AitiCard } from "./components/AitiCard";
 export { LearnCard } from "./components/LearnCard";
+export { RoundtablePanel } from "./components/RoundtablePanel";
 export { StructuredSummaryCard } from "./components/StructuredSummaryCard";
 export { SummaryPipelineProgress } from "./components/SummaryPipelineProgress";
 export { MOCK_NOTES } from "./mock-data";
@@ -74,5 +75,10 @@ export type {
   LearnDomain,
   LearnGlossaryEntry,
   LearnOpenLoop,
+  RoundtablePersonaId,
+  RoundtablePersona,
+  RoundtableSeatTurn,
+  RoundtableSynthesis,
+  RoundtableResult,
   DashboardLabels,
 } from "./types";

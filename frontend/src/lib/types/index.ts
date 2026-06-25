@@ -235,6 +235,51 @@ export interface ExploreMessage {
   timestamp: number
 }
 
+// ---- AI 圆桌 (Roundtable) ----
+export type RoundtablePersonaId =
+  | "skeptic"
+  | "optimist"
+  | "pragmatist"
+  | "domain_expert"
+  | "devils_advocate"
+  | "moderator"
+
+export interface RoundtablePersona {
+  id: RoundtablePersonaId
+  nameZh: string
+  nameEn: string
+  blurbZh: string
+  blurbEn: string
+  systemPromptZh: string
+  systemPromptEn: string
+}
+
+export interface RoundtableSeatTurn {
+  personaId: RoundtablePersonaId
+  content: string
+  ok: boolean
+  error?: string
+  durationMs: number
+}
+
+export interface RoundtableSynthesis {
+  consensus: string[]
+  disagreements: string[]
+  recommendation: string
+  openQuestions: string[]
+}
+
+export interface RoundtableResult {
+  question: string
+  lang: "zh" | "en"
+  grounded: boolean
+  seatTurns: RoundtableSeatTurn[]
+  synthesis: RoundtableSynthesis | null
+  synthesisRaw: string
+  sources: RelatedConversation[]
+  totalDurationMs: number
+}
+
 export type MessageCitationSourceType =
   | "inline_pill"
   | "search_card"

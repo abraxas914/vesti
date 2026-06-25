@@ -33,6 +33,8 @@ import type {
   PromptExtractionResult,
   PromptCompletionResult,
   RagResponse,
+  RoundtablePersonaId,
+  RoundtableResult,
   RelatedConversation,
   SearchConversationMatchesQuery,
   StorageUsageSnapshot,
@@ -241,6 +243,17 @@ export type RequestMessage =
         sessionId?: string
         mode?: ExploreMode
         options?: ExploreAskOptions
+      }
+    }
+  | {
+      type: "RUN_ROUNDTABLE"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+      payload: {
+        question: string
+        personaIds: RoundtablePersonaId[]
+        lang?: "zh" | "en"
       }
     }
   | {
@@ -626,6 +639,7 @@ export type ResponseDataMap = {
   MOVE_FOLDER_TAG: { updated: number }
   REMOVE_FOLDER_TAG: { updated: number }
   ASK_KNOWLEDGE_BASE: RagResponse & { sessionId: string }
+  RUN_ROUNDTABLE: RoundtableResult
   CREATE_EXPLORE_SESSION: { sessionId: string }
   LIST_EXPLORE_SESSIONS: ExploreSession[]
   GET_EXPLORE_SESSION: ExploreSession | null

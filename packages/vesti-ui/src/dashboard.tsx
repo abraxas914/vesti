@@ -16,6 +16,7 @@ import { LibraryDataProvider } from "./contexts/library-data";
 import { ExploreTab } from "./tabs/explore-tab";
 import { AitiCard } from "./components/AitiCard";
 import { LearnCard } from "./components/LearnCard";
+import { RoundtablePanel } from "./components/RoundtablePanel";
 import { LibraryTab } from "./tabs/library-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { PromptsTab } from "./tabs/prompts-tab";
@@ -243,6 +244,7 @@ const DEFAULT_LABELS: DashboardLabels = {
   aiti: {
     modeAsk: "Ask",
     modeAiti: "AITI",
+    modeRoundtable: "Roundtable",
     title: "Your AITI — your thinking strengths",
     subtitle: "Computed locally from your own conversations. A reflection of your strengths, not a verdict.",
     insufficient: "Not enough conversations analyzed yet — keep chatting and your portrait will take shape.",
@@ -285,6 +287,28 @@ const DEFAULT_LABELS: DashboardLabels = {
     glossaryTitle: "Things you've learned",
     openLoopsTitle: "Open loops",
     openLoopsEmpty: "No unresolved threads — nicely closed out.",
+  },
+  roundtable: {
+    title: "AI Roundtable",
+    subtitle: "Convene a panel of perspectives on your question, then a moderated synthesis.",
+    questionPlaceholder: "Ask a judgment-call question to debate…",
+    personasLabel: "Panelists (pick up to 3)",
+    run: "Convene panel",
+    running: "The panel is deliberating…",
+    latencyHint: "Each seat answers in turn, so this takes a little while.",
+    needQuestion: "Type a question first.",
+    seatsTitle: "Panel",
+    synthesisTitle: "Moderator's synthesis",
+    consensus: "Consensus",
+    disagreements: "Key disagreements",
+    recommendation: "Recommendation",
+    openQuestions: "Open questions",
+    empty: "Ask a question and convene the panel to see perspectives + a synthesis.",
+    personaSkeptic: "Skeptic",
+    personaOptimist: "Optimist",
+    personaPragmatist: "Pragmatist",
+    personaDomainExpert: "Domain Expert",
+    personaDevilsAdvocate: "Devil's Advocate",
   },
 };
 
@@ -334,7 +358,7 @@ export function VestiDashboard({
       return tab;
     return "library";
   });
-  const [exploreMode, setExploreMode] = useState<"ask" | "aiti" | "learn">("ask");
+  const [exploreMode, setExploreMode] = useState<"ask" | "aiti" | "learn" | "roundtable">("ask");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerView, setDrawerView] = useState<DrawerView>("settings");
@@ -763,9 +787,9 @@ export function VestiDashboard({
           )}
           {mountedTabs.explore && (
             <div className={`h-full ${activeTab === "explore" ? "flex flex-col" : "hidden"}`}>
-              {/* Explore = the reflective-AI hub: 问答 / AITI 画像 / 学习 (圆桌 later) */}
+              {/* Explore = the reflective-AI hub: 问答 / AITI 画像 / 学习 / 圆桌 */}
               <div className="flex items-center gap-1 border-b border-border-subtle px-4 py-2">
-                {(["ask", "aiti", "learn"] as const).map((mode) => (
+                {(["ask", "aiti", "learn", "roundtable"] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
@@ -780,7 +804,9 @@ export function VestiDashboard({
                       ? labels.aiti.modeAsk
                       : mode === "aiti"
                         ? labels.aiti.modeAiti
-                        : labels.learn.modeLearn}
+                        : mode === "learn"
+                          ? labels.learn.modeLearn
+                          : labels.aiti.modeRoundtable}
                   </button>
                 ))}
               </div>
@@ -804,6 +830,11 @@ export function VestiDashboard({
                     labels={labels.learn}
                     onOpenConversation={handleOpenConversation}
                   />
+                </div>
+              )}
+              {exploreMode === "roundtable" && (
+                <div className="min-h-0 flex-1">
+                  <RoundtablePanel storage={storage} themeMode={themeMode} labels={labels.roundtable} />
                 </div>
               )}
             </div>

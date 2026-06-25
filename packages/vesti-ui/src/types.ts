@@ -469,6 +469,11 @@ export type StorageApi = {
     contextDraft: string,
     selectedContextConversationIds: number[]
   ) => Promise<void>;
+  runRoundtable?: (
+    question: string,
+    personaIds: RoundtablePersonaId[],
+    opts?: { lang?: "zh" | "en" }
+  ) => Promise<RoundtableResult>;
   getSummary?: (conversationId: number) => Promise<ChatSummaryData | null>;
   generateSummary?: (conversationId: number) => Promise<ChatSummaryData>;
   getNotes?: () => Promise<Note[]>;
@@ -1113,6 +1118,7 @@ export interface DashboardLabels {
   aiti: {
     modeAsk: string;
     modeAiti: string;
+    modeRoundtable: string;
     title: string;
     subtitle: string;
     insufficient: string;
@@ -1155,6 +1161,28 @@ export interface DashboardLabels {
     glossaryTitle: string;
     openLoopsTitle: string;
     openLoopsEmpty: string;
+  };
+  roundtable: {
+    title: string;
+    subtitle: string;
+    questionPlaceholder: string;
+    personasLabel: string;
+    run: string;
+    running: string;
+    latencyHint: string;
+    needQuestion: string;
+    seatsTitle: string;
+    synthesisTitle: string;
+    consensus: string;
+    disagreements: string;
+    recommendation: string;
+    openQuestions: string;
+    empty: string;
+    personaSkeptic: string;
+    personaOptimist: string;
+    personaPragmatist: string;
+    personaDomainExpert: string;
+    personaDevilsAdvocate: string;
   };
 }
 
@@ -1222,6 +1250,51 @@ export interface LearnProfile {
   domains: LearnDomain[];
   glossary: LearnGlossaryEntry[];
   openLoops: LearnOpenLoop[];
+}
+
+// ---- AI 圆桌 (Roundtable) ----
+export type RoundtablePersonaId =
+  | "skeptic"
+  | "optimist"
+  | "pragmatist"
+  | "domain_expert"
+  | "devils_advocate"
+  | "moderator";
+
+export interface RoundtablePersona {
+  id: RoundtablePersonaId;
+  nameZh: string;
+  nameEn: string;
+  blurbZh: string;
+  blurbEn: string;
+  systemPromptZh: string;
+  systemPromptEn: string;
+}
+
+export interface RoundtableSeatTurn {
+  personaId: RoundtablePersonaId;
+  content: string;
+  ok: boolean;
+  error?: string;
+  durationMs: number;
+}
+
+export interface RoundtableSynthesis {
+  consensus: string[];
+  disagreements: string[];
+  recommendation: string;
+  openQuestions: string[];
+}
+
+export interface RoundtableResult {
+  question: string;
+  lang: "zh" | "en";
+  grounded: boolean;
+  seatTurns: RoundtableSeatTurn[];
+  synthesis: RoundtableSynthesis | null;
+  synthesisRaw: string;
+  sources: RelatedConversation[];
+  totalDurationMs: number;
 }
 
 /** Everything the Prompts tab needs to render the plaza + supermarket. */

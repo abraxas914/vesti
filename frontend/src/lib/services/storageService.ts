@@ -30,6 +30,8 @@ import type {
   PromptExtractionResult,
   PromptCompletionResult,
   RagResponse,
+  RoundtablePersonaId,
+  RoundtableResult,
   RelatedConversation,
   SearchConversationMatchesQuery,
   StorageUsageSnapshot,
@@ -431,6 +433,21 @@ export async function askKnowledgeBase(
     },
     LONG_RUNNING_TIMEOUT_MS
   ) as Promise<RagResponse & { sessionId: string }>
+}
+
+export async function runRoundtable(
+  question: string,
+  personaIds: RoundtablePersonaId[],
+  opts?: { lang?: "zh" | "en" }
+): Promise<RoundtableResult> {
+  return sendRequest(
+    {
+      type: "RUN_ROUNDTABLE",
+      target: "offscreen",
+      payload: { question, personaIds, lang: opts?.lang }
+    },
+    LONG_RUNNING_TIMEOUT_MS
+  ) as Promise<RoundtableResult>
 }
 
 // Explore Session APIs

@@ -9,14 +9,43 @@ interface AitiCardProps {
   labels: DashboardLabels["aiti"];
 }
 
-type AxisMeta = { label: string; left: string; right: string };
-
 export function AitiCard({ profile, labels }: AitiCardProps) {
+  type AxisMeta = {
+    label: string;
+    left: string;
+    right: string;
+    leftStrength: string;
+    rightStrength: string;
+  };
   const axisMeta: Record<string, AxisMeta> = {
-    depth: { label: labels.axisDepthLabel, left: labels.axisDepthLeft, right: labels.axisDepthRight },
-    maker: { label: labels.axisMakerLabel, left: labels.axisMakerLeft, right: labels.axisMakerRight },
-    focus: { label: labels.axisFocusLabel, left: labels.axisFocusLeft, right: labels.axisFocusRight },
-    affect: { label: labels.axisAffectLabel, left: labels.axisAffectLeft, right: labels.axisAffectRight },
+    depth: {
+      label: labels.axisDepthLabel,
+      left: labels.axisDepthLeft,
+      right: labels.axisDepthRight,
+      leftStrength: labels.axisDepthLeftStrength,
+      rightStrength: labels.axisDepthRightStrength,
+    },
+    maker: {
+      label: labels.axisMakerLabel,
+      left: labels.axisMakerLeft,
+      right: labels.axisMakerRight,
+      leftStrength: labels.axisMakerLeftStrength,
+      rightStrength: labels.axisMakerRightStrength,
+    },
+    focus: {
+      label: labels.axisFocusLabel,
+      left: labels.axisFocusLeft,
+      right: labels.axisFocusRight,
+      leftStrength: labels.axisFocusLeftStrength,
+      rightStrength: labels.axisFocusRightStrength,
+    },
+    affect: {
+      label: labels.axisAffectLabel,
+      left: labels.axisAffectLeft,
+      right: labels.axisAffectRight,
+      leftStrength: labels.axisAffectLeftStrength,
+      rightStrength: labels.axisAffectRightStrength,
+    },
   };
 
   if (!profile || !profile.available) {
@@ -52,6 +81,25 @@ export function AitiCard({ profile, labels }: AitiCardProps) {
           <div className="mt-1 text-[11.5px] text-text-tertiary">
             {labels.sample.replace("{n}", String(profile.sampleSize))}
           </div>
+        </div>
+
+        {/* Empowering strengths — the dominant pole of each axis, framed positively */}
+        <div className="mt-5">
+          <div className="text-[13px] font-medium text-text-primary">{labels.strengthsTitle}</div>
+          <p className="mt-1 text-[12px] text-text-tertiary">{labels.empoweringIntro}</p>
+          <ul className="mt-3 flex flex-col gap-2">
+            {profile.axes.map((axis) => {
+              const meta = axisMeta[axis.key];
+              if (!meta) return null;
+              const strength = axis.score >= 50 ? meta.rightStrength : meta.leftStrength;
+              return (
+                <li key={axis.key} className="flex items-start gap-2.5">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent-primary" />
+                  <span className="text-[13px] leading-relaxed text-text-primary">{strength}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
 
         {/* Axes */}

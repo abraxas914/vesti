@@ -346,6 +346,8 @@ export interface UpdatePromptChanges {
   is_archived?: boolean
   summary?: string | null
   quality_score?: number
+  /** Editing an auto-extracted prompt promotes it to "manual" so a re-extract keeps it. */
+  source?: PromptSource
 }
 
 export interface PromptListFilter {

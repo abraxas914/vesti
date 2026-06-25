@@ -562,6 +562,7 @@ export interface UpdatePromptChanges {
   is_archived?: boolean;
   summary?: string | null;
   quality_score?: number;
+  source?: PromptSource;
 }
 
 export interface PromptListFilter {
@@ -1117,20 +1118,30 @@ export interface DashboardLabels {
     insufficient: string;
     sample: string;
     typeSeparator: string;
+    strengthsTitle: string;
+    empoweringIntro: string;
     obsessionsTitle: string;
     evidence: string;
     axisDepthLabel: string;
     axisDepthLeft: string;
     axisDepthRight: string;
+    axisDepthLeftStrength: string;
+    axisDepthRightStrength: string;
     axisMakerLabel: string;
     axisMakerLeft: string;
     axisMakerRight: string;
+    axisMakerLeftStrength: string;
+    axisMakerRightStrength: string;
     axisFocusLabel: string;
     axisFocusLeft: string;
     axisFocusRight: string;
+    axisFocusLeftStrength: string;
+    axisFocusRightStrength: string;
     axisAffectLabel: string;
     axisAffectLeft: string;
     axisAffectRight: string;
+    axisAffectLeftStrength: string;
+    axisAffectRightStrength: string;
   };
 }
 

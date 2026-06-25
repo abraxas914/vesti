@@ -158,7 +158,10 @@ export interface DistilledFragment {
 
 const FRAGMENT_CHUNK_SIZE = 15;
 const MAX_FRAGMENT_INPUT = 120;
-const MAX_FRAGMENTS_OUT = 12;
+const MAX_FRAGMENTS_OUT = 8;
+
+const FRAGMENT_CONSOLIDATE_PROMPT = `You are finalizing a small, premium library of reusable PROMPT FRAGMENTS. From the candidate fragments below, KEEP ONLY the best, most broadly-reusable, highest-quality ones — at most {MAX}. Merge near-duplicates, drop anything narrow, vague, or low-value, and lightly polish wording. Keep each fragment's language. Prefer FEWER excellent fragments over hitting the cap.
+Return ONLY a JSON array: [{"title": "<= 6 words", "body": "...", "category": "<Writing|Coding|Analysis|Learning|Productivity|Translation|Roleplay|Other>"}]. No prose.`;
 
 const fragmentItemSchema = z.object({
   title: z.string().trim().min(1).max(60),
@@ -197,9 +200,12 @@ export async function distillFragments(
     .slice(0, MAX_FRAGMENT_INPUT);
   if (input.length === 0) return [];
 
+  // Pass 1: per-chunk candidate fragments (collect a few extra, then rank down).
+  const CANDIDATE_CAP = MAX_FRAGMENTS_OUT * 3;
   const out: DistilledFragment[] = [];
   const seen = new Set<string>();
   for (let offset = 0; offset < input.length; offset += FRAGMENT_CHUNK_SIZE) {
+    if (out.length >= CANDIDATE_CAP) break;
     const chunk = input.slice(offset, offset + FRAGMENT_CHUNK_SIZE);
     try {
       const result = await callInference(config, buildFragmentUserPrompt(chunk), {
@@ -219,7 +225,6 @@ export async function distillFragments(
           body: item.body.trim(),
           category: item.category ?? null,
         });
-        if (out.length >= MAX_FRAGMENTS_OUT) return out;
       }
     } catch (error) {
       logger.debug("llm", "Fragment distillation chunk failed", {
@@ -227,7 +232,44 @@ export async function distillFragments(
       });
     }
   }
-  return out;
+
+  if (out.length <= MAX_FRAGMENTS_OUT) return out;
+
+  // Pass 2: consolidate/rank down to the best MAX_FRAGMENTS_OUT (cross-chunk
+  // dedup + quality selection). Falls back to the top slice if the call fails.
+  try {
+    const listing = out
+      .map((f, i) => `#${i}\n${f.title}\n${f.body.slice(0, MAX_BODY_CHARS)}`)
+      .join("\n\n---\n\n");
+    const result = await callInference(config, `Candidate fragments:\n\n${listing}`, {
+      responseFormat: "json_object",
+      systemPrompt: FRAGMENT_CONSOLIDATE_PROMPT.replace("{MAX}", String(MAX_FRAGMENTS_OUT)),
+    });
+    const parsed = fragmentArraySchema.safeParse(
+      JSON.parse(extractJsonArray(result.content.trim())),
+    );
+    if (parsed.success && parsed.data.length > 0) {
+      const consolidated: DistilledFragment[] = [];
+      const seen2 = new Set<string>();
+      for (const item of parsed.data) {
+        const key = item.body.trim().toLowerCase().replace(/\s+/g, " ");
+        if (seen2.has(key)) continue;
+        seen2.add(key);
+        consolidated.push({
+          title: item.title.trim(),
+          body: item.body.trim(),
+          category: item.category ?? null,
+        });
+        if (consolidated.length >= MAX_FRAGMENTS_OUT) break;
+      }
+      if (consolidated.length > 0) return consolidated;
+    }
+  } catch (error) {
+    logger.debug("llm", "Fragment consolidation failed; using top slice", {
+      error: (error as Error)?.message ?? String(error),
+    });
+  }
+  return out.slice(0, MAX_FRAGMENTS_OUT);
 }
 
 export type PromptCompletionMode = "optimize" | "continue";

@@ -88,31 +88,19 @@ export function PromptsTab({
     }
   }, [isActive, status, load]);
 
-  // Auto-build the library from captured conversations on open, if empty or
-  // stale (>1h). Runs once per mount; the manual button remains for refresh.
+  // Auto-build the library ONLY when it's empty (one-time populate). Re-running
+  // is an explicit user action (the Extract button), which refreshes the set —
+  // this avoids the auto-accumulation that bloated the library across opens.
   const autoExtractDoneRef = useRef(false);
   useEffect(() => {
     if (!isActive || status !== "ready" || autoExtractDoneRef.current) return;
     if (!storage.extractPromptsFromLibrary) return;
-    const STALE_KEY = "vesti_prompts_last_extract";
-    let lastExtract = 0;
-    try {
-      lastExtract = Number(window.localStorage.getItem(STALE_KEY)) || 0;
-    } catch {
-      lastExtract = 0;
-    }
-    const isStale = Date.now() - lastExtract > 60 * 60 * 1000;
-    if (prompts.length > 0 && !isStale) return;
+    if (prompts.length > 0) return;
     autoExtractDoneRef.current = true;
     void (async () => {
       setExtractStatus("running");
       try {
         await storage.extractPromptsFromLibrary?.({ scope: "recent" });
-        try {
-          window.localStorage.setItem(STALE_KEY, String(Date.now()));
-        } catch {
-          /* ignore storage failures */
-        }
         await load();
       } catch {
         /* silent — the manual extract button remains available */
@@ -209,6 +197,8 @@ export function PromptsTab({
         await storage.updatePrompt(editor.id, {
           title: editor.title.trim() || undefined,
           body,
+          // Promote to "manual" so an edited prompt survives a library refresh.
+          source: "manual",
         });
         setToast(labels.toastUpdated);
       }

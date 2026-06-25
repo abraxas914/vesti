@@ -179,6 +179,7 @@ export async function updatePrompt(
   if (changes.is_archived !== undefined) patch.is_archived = changes.is_archived;
   if (changes.summary !== undefined) patch.summary = changes.summary;
   if (changes.quality_score !== undefined) patch.quality_score = changes.quality_score;
+  if (changes.source !== undefined) patch.source = changes.source;
 
   await db.prompts.update(id, patch);
   const updated = await getPromptById(id);
@@ -253,16 +254,31 @@ interface CandidateGroup {
 // curated. A small quality-gated singleton top-up ensures a useful minimum on
 // sparse/new libraries without hoarding.
 const FREQUENT_MIN_CONVERSATIONS = 3; // recurs in >= 3 distinct conversations
-const FREQUENT_QUALITY_GATE = 0.48; // recurrence + a real quality bar (raised)
-const SINGLETON_QUALITY_GATE = 0.62; // one-offs must be genuinely excellent
-const MAX_RESULTS = 12; // keep the library small + high-quality, don't hoard
-const MIN_FLOOR = 5; // a small useful minimum even with few repeats
-const MAX_SINGLETON_TOPUP = 5;
+const FREQUENT_QUALITY_GATE = 0.55; // recurrence + a strong quality bar
+const SINGLETON_QUALITY_GATE = 0.72; // one-offs must be genuinely excellent
+const MAX_RESULTS = 8; // keep the library small + high-quality, don't hoard
+const MIN_FLOOR = 4; // a small useful minimum even with few repeats
+const MAX_SINGLETON_TOPUP = 4;
 
 function combinedCurationScore(group: CandidateGroup): number {
   const quality = group.candidate.heuristicScore; // 0..1
   const freqNorm = Math.min(1, group.conversationIds.size / 5); // 0..1
   return quality * 0.6 + freqNorm * 0.4;
+}
+
+/**
+ * Remove the previously auto-extracted prompts so each extraction refreshes a
+ * small, curated set instead of accumulating across runs. User-authored prompts
+ * (source !== "extracted") are preserved; editing an extracted prompt promotes
+ * it to "manual" (see updatePrompt), so edits survive a refresh.
+ */
+async function clearExtractedPrompts(): Promise<number> {
+  const all = await db.prompts.toArray();
+  const ids = all
+    .filter((p) => p.source === "extracted" && typeof p.id === "number")
+    .map((p) => p.id as number);
+  if (ids.length > 0) await db.prompts.bulkDelete(ids);
+  return ids.length;
 }
 
 /**
@@ -341,9 +357,11 @@ export async function extractPromptsFromLibrary(
       });
     }
     if (fragments.length > 0) {
+      // Refresh, don't accumulate: drop the prior auto-extracted set first.
+      await clearExtractedPrompts();
       let created = 0;
       let skipped = 0;
-      for (const fragment of fragments) {
+      for (const fragment of fragments.slice(0, MAX_RESULTS)) {
         const body = fragment.body.trim();
         if (!body) {
           skipped += 1;
@@ -398,6 +416,9 @@ export async function extractPromptsFromLibrary(
       .slice(0, Math.min(MAX_SINGLETON_TOPUP, MIN_FLOOR - selected.length, MAX_RESULTS - selected.length));
     selected = [...selected, ...topUp];
   }
+
+  // Refresh, don't accumulate (only when we actually have a new set to install).
+  if (selected.length > 0) await clearExtractedPrompts();
 
   let created = 0;
   let skipped = 0;

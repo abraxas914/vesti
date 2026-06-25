@@ -679,6 +679,14 @@ export async function getSummary(
   return record ? toChatSummaryData(record) : null
 }
 
+/** Raw summary records (with `structured` payloads) for local analytics like AITI. */
+export async function getAllSummaries(): Promise<SummaryRecord[]> {
+  return sendRequest({
+    type: "GET_ALL_SUMMARIES",
+    target: "offscreen"
+  }) as Promise<SummaryRecord[]>
+}
+
 export async function generateConversationSummary(
   conversationId: number
 ): Promise<SummaryRecord> {

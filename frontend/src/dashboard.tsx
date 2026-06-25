@@ -13,6 +13,9 @@ import {
   setPlazaAdopted,
   subscribeAdoptedPlazaIds,
 } from "~lib/promptPlaza/plazaCollectionService";
+import { computeAiti } from "~lib/aiti/computeAiti";
+import { getAllSummaries } from "~lib/services/storageService";
+import type { AitiProfile } from "~vendor/vesti-ui";
 import {
   connectObsidianVault,
   exportNoteToObsidian,
@@ -198,6 +201,37 @@ function VestiDashboardInner({
     void setPlazaAdopted(id, adopt).then(setAdoptedIds);
   }, []);
 
+  // AITI (个人内向探索): computed 100% locally from stored summaries. Recomputed
+  // when the dataset signals a change (VESTI_DATA_UPDATED).
+  const [aiti, setAiti] = useState<AitiProfile | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    const recompute = () => {
+      void getAllSummaries()
+        .then((summaries) => {
+          if (!cancelled) setAiti(computeAiti(summaries));
+        })
+        .catch(() => {
+          if (!cancelled) setAiti({ available: false, sampleSize: 0, axes: [], obsessions: [] });
+        });
+    };
+    recompute();
+    const onMsg = (msg: unknown) => {
+      if (msg && typeof msg === "object" && (msg as { type?: string }).type === "VESTI_DATA_UPDATED") {
+        recompute();
+      }
+    };
+    if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener(onMsg);
+    }
+    return () => {
+      cancelled = true;
+      if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(onMsg);
+      }
+    };
+  }, []);
+
   return (
     <VestiDashboardShell
       logoSrc={LOGO_BASE64}
@@ -205,6 +239,7 @@ function VestiDashboardInner({
       labels={t.dashboard}
       plaza={plaza}
       onPlazaAdoptToggle={handlePlazaAdoptToggle}
+      aiti={aiti}
       themeMode={themeMode}
       onToggleTheme={onToggleTheme}
       themeSyncStatus={themeSyncStatus}

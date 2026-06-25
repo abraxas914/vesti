@@ -15,6 +15,7 @@ import {
   getExploreMessages,
   getExploreSession,
   getStorageUsage,
+  getAllSummaries,
   getSummary,
   getTopics,
   getWeeklyReport,
@@ -701,6 +702,10 @@ async function handleOffscreenRequest(
       }
       case "GET_CONVERSATION_SUMMARY": {
         const data = await getSummary(message.payload.conversationId)
+        return { ok: true, type: messageType, data }
+      }
+      case "GET_ALL_SUMMARIES": {
+        const data = await getAllSummaries()
         return { ok: true, type: messageType, data }
       }
       case "GENERATE_CONVERSATION_SUMMARY": {

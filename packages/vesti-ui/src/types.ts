@@ -1109,6 +1109,29 @@ export interface DashboardLabels {
     adopt: string;
     adopted: string;
   };
+  aiti: {
+    modeAsk: string;
+    modeAiti: string;
+    title: string;
+    subtitle: string;
+    insufficient: string;
+    sample: string;
+    typeSeparator: string;
+    obsessionsTitle: string;
+    evidence: string;
+    axisDepthLabel: string;
+    axisDepthLeft: string;
+    axisDepthRight: string;
+    axisMakerLabel: string;
+    axisMakerLeft: string;
+    axisMakerRight: string;
+    axisFocusLabel: string;
+    axisFocusLeft: string;
+    axisFocusRight: string;
+    axisAffectLabel: string;
+    axisAffectLeft: string;
+    axisAffectRight: string;
+  };
 }
 
 /** A curated/recommended prompt for the 提示词广场 (Prompt Plaza). */
@@ -1126,6 +1149,29 @@ export interface PlazaPrompt {
 export interface PlazaCategory {
   category: string;
   prompts: PlazaPrompt[];
+}
+
+/** AITI (个人内向探索) — a locally-computed "thinking fingerprint". */
+export interface AitiAxisScore {
+  /** stable axis key: "depth" | "maker" | "focus" | "affect" */
+  key: string;
+  /** 0..100, toward the axis's RIGHT pole */
+  score: number;
+  /** up to a few source conversations that contributed most (evidence) */
+  evidenceConversationIds: number[];
+}
+
+export interface AitiObsession {
+  term: string;
+  count: number;
+}
+
+export interface AitiProfile {
+  /** false → not enough summaries to be meaningful (show the gated state) */
+  available: boolean;
+  sampleSize: number;
+  axes: AitiAxisScore[];
+  obsessions: AitiObsession[];
 }
 
 /** Everything the Prompts tab needs to render the plaza + supermarket. */

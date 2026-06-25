@@ -10,4 +10,10 @@ export {
   setNotionSettings,
   selectNotionDatabase,
 } from "@vesti/ui";
-export type { NotionDatabaseOption, NotionSettings } from "@vesti/ui";
+export type {
+  NotionDatabaseOption,
+  NotionSettings,
+  AitiProfile,
+  AitiAxisScore,
+  AitiObsession,
+} from "@vesti/ui";

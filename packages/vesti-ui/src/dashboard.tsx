@@ -14,10 +14,11 @@ import {
 import { DataManagementPanel } from "./components/DataManagementPanel";
 import { LibraryDataProvider } from "./contexts/library-data";
 import { ExploreTab } from "./tabs/explore-tab";
+import { AitiCard } from "./components/AitiCard";
 import { LibraryTab } from "./tabs/library-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { PromptsTab } from "./tabs/prompts-tab";
-import type { DashboardLabels, PlazaData, StorageApi, UiThemeMode } from "./types";
+import type { AitiProfile, DashboardLabels, PlazaData, StorageApi, UiThemeMode } from "./types";
 import type { NotionDatabaseOption, NotionSettings } from "./notion-integration";
 import {
   connectToNotion,
@@ -238,6 +239,29 @@ const DEFAULT_LABELS: DashboardLabels = {
     adopt: "Add",
     adopted: "Added",
   },
+  aiti: {
+    modeAsk: "Ask",
+    modeAiti: "AITI",
+    title: "Your AITI — a mirror of how you think",
+    subtitle: "Computed locally from your conversations. A reflection, not a verdict.",
+    insufficient: "Not enough conversations analyzed yet — keep chatting and check back.",
+    sample: "Based on {n} analyzed conversations",
+    typeSeparator: " · ",
+    obsessionsTitle: "Top obsessions",
+    evidence: "seen in {n} conversations",
+    axisDepthLabel: "Breadth ↔ Depth",
+    axisDepthLeft: "Explorer",
+    axisDepthRight: "Excavator",
+    axisMakerLabel: "Theory ↔ Practice",
+    axisMakerLeft: "Theorist",
+    axisMakerRight: "Maker",
+    axisFocusLabel: "Converge ↔ Wander",
+    axisFocusLeft: "Converger",
+    axisFocusRight: "Wanderer",
+    axisAffectLabel: "Cool ↔ Spirited",
+    axisAffectLeft: "Cool-headed",
+    axisAffectRight: "Spirited",
+  },
 };
 
 type DashboardProps = {
@@ -252,6 +276,7 @@ type DashboardProps = {
   labels?: DashboardLabels;
   plaza?: PlazaData;
   onPlazaAdoptToggle?: (id: string, adopt: boolean) => void;
+  aiti?: AitiProfile;
 };
 
 export function VestiDashboard({
@@ -266,6 +291,7 @@ export function VestiDashboard({
   labels: providedLabels,
   plaza,
   onPlazaAdoptToggle,
+  aiti,
 }: DashboardProps) {
   const labels = providedLabels ?? DEFAULT_LABELS;
   const SETTINGS_KEY = "vesti_llm_settings";
@@ -282,6 +308,7 @@ export function VestiDashboard({
       return tab;
     return "library";
   });
+  const [exploreMode, setExploreMode] = useState<"ask" | "aiti">("ask");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerView, setDrawerView] = useState<DrawerView>("settings");
@@ -709,13 +736,37 @@ export function VestiDashboard({
             </div>
           )}
           {mountedTabs.explore && (
-            <div className={`h-full ${activeTab === "explore" ? "block" : "hidden"}`}>
-              <ExploreTab
-                storage={storage}
-                themeMode={themeMode}
-                onOpenConversation={handleOpenConversation}
-                labels={labels.explore}
-              />
+            <div className={`h-full ${activeTab === "explore" ? "flex flex-col" : "hidden"}`}>
+              {/* Explore = the reflective-AI hub: 问答 / AITI 画像 (圆桌/学习 later) */}
+              <div className="flex items-center gap-1 border-b border-border-subtle px-4 py-2">
+                {(["ask", "aiti"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setExploreMode(mode)}
+                    className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                      exploreMode === mode
+                        ? "bg-accent-primary-light text-accent-primary"
+                        : "text-text-tertiary hover:text-text-secondary"
+                    }`}
+                  >
+                    {mode === "ask" ? labels.aiti.modeAsk : labels.aiti.modeAiti}
+                  </button>
+                ))}
+              </div>
+              <div className={`min-h-0 flex-1 ${exploreMode === "ask" ? "block" : "hidden"}`}>
+                <ExploreTab
+                  storage={storage}
+                  themeMode={themeMode}
+                  onOpenConversation={handleOpenConversation}
+                  labels={labels.explore}
+                />
+              </div>
+              {exploreMode === "aiti" && (
+                <div className="min-h-0 flex-1">
+                  <AitiCard profile={aiti} labels={labels.aiti} />
+                </div>
+              )}
             </div>
           )}
           {mountedTabs.network && (

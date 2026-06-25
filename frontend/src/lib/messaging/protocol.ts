@@ -478,6 +478,12 @@ export type RequestMessage =
       payload: { conversationId: number }
     }
   | {
+      type: "GET_ALL_SUMMARIES"
+      target?: "offscreen"
+      via?: "background"
+      requestId?: string
+    }
+  | {
       type: "GENERATE_CONVERSATION_SUMMARY"
       target?: "offscreen"
       via?: "background"
@@ -667,6 +673,7 @@ export type ResponseDataMap = {
     }
   }
   GET_CONVERSATION_SUMMARY: SummaryRecord | null
+  GET_ALL_SUMMARIES: SummaryRecord[]
   GENERATE_CONVERSATION_SUMMARY: SummaryRecord
   GET_WEEKLY_REPORT: WeeklyReportRecord | null
   GENERATE_WEEKLY_REPORT: WeeklyReportRecord

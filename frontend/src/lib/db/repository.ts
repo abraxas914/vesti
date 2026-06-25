@@ -1916,6 +1916,11 @@ export async function getSummary(
   return record ? toSummary(record) : null
 }
 
+/** All stored summaries (latest per conversation may repeat; callers dedupe). Used by AITI. */
+export async function getAllSummaries(): Promise<SummaryRecord[]> {
+  return (await db.summaries.toArray()).map(toSummary)
+}
+
 export async function saveSummary(
   record: Omit<SummaryRecord, "id">
 ): Promise<SummaryRecord> {

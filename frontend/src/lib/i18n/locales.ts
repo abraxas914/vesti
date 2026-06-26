@@ -70,10 +70,19 @@ export function resolveLocale(raw: string): SupportedLocale {
 }
 
 export function getBrowserLanguage(): string {
-  if (typeof chrome !== "undefined" && chrome.i18n?.getUILanguage) {
-    return chrome.i18n.getUILanguage();
-  }
-  return navigator.language || "en";
+  // Access chrome via globalThis (not the bare global) so this file compiles
+  // without @types/chrome — e.g. under the leaner eval tsconfig. Runtime behavior
+  // is unchanged: inside the extension globalThis.chrome is present.
+  const chromeApi = (
+    globalThis as unknown as {
+      chrome?: { i18n?: { getUILanguage?: () => string } };
+    }
+  ).chrome;
+  const uiLanguage = chromeApi?.i18n?.getUILanguage?.();
+  if (uiLanguage) return uiLanguage;
+  const nav = (globalThis as unknown as { navigator?: { language?: string } })
+    .navigator;
+  return nav?.language || "en";
 }
 
 /** Native display name for the language switcher (e.g. "日本語"). */
